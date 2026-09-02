@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5117-->
+<!--B:20260913-5123-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -502,6 +502,48 @@ body.matchFS .fmPitchPane{max-width:none;}
 .fmPitchPane{max-width:620px; margin-left:auto; margin-right:auto;}
 .pitch .pslotLabel{font-size:9px;}
 .pslot.zoneDrop{background:#3fb95022;}
+/* ── 👑 세력 구도 (라커룸 계층) ───────────────────────────── */
+.hrPyr{display:flex; flex-direction:column; align-items:center; gap:12px; margin-top:10px;}
+.hrTier{max-width:100%;}
+.hrBar{border-radius:8px 8px 0 0; padding:6px 12px; font-weight:800; font-size:13px; color:#12181f; text-align:center;}
+.hrRow{display:flex; flex-wrap:wrap; justify-content:center; gap:7px; padding:9px 7px;
+  background:linear-gradient(180deg,#161d25,#101720); border:1px solid #232c36; border-top:none; border-radius:0 0 8px 8px;}
+.hrCard{background:linear-gradient(180deg,#1a2430 0%,#0e161e 100%); border:1px solid #2e3f52; border-radius:8px;
+  padding:7px 9px; min-width:104px; text-align:center; cursor:pointer; transition:transform .12s, border-color .12s;}
+.hrCard:hover{transform:translateY(-2px); border-color:#4a6a8c;}
+.hrNm{font-size:12.5px; font-weight:800; color:#fff; line-height:1.2;}
+.hrSub{font-size:10.5px; margin-top:2px; font-weight:700;}
+.hrMeta{font-size:10px; color:var(--sub); margin-top:2px;}
+.hrBand{display:inline-block; background:var(--gold); color:#12181f; font-size:9.5px; font-weight:900;
+  border-radius:3px; padding:0 4px; vertical-align:1px;}
+.hrBand.v{background:#8b949e;}
+.hrDesc{margin:5px 2px 0; text-align:center; color:var(--sub); opacity:.8;}
+/* 계층 탭 — 좌: 피라미드 · 우: 수석코치 의견 */
+.hrWrap{display:flex; gap:14px; align-items:flex-start; margin-top:10px;}
+.hrLeft{flex:1 1 560px; min-width:0;}
+.hrRight{flex:0 1 330px; min-width:290px; position:sticky; top:8px;}
+.hrCoach{margin:0;}
+.hrSay{display:flex; gap:8px; align-items:flex-start; padding:7px 9px; border-radius:7px;
+  background:#0f161e; border:1px solid #1e2731;}
+.hrSayIc{font-size:14px; line-height:1.35; flex:0 0 auto;}
+/* 팀 미팅 — 리더 첫 반응 칩 */
+.hrChips{display:flex; flex-wrap:wrap; gap:5px;}
+.hrChip{font-size:11px; font-weight:700; border-radius:99px; padding:2px 9px; border:1px solid #2a3540; background:#101821;}
+.hrChip.y{border-color:#2c5c3a; color:#7ee2a0;}
+.hrChip.n{border-color:#5c2c2c; color:#ff9d9d;}
+/* 역질문 */
+.hrAsk{background:linear-gradient(180deg,#221a1a,#161012); border:1px solid #4a2c2c; border-radius:9px; padding:11px 13px;}
+.hrAskWho{font-size:12.5px; font-weight:800; color:#ff9d9d; margin-bottom:4px;}
+.hrAskQ{font-size:14.5px; font-weight:700; color:#fff; line-height:1.45;}
+.hrQLog{padding:7px 10px; border-left:3px solid #2e3f52; background:#0f161e; border-radius:0 6px 6px 0; margin-bottom:6px;}
+/* 선수별 반응 */
+.hrReList{display:grid; grid-template-columns:repeat(auto-fill,minmax(258px,1fr)); gap:7px;}
+.hrRe{border-left:3px solid #8b949e; background:#0f161e; border-radius:0 7px 7px 0; padding:7px 10px;}
+.hrReTop{display:flex; align-items:center; gap:6px; font-size:12.5px; margin-bottom:2px;}
+.hrReTier{font-size:9.5px; font-weight:800; border:1px solid; border-radius:4px; padding:0 4px;}
+@media (max-width:900px){ .hrTier{width:100%!important;} .hrCard{min-width:88px; padding:6px 7px;} .hrNm{font-size:11.5px;}
+  .hrWrap{flex-direction:column;} .hrRight{flex:1 1 auto; width:100%; min-width:0; position:static;}
+  .hrReList{grid-template-columns:1fr;} }
 .pslotLabel{font-size:8.5px; color:#87b89a; letter-spacing:1px; font-weight:800; opacity:.55;}
 /* 빈 칸 — 은은한 자리 표시(고스트 링). 칸 높이는 카드 칸과 동일해 판이 출렁이지 않는다 */
 .pslot:not(:has(.fmCard)):not(.empty) .pslotLabel{
@@ -2262,6 +2304,7 @@ tr.yArmy{background:linear-gradient(90deg,rgba(201,162,39,.12),rgba(201,162,39,0
     <button class="navbtn" data-v="media">📰 뉴스 / 소셜</button>
     <button class="navbtn" data-v="staff">📋 스태프 회의</button>
     <button class="navbtn" data-v="squad">👥 스쿼드</button>
+    <button class="navbtn" data-v="hier">👑 세력 구도</button>
     <button class="navbtn" data-v="tactics">📋 전술</button>
     <button class="navbtn" data-v="table">🏆 순위표</button>
     <button class="navbtn" data-v="fixtures">📅 일정 및 훈련</button>
@@ -2832,10 +2875,28 @@ const POT_K=19.5/5;   // (구 앵커 기울기 — 기록용)
      보통은 150대, 우수가 170선, 특급(85+)부터 178+, 최상급(92+)만 192+ — 제보의 그림 그대로.
      나이 든 선수는 화면 능력이 이 값보다 클 수 있으므로 max()로 「잠재 ≥ 현재」를 보장한다. */
 const POT_MAP_K=110/58;   // 내부 38~96 → 화면 90~200
+/* 🌱 ⚠ 제보 원문 — 「합계 170 넘는 선수를 40억에 사 왔더니 반 시즌 만에 잠재력 별이 줄고
+     합계 140 이 됐다. 나이가 30 넘은 것도 아닌데」. 「FM 은 어빌이 줄지언정 잠재력은 안 줄어든다」.
+   맞는 지적이고, 실제로 그렇게 된다. 다만 원인은 «나이 들면 잠재력이 깎인다»가 아니었다 —
+   내부 잠재력(p.pot)은 90일·시즌 경계·28/31/34세 어디서도 <b>1도 움직이지 않는다</b>(실측).
+   진짜 원인은 이 함수의 max 였다:
+       dispPot = max(화면 종합, 내부 잠재력 환산)
+     화면 종합(dispOvr)은 포지션 가중 세부 능력치에서 나오므로 내부 잠재력 환산값보다
+     클 수 있다. 그런 선수는 «표시 잠재력 = 표시 종합»이 되어, 능력치가 조금만 흔들려도
+     (노쇠·부진·능력치 재배분) 표시 잠재력이 <b>그대로 따라 내려갔다</b>.
+     실측: 표시 종합 172 · 표시 잠재력 172 인 선수의 능력치를 낮추자 잠재력 172 → 166.
+     내부 잠재력이 낮을수록 낙폭이 크다 — 내부 65 면 바닥이 141 이라 「170 → 140」이 그대로 나온다.
+   ─ 화면 종합이 잠재력 환산을 넘어서는 순간 «내부 잠재력을 그만큼 끌어올린다». 한 번 올라간
+     잠재력은 내려오지 않는다(FM 규칙). 화면에 보이던 숫자가 낮아지는 일이 없어진다. */
 function dispPot(p){
   if(!p) return 0;
+  const cur=dispOvr(p);
+  const direct0=90 + (((p.pot||p.ovr||65)-38))*POT_MAP_K;
+  if(cur > direct0){
+    try{ const up=potFromDisp(p, cur); if(up > (p.pot||0)) p.pot=clamp(up, p.pot||0, 96); }catch(e){}
+  }
   const direct=90 + (((p.pot||p.ovr||65)-38))*POT_MAP_K;
-  return clamp(Math.round(Math.max(dispOvr(p), direct)), 90, 200);
+  return clamp(Math.round(Math.max(cur, direct)), 90, 200);
 }
 /* 🌱 성장 전망 — ⚠ 제보 원문 「선수 종합 능력이 잠재 능력 끝까지 성장 했는데도 유스 탭에서
    성장 전망이 3칸이 남는 일이 있습니다. … 종합 능력 200, 잠재 능력 200 으로 프로필 기준으로는
@@ -4738,6 +4799,610 @@ function capInfo(t){
 }
 function captainOf(t){ const c=capInfo(t); return c.c ? t.players.find(p=>p.id===c.c) : null; }
 function viceOf(t){ const c=capInfo(t); return c.v ? t.players.find(p=>p.id===c.v) : null; }
+/* ═══ 👑 세력 구도 — 라커룸 계층 (요청: FM 처럼) ═══════════════════════════
+   ⚠ 요청 원문 — 「FM 처럼 좌측 스쿼드 메뉴 아래에 «세력 구도» 메뉴를 신설하자.
+     피라미드 구조의 라커룸 계층을 구현하고, 여기서 한 달에 한 번 팀 미팅도 가질 수 있는 거지」.
+   ─ 계층은 «영향력»으로 정한다. 주장 완장이 전부가 아니다 — 실제 라커룸에서 말이 먹히는 건
+     리더십·팀워크만큼이나 «경기장에서 보여 준 것»과 «이 팀에서 보낸 시간»이다.
+     주장·부주장에게는 가산점이 붙지만, 완장 없이도 팀 리더가 되는 고참이 있다. */
+const HIER_TIERS=[
+  {k:"lead", n:"팀 리더",            c:"#e05a5a", d:"라커룸의 목소리입니다. 이들이 등을 돌리면 팀이 통째로 흔들립니다."},
+  {k:"high", n:"매우 영향력 있는 선수", c:"#e0a03a", d:"팀 리더 다음으로 말이 먹힙니다. 불만이 생기면 빠르게 번집니다."},
+  {k:"mid",  n:"영향력 있는 선수",     c:"#e8d44a", d:"동료들이 눈치를 봅니다. 라커룸 분위기의 허리입니다."},
+  {k:"low",  n:"그 외 선수",          c:"#7d848c", d:"아직 라커룸에서 목소리를 내지 못합니다."}
+];
+/* 영향력 — 0 을 넘으면 리그 평균 이상이라는 뜻 */
+function hierScore(t, p){
+  try{
+    const a=p.attr||{}, age=G.season-(p.by||2000);
+    let v = attr20(a.ldr||60)*3.2 + attr20(a.tea||60)*1.7 + attr20(a.det||60)*1.1 + attr20(a.cmp||60)*0.7;
+    v += (playerLevel(p)-leagueLevel())*0.85;                 // 경기장에서 보여 준 것
+    v += clamp((age-21)*0.85, -7, 9);                          // 나이·연차
+    v += Math.min(7, (p.career||0)/38);                        // 통산 출장
+    v += clamp((squadRole(p, t)-0.35)*9, -4, 6);               // 요즘 주전인가
+    try{ const c=capInfo(t);
+      if(c.c===p.id) v+=11; else if(c.v===p.id) v+=6.5; }catch(e){}   // 🎖️ 완장
+    if(p.pers===1) v+=1.6;                                     // 야심가는 목소리를 낸다
+    if(p.pers===2) v-=1.2;                                     // 온화함은 앞에 나서지 않는다
+    if((p.sulk||0)>0) v-=6;                                    // 태업 중이면 신뢰를 잃는다
+    if((p.unhappy||0)>0) v-=2.5*(p.unhappy||0);
+    return Math.round(v*10)/10;
+  }catch(e){ return 0; }
+}
+/* 계층 배분 — 스쿼드 크기에 맞춰 인원을 나눈다 (FM 과 같은 피라미드 모양) */
+function hierOf(t){
+  t=t||userTeam(); if(!t) return null;
+  const ps=(t.players||[]).filter(p=>p && !p.loan);
+  if(!ps.length) return null;
+  const ranked=ps.map(p=>({p, v:hierScore(t,p)})).sort((a,b)=>b.v-a.v);
+  const n=ranked.length;
+  const nLead=clamp(Math.round(n*0.09), 1, 3);
+  const nHigh=clamp(Math.round(n*0.20), 2, 6);
+  const nMid =clamp(Math.round(n*0.34), 3, 11);
+  const out={lead:[], high:[], mid:[], low:[]};
+  ranked.forEach((x,i)=>{
+    const k = i<nLead ? "lead" : i<nLead+nHigh ? "high" : i<nLead+nHigh+nMid ? "mid" : "low";
+    out[k].push(x);
+  });
+  return out;
+}
+/* 카드 아래에 붙는 한 줄 — 성격과 라커룸에서의 태도 */
+function hierTag(t, x){
+  const p=x.p;
+  try{
+    if((p.sulk||0)>0) return ["태업 중","#f85149"];
+    if((p.unhappy||0)>0) return ["불만이 있음","#ff9d5c"];
+    const c=capInfo(t);
+    if(c.c===p.id) return ["주장 · 팀의 얼굴","#e3b341"];
+    if(c.v===p.id) return ["부주장","#e3b341"];
+    const a=p.attr||{};
+    if(attr20(a.ldr||60)>=15) return ["타고난 지도자","#3fb950"];
+    if(attr20(a.det||60)>=15) return ["의지가 굳음","#3fb950"];
+    if(attr20(a.tea||60)>=15) return ["팀을 먼저 생각함","#3fb950"];
+    if(p.pers===0) return ["프로다운","#8b949e"];
+    if(p.pers===1) return ["야심이 있음","#8b949e"];
+    if(p.pers===2) return ["온화함","#8b949e"];
+    if(p.pers===3) return ["다혈질","#ff9d5c"];
+    return ["균형","#8b949e"];
+  }catch(e){ return ["균형","#8b949e"]; }
+}
+/* ═══ 🗣️ 팀 미팅 — 한 달에 한 번 ══════════════════════════════════════════
+   ⚠ 요청 — 「여기서 한 달에 한 번 팀 미팅도 가질 수 있는 거지」.
+   ─ 미팅의 결과는 «팀 리더들이 어떻게 받아들이느냐»가 정한다. 라커룸에서 말이 먹히는
+     사람들이 수긍하면 아래로 퍼지고, 등을 돌리면 그 자리에서 역효과가 난다.
+     그래서 계층 화면 안에 둔다 — 누가 이 말을 들을지 보면서 고르는 것이 이 화면의 쓸모다. */
+const MEET_COOL=28;                       // 4주에 한 번 (요청)
+const MEET_TOPIC=[
+  {k:"unite", ic:"🤝", n:"단합을 호소한다",   d:"「우리는 한 팀이다」 — 무난하지만 확실합니다.",
+   need:"", mor:+4, aff:+2, fam:+1.5, risk:0.06},
+  {k:"push",  ic:"🔥", n:"기강을 잡는다",     d:"느슨해진 팀에 회초리를 듭니다. 성적이 나쁠 때 먹힙니다.",
+   need:"bad", mor:-2, aff:-3, fam:+4.0, risk:0.30},
+  {k:"praise",ic:"👏", n:"공개적으로 칭찬한다", d:"잘하고 있을 때 더 크게 띄웁니다. 성적이 나쁘면 공허하게 들립니다.",
+   need:"good", mor:+7, aff:+5, fam:+0.5, risk:0.18},
+  {k:"goal",  ic:"🎯", n:"목표를 다시 못박는다", d:"시즌 목표를 상기시킵니다. 리더들이 수긍하면 조직력이 붙습니다.",
+   need:"", mor:+2, aff:0,  fam:+3.0, risk:0.14},
+  {k:"listen",ic:"👂", n:"선수들의 말을 듣는다", d:"불만을 꺼내 놓게 합니다. 사기보다 «관계»가 오릅니다.",
+   need:"", mor:+1, aff:+7, fam:+0.5, risk:0.08}
+];
+function meetState(){
+  if(!G.meet) G.meet={at:-1e9, s:G.season, n:0, last:null};
+  if(G.meet.s!==G.season){ G.meet.s=G.season; G.meet.n=0; }
+  return G.meet;
+}
+function meetLeft(){
+  try{ const M=meetState(); return Math.max(0, (M.at|0)+MEET_COOL-(G.day||0)); }catch(e){ return 0; }
+}
+function meetReady(){ try{ return !G.jobless && !!userTeam() && meetLeft()<=0; }catch(e){ return false; } }
+/* 최근 5경기로 본 팀 상태 — 어떤 주제가 먹히는지 가른다 */
+function meetForm(t){
+  try{ const f=(t.form||[]).slice(-5);
+    const w=f.filter(x=>x==="W").length, l=f.filter(x=>x==="L").length;
+    return w-l; }catch(e){ return 0; }
+}
+/* 라커룸에서 말이 먹히는 사람들 — 이 미팅의 «청중 1열» */
+function meetLeaders(t){
+  const H=hierOf(t); if(!H) return [];
+  return H.lead.concat(H.high).map(x=>x.p);
+}
+/* 이 선수 한 명이 이 주제를 받아들일 확률 — 반응을 한 명씩 보여 주려면
+   평균이 아니라 개인값이 있어야 한다(요청 「선수별로 하나하나 다 확인」). */
+function meetAcceptP(t, T, p, isLead){
+  let a=0.55;
+  try{ a += (aff(p)-50)/100*0.55; }catch(e){}
+  a += ((p.morale||70)-70)/100*0.5;
+  if((p.sulk||0)>0) a-=0.45;
+  if((p.unhappy||0)>0) a-=0.18*(p.unhappy||0);
+  const fm=meetForm(t);
+  if(T.need==="bad")  a += fm<=-1 ? 0.20 : -0.28;      // 못하고 있을 때만 회초리가 먹힌다
+  if(T.need==="good") a += fm>=1  ? 0.18 : -0.30;      // 잘하고 있을 때만 칭찬이 산다
+  if(T.k==="push" && p.pers===3) a-=0.16;               // 다혈질에게 기강은 역효과
+  if(T.k==="push" && p.pers===0) a+=0.08;               // 프로다운 선수는 회초리를 받아들인다
+  if(T.k==="praise"&& p.pers===1) a+=0.07;              // 야심가는 공개 칭찬을 좋아한다
+  if(T.k==="listen") a+=0.12;
+  try{ a += profRespect()*0.55; }catch(e){}             // 선수단이 나를 믿는 만큼
+  /* 📌 지난 미팅에서 한 약속을 두 달 넘게 안 지켰다면 — 저들은 기억한다 */
+  try{ const M=meetState();
+    if(M.vow && !M.vow.done && (G.day||0)-(M.vow.d|0)>60) a-=0.11; }catch(e){}
+  if(!isLead) a+=0.04;                                  // 아랫자리는 조금 더 쉽게 수긍한다
+  return clamp(a, 0.03, 0.97);
+}
+/* 리더들이 이 주제를 받아들일 확률(평균) — 주제 고를 때 보여 주는 숫자 */
+function meetAccept(t, T){
+  const lead=meetLeaders(t); if(!lead.length) return 0.5;
+  let acc=0; for(const p of lead) acc+=meetAcceptP(t, T, p, true);
+  return clamp(acc/lead.length, 0.03, 0.97);
+}
+/* ═══ ❓ 역질문 — 팀 리더들이 되묻는다 ══════════════════════════════════
+   ⚠ 요청 — 「일방적인 대화 방식이 아닌, 팀 리더 그룹이 다시 역질문 할 수 있게」.
+   ─ 주제를 던지면 끝이 아니다. 라커룸에서 말이 먹히는 사람이 손을 들고 되묻고,
+     그 대답이 미팅의 결과를 바꾼다. 대답에는 «근거»가 필요하다 —
+     성적이 좋아야 먹히는 말, 신뢰가 있어야 먹히는 말, 곳간이 있어야 먹히는 말이 다르다. */
+const MEET_Q=[
+  {k:"far", t:"", q:"「그래서 우리가 올 시즌 어디까지 갈 수 있다고 보십니까?」",
+   o:[{n:"우승까지 간다",          mor:+5, aff:0,  fam:+2, need:"strong"},
+      {n:"한 계단씩 올라간다",       mor:+2, aff:+2, fam:+2, need:""},
+      {n:"그건 너희가 하기 나름이다",  mor:-2, aff:-3, fam:+3, need:"resp"}]},
+  {k:"pt",  t:"", q:"「출전 시간은 어떻게 되는 겁니까? 여기 앉은 사람 절반은 나가지도 못합니다.」",
+   o:[{n:"자리는 실력으로만 준다",    mor:+1, aff:-1, fam:+3, need:"resp"},
+      {n:"돌아가면서 기회를 주겠다",   mor:+4, aff:+4, fam:-2, need:"", vow:"출전 기회를 돌린다"},
+      {n:"불만이면 이적을 알아봐라",   mor:-4, aff:-6, fam:+2, need:"strong"}]},
+  {k:"buy", t:"", q:"「보강은 하는 겁니까? 이 스쿼드로 그 목표가 됩니까?」",
+   o:[{n:"이번 시장에서 반드시 데려온다", mor:+5, aff:+3, fam:+1, need:"rich", vow:"보강을 약속한다"},
+      {n:"지금 있는 사람으로 한다",      mor:-1, aff:0,  fam:+4, need:""},
+      {n:"구단과 이야기하는 중이다",     mor:+1, aff:+1, fam:0,  need:""}]},
+  {k:"me",  t:"push", q:"「감독님은요? 우리한테만 뭐라 하실 겁니까?」",
+   o:[{n:"내 잘못도 있다",           mor:+3, aff:+5, fam:+1, need:""},
+      {n:"내 자리는 성적으로 증명한다",  mor:+2, aff:0,  fam:+3, need:"resp"},
+      {n:"지금 그게 중요한가",         mor:-3, aff:-5, fam:+1, need:""}]},
+  {k:"cap", t:"", q:"「완장은 계속 저 사람이 답니까?」",
+   o:[{n:"주장은 바꾸지 않는다",       mor:+1, aff:+1, fam:+3, need:""},
+      {n:"경기력으로 다시 정한다",      mor:+2, aff:-1, fam:+1, need:"resp"},
+      {n:"그건 너희끼리 정해라",        mor:0,  aff:+4, fam:-3, need:""}]},
+  {k:"prs", t:"", q:"「밖에서 우리 얘기가 계속 나옵니다. 그건 누가 막습니까?」",
+   o:[{n:"밖은 내가 막는다",          mor:+4, aff:+4, fam:+1, need:""},
+      {n:"신경 쓰지 말고 경기만 해라",   mor:0,  aff:0,  fam:+2, need:""},
+      {n:"말이 나오게 만든 건 우리다",   mor:-2, aff:-2, fam:+4, need:"resp"}]},
+  {k:"trn", t:"", q:"「훈련이 지금 이대로 맞습니까? 다들 다리가 무겁습니다.」",
+   o:[{n:"강도를 낮추겠다",           mor:+3, aff:+3, fam:-1, need:"", vow:"훈련 강도를 낮춘다"},
+      {n:"이 정도는 견뎌야 한다",       mor:-2, aff:-2, fam:+4, need:"resp"},
+      {n:"코치진과 다시 짜 보겠다",      mor:+2, aff:+2, fam:+1, need:""}]},
+  {k:"yng", t:"praise", q:"「어린 선수들 띄우는 건 좋습니다. 그런데 우리는요?」",
+   o:[{n:"고참이 이 팀의 중심이다",     mor:+3, aff:+3, fam:0,  need:""},
+      {n:"자리는 나이로 주지 않는다",    mor:-1, aff:-2, fam:+4, need:"resp"},
+      {n:"둘 다 필요하다",             mor:+2, aff:+1, fam:+1, need:""}]},
+  {k:"win", t:"goal", q:"「목표는 알겠습니다. 못 지키면 어떻게 되는 겁니까?」",
+   o:[{n:"내가 책임진다",             mor:+4, aff:+4, fam:+2, need:""},
+      {n:"그런 가정은 하지 않는다",      mor:+1, aff:0,  fam:+2, need:"strong"},
+      {n:"다 같이 책임지는 거다",        mor:0,  aff:-1, fam:+3, need:"resp"}]},
+  {k:"say", t:"listen", q:"「말해도 바뀌는 게 없으면, 말할 이유가 없지 않습니까?」",
+   o:[{n:"오늘 나온 것 중 하나는 반드시 바꾼다", mor:+4, aff:+5, fam:0, need:"", vow:"나온 말 하나는 바꾼다"},
+      {n:"바꿀 수 있는 것과 없는 게 있다",     mor:+1, aff:+1, fam:+2, need:"resp"},
+      {n:"그래서 오늘 부른 거다",             mor:+2, aff:+2, fam:+1, need:""}]},
+  {k:"mny", t:"", q:"「연봉 얘기는 언제 합니까? 옆 팀은 우리보다 덜 뛰고 더 받습니다.」",
+   o:[{n:"성적이 나오면 구단이 움직인다",  mor:+2, aff:+1, fam:+2, need:"rich"},
+      {n:"돈 얘기는 나와 따로 하자",      mor:+1, aff:+3, fam:0,  need:""},
+      {n:"여기 있는 동안은 그 얘기 없다",   mor:-3, aff:-4, fam:+3, need:"resp"}]}
+];
+/* 대답에 근거가 있는가 — 없는 말은 라커룸에서 그냥 흘러간다 */
+function meetNeedK(t, need){
+  try{
+    if(need==="strong"){
+      const T=tableOf(t.div)||[]; const r=T.findIndex(x=>x.id===t.id);
+      if(r<0) return 0;
+      return (r < T.length/3) ? 0.16 : -0.22;
+    }
+    if(need==="resp") return profRespect()>=0.06 ? 0.15 : -0.20;
+    if(need==="rich") return (t.budget||0)>=40 ? 0.14 : -0.22;
+  }catch(e){}
+  return 0;
+}
+function meetQLand(t, o, asker){
+  let a=0.55 + meetNeedK(t, o.need);
+  try{ a += (aff(asker)-50)/100*0.40; }catch(e){}
+  try{ a += profRespect()*0.50; }catch(e){}
+  if(asker && asker.pers===3) a-=0.08;                 // 다혈질은 쉽게 안 넘어간다
+  if(asker && (asker.sulk||0)>0) a-=0.20;
+  return clamp(a, 0.05, 0.95);
+}
+/* 반응 한 줄 — 결과를 사람 얼굴로 보여 준다 */
+const MEET_RE={
+  "1" :["고개를 끄덕였습니다.","「맞는 말입니다.」","표정이 풀렸습니다.","먼저 박수를 쳤습니다.",
+        "눈을 맞추고 끝까지 들었습니다.","옆 사람 어깨를 쳤습니다."],
+  "0" :["듣고만 있었습니다.","별 반응이 없었습니다.","고개만 한 번 움직였습니다.",
+        "바닥을 보고 있었습니다.","시계를 봤습니다."],
+  "-1":["팔짱을 낀 채였습니다.","혼잣말로 뭔가를 중얼거렸습니다.","시선을 피했습니다.",
+        "「또 그 얘기입니까.」","자리에서 먼저 일어났습니다.","코웃음을 쳤습니다."]
+};
+const MEET_RE_L={
+  "1" :["라커룸을 둘러보며 동료들에게 눈짓했습니다.","먼저 일어나 「가자」고 했습니다.","감독 말을 자기 말로 한 번 더 옮겼습니다."],
+  "0" :["아무 말 없이 자리를 지켰습니다.","동료들 눈치만 살폈습니다."],
+  "-1":["대놓고 「그게 됩니까」라고 되받았습니다.","동료들 앞에서 고개를 저었습니다.","말을 끊고 나가 버렸습니다."]
+};
+function meetLine(r, isLead, i){
+  const P=(isLead && Math.abs(i)%3!==2) ? MEET_RE_L[String(r)] : MEET_RE[String(r)];
+  const Q=P&&P.length?P:MEET_RE[String(r)];
+  return Q[Math.abs(i)%Q.length];
+}
+/* ── 미팅 시작 — 주제를 던지고, 리더들의 첫 반응을 굴리고, 역질문을 뽑는다 ── */
+function meetDo(k){
+  const t=userTeam(); if(!t) return;
+  if(meetPending()){ HRTAB="meet"; show("hier"); return; }
+  if(!meetReady()){ try{ flash(`팀 미팅은 4주에 한 번입니다 — ${meetLeft()}일 남았습니다.`,"warn"); }catch(e){} return; }
+  const T=MEET_TOPIC.find(x=>x.k===k); if(!T) return;
+  const acc=meetAccept(t, T);
+  showConfirm(`<b>${T.ic} ${T.n}</b>\n\n${T.d}\n\n`+
+    `<span class="small">라커룸 리더들이 수긍할 가능성 <b style="color:${acc>=0.6?"var(--green)":acc>=0.4?"var(--gold)":"var(--red)"}">${Math.round(acc*100)}%</b>\n`+
+    `수긍하면 아래로 퍼지고, 등을 돌리면 그 자리에서 역효과가 납니다.\n`+
+    `이야기를 마치면 <b>팀 리더들이 되묻습니다</b> — 그 대답도 결과에 들어갑니다.</span>`,
+    ()=>meetStart(T), {okLabel:"이 이야기를 한다", cancelLabel:"그만둔다"});
+}
+/* 진행 중인 미팅(역질문 대기)인가 */
+function meetPending(){ try{ const M=meetState(); return !!(M.q && M.q.tk); }catch(e){ return false; } }
+function meetStart(T){
+  const t=userTeam(); if(!t) return;
+  const M=meetState();
+  /* 쿨타임은 «말을 꺼낸 순간» 잠근다 — 중간에 덮고 다시 고르는 재굴림을 막는다 */
+  M.at=(G.day||0); M.n=(M.n|0)+1;
+  const H=hierOf(t);
+  const lead=H?H.lead.map(x=>x.p):[], high=H?H.high.map(x=>x.p):[];
+  const grp=lead.concat(high);
+  /* 리더들의 첫 반응 */
+  const roll=[];
+  let okN=0;
+  for(const p of grp){
+    const a=meetAcceptP(t, T, p, true);
+    const ok=Math.random()<a;
+    if(ok) okN++;
+    roll.push({id:p.id, a:Math.round(a*100), ok});
+  }
+  const lead0 = grp.length ? okN/grp.length : 0.5;
+  /* 되물을 사람 — 팀 리더 우선, 불만·태업·다혈질이 먼저 손을 든다 */
+  const cand=(lead.length?lead:grp).slice().sort((a,b)=>
+      ((b.sulk||0)+(b.unhappy||0)*0.6+(b.pers===3?0.5:0)) -
+      ((a.sulk||0)+(a.unhappy||0)*0.6+(a.pers===3?0.5:0)));
+  const pool=MEET_Q.filter(q=>!q.t || q.t===T.k);
+  const qs=[]; const used={};
+  const nQ=Math.min(cand.length?2:0, 2);
+  for(let i=0;i<nQ;i++){
+    let tries=0, q=null;
+    while(tries++<24){ const c=pool[Math.floor(Math.random()*pool.length)];
+      if(c && !used[c.k]){ q=c; break; } }
+    if(!q) break;
+    used[q.k]=1;
+    qs.push({who:cand[i%cand.length].id, k:q.k});
+  }
+  M.q={tk:T.k, i:0, qs, log:[], roll, lead:lead0, lead0};
+  HRTAB="meet";
+  try{ saveGame(); }catch(e){}
+  show("hier");
+}
+/* ── 역질문에 답한다 ── */
+function meetAns(oi){
+  const t=userTeam(); if(!t) return;
+  const M=meetState(); if(!M.q) return;
+  const Q=M.q, step=Q.qs[Q.i|0]; if(!step) return meetFinish();
+  const QD=MEET_Q.find(x=>x.k===step.k); if(!QD) return meetFinish();
+  const o=QD.o[oi|0]; if(!o) return;
+  const asker=(t.players||[]).find(p=>p.id===step.who);
+  const land=meetQLand(t, o, asker);
+  const ok=Math.random()<land;
+  Q.lead = clamp((Q.lead||0.5) + (ok?0.10:-0.13), 0, 1);
+  Q.log.push({who:step.who, nm:asker?nmF(asker):"선수", q:QD.q, an:o.n, ok,
+              land:Math.round(land*100),
+              mor:o.mor*(ok?1:-0.6), aff:o.aff*(ok?1:-0.6), fam:o.fam*(ok?1:-0.5),
+              vow:(ok&&o.vow)?o.vow:""});
+  if(ok && o.vow) M.vow={n:o.vow, d:(G.day||0), done:false};
+  Q.i=(Q.i|0)+1;
+  if(Q.i >= Q.qs.length) return meetFinish();
+  try{ saveGame(); }catch(e){}
+  show("hier");
+}
+/* ── 미팅 마무리 — 선수 한 명 한 명의 반응을 남긴다 ── */
+function meetFinish(){
+  const t=userTeam(); if(!t) return;
+  const M=meetState(); const Q=M.q; if(!Q) return;
+  const T=MEET_TOPIC.find(x=>x.k===Q.tk)||MEET_TOPIC[0];
+  const H=hierOf(t);
+  const tierOf=(id)=>{ if(!H) return "low";
+    for(const k of ["lead","high","mid","low"]) if(H[k].some(x=>x.p.id===id)) return k;
+    return "low"; };
+  /* 역질문에서 쌓인 것 */
+  let qMor=0, qAff=0, qFam=0;
+  for(const L of (Q.log||[])){ qMor+=L.mor; qAff+=L.aff; qFam+=L.fam; }
+  const lead=clamp(Q.lead!=null?Q.lead:0.5, 0, 1);
+  const ok  = lead>=0.5;
+  const bad = lead<0.28;
+  /* 주제의 기본 효과 × 리더들이 얼마나 받아 줬는가 */
+  const k = ok ? (0.6+lead*0.8) : (bad ? -1.05 : -0.35);
+  const re=[];
+  let sMor=0, sAff=0, n=0;
+  try{ for(const p of (t.players||[])){
+    if(p.loan) continue;
+    const tk=tierOf(p.id);
+    const isLead = (tk==="lead"||tk==="high");
+    const a0=meetAcceptP(t, T, p, isLead);
+    /* 아랫자리는 자기 판단 60% + 리더들이 어떻게 받았는가 40% */
+    const a = isLead ? a0 : (a0*0.6 + lead*0.4);
+    const rl=Math.random();
+    const r = rl<a-0.18 ? 1 : rl<a+0.22 ? 0 : -1;
+    const w = (tk==="lead"?1.15:tk==="high"?1:tk==="mid"?0.7:0.5);
+    const mor = (T.mor*k + qMor*0.55) * w * (r>0?1:r<0?-0.7:0.25);
+    const aff2= (T.aff*k + qAff*0.55) * w * (r>0?1:r<0?-0.7:0.25);
+    p.morale=clamp((p.morale||70)+mor, 20, 99);
+    try{ affAdd(p, aff2, "팀 미팅"); }catch(e){}
+    sMor+=mor; sAff+=aff2; n++;
+    re.push({id:p.id, nm:nmF(p), pos:p.pos, tk, r,
+             mor:Math.round(mor*10)/10, aff:Math.round(aff2*10)/10,
+             ln:meetLine(r, isLead, p.id+(Q.i|0))});
+  } }catch(e){}
+  const famD=(T.fam*k + qFam*0.6);
+  try{ t.fam=clamp((t.fam!=null?t.fam:70)+famD, 0, 100); }catch(e){}
+  re.sort((a,b)=> (["lead","high","mid","low"].indexOf(a.tk)-["lead","high","mid","low"].indexOf(b.tk)) || (b.r-a.r));
+  const nIn=re.filter(x=>x.r>0).length, nOut=re.filter(x=>x.r<0).length;
+  M.last={k:T.k, s:G.season, d:(G.day||0), ok:ok?1:bad?-1:0,
+          lead:Math.round(lead*100), re, log:Q.log||[],
+          fam:Math.round(famD*10)/10, mor:Math.round((n?sMor/n:0)*10)/10};
+  M.q=null;
+  const names=(H&&H.lead.length)?H.lead.map(x=>nmF(x.p)).join(", "):"선수단";
+  const txt = ok
+    ? `🗣️ <b>팀 미팅 — ${T.n}</b><br><span class="small">${names}이(가) 먼저 고개를 끄덕였고, 라커룸이 따라갔습니다.
+        공감 ${nIn}명 · 반발 ${nOut}명 · 조직력 ${famD>=0?"+":""}${Math.round(famD*10)/10}</span>`
+    : bad
+    ? `🗣️ <b>팀 미팅 — ${T.n}</b><br><span class="small" style="color:#ff9d5c">${names}이(가) 대놓고 반발했습니다. 분위기가 더 나빠졌습니다.
+        공감 ${nIn}명 · 반발 ${nOut}명 · 조직력 ${Math.round(famD*10)/10}</span>`
+    : `🗣️ <b>팀 미팅 — ${T.n}</b><br><span class="small">듣기는 했지만 마음이 크게 움직이지는 않았습니다. 공감 ${nIn}명 · 반발 ${nOut}명</span>`;
+  try{ addMood(txt, ok?"good":bad?"warn":undefined); }catch(e){}
+  try{ notify(txt, ok?"good":bad?"warn":"info"); }catch(e){}
+  try{ saveGame(); }catch(e){}
+  HRTAB="meet";
+  show("hier");
+}
+/* ═══ 🎩 수석코치가 읽는 라커룸 ═══════════════════════════════════════════
+   ⚠ 요청 — 「계층 탭 우측에서 수석코치의 의견으로 팀 계층 상황을 알 수 있게」.
+   ─ 피라미드는 «누가 위에 있는가»만 보여 준다. 그게 좋은 모양인지 나쁜 모양인지는
+     따로 읽어 줘야 한다. 경기 총평과 같은 규칙을 쓴다 — 인력 관리(mgm)가 낮으면
+     라커룸을 깊이 못 보고, 그래서 짚어 주는 항목 수 자체가 줄어든다. */
+function hierCoachRead(t, H){
+  const c=(typeof acOf==="function")?acOf():null;
+  const wrap=(inner, head)=>`<div class="card hrCoach">
+    <h3>🎩 ${c?`${c.n} 수석코치`:"수석코치"} <span class="small">— 라커룸을 어떻게 보는가</span></h3>
+    ${head||""}${inner}</div>`;
+  if(!c) return wrap(`<p class="small" style="opacity:.8">수석코치가 공석이라 라커룸을 대신 봐 줄 사람이 없습니다.
+    <span style="color:var(--gold)">💸 이적시장 → 🎩 스태프 탭</span>에서 한 명 선임하시죠.</p>`);
+  const lv=(typeof sa==="function")?sa(c,"mgm"):10;                 // 인력 관리
+  const man=(c.trait==="man");
+  const O=[];
+  const say=(ic, txt, tone, w)=>O.push({ic, txt, tone:tone||"", w:w||1});
+  try{
+    const lead=H.lead.map(x=>x.p), high=H.high.map(x=>x.p), grp=lead.concat(high);
+    const all=(t.players||[]).filter(p=>p&&!p.loan);
+    const cap=captainOf(t);
+    const age=p=>G.season-(p.by||2000);
+    /* ① 완장이 라커룸에서 힘을 쓰는가 */
+    if(cap && !grp.some(p=>p.id===cap.id))
+      say("🎖️", `<b>${nmF(cap)}</b>가 완장을 달고 있는데 라커룸에서는 목소리가 없습니다. 완장이 겉돌면 아무 말도 안 먹힙니다.`, "bad", 3);
+    else if(cap && lead.length && lead[0].id===cap.id)
+      say("🎖️", `<b>${nmF(cap)}</b>가 완장도, 목소리도 쥐고 있습니다. 이 방은 정리되어 있습니다.`, "good", 1);
+    /* ② 위쪽에 불씨가 있는가 */
+    const sulk=grp.filter(p=>(p.sulk||0)>0);
+    const unh =grp.filter(p=>(p.unhappy||0)>0 && !(p.sulk||0));
+    if(sulk.length) say("🔥", `<b>${sulk.map(nmF).join(", ")}</b>가 태업 중인데, 하필 말이 먹히는 자리에 있습니다. 이건 아래로 번집니다 — 빨리 정리하셔야 합니다.`, "bad", 4);
+    else if(unh.length) say("⚠️", `<b>${unh.map(nmF).join(", ")}</b>가 불만을 품고 있습니다. 위쪽 불만은 조용히 퍼집니다.`, "warn", 3);
+    /* ③ 말과 경기력이 따로 노는가 */
+    if(grp.length && all.length>=11){
+      const gv=grp.reduce((s,p)=>s+ovr20(p),0)/grp.length;
+      const av=all.reduce((s,p)=>s+ovr20(p),0)/all.length;
+      if(gv < av-0.7) say("🗣️", `말은 저 사람들이 하는데, 경기는 다른 사람들이 하고 있습니다. 라커룸 서열과 경기력이 어긋나면 어린 선수들이 헷갈립니다.`, "warn", 2);
+      else if(gv > av+1.4) say("💪", `위에 있는 사람들이 실력으로도 위에 있습니다. 이런 팀은 감독 말이 잘 통합니다.`, "good", 1);
+    }
+    /* ④ 라커룸의 나이 */
+    if(lead.length){
+      const la=lead.reduce((s,p)=>s+age(p),0)/lead.length;
+      if(la>=31) say("⏳", `리더 그룹 평균이 <b>${la.toFixed(1)}세</b>입니다. 지금은 든든하지만, 이 사람들이 한꺼번에 빠집니다. 다음 세대를 지금 올려 두셔야 합니다.`, "warn", 2);
+      else if(la<=24.5) say("🌱", `리더 그룹이 <b>${la.toFixed(1)}세</b>로 젊습니다. 밀리는 경기에서 붙잡아 줄 사람이 없습니다 — 고참 한 명이 필요합니다.`, "warn", 2);
+    }
+    /* ⑤ 다음 세대 */
+    const next=all.filter(p=>age(p)<=23 && attr20((p.attr||{}).ldr||60)>=14
+                 && !grp.some(q=>q.id===p.id)).sort((a,b)=>((b.attr||{}).ldr||0)-((a.attr||{}).ldr||0))[0];
+    if(next) say("👑", `<b>${nmF(next)}</b>(${age(next)}세)는 몇 년 뒤 이 방의 주인이 될 사람입니다. 지금부터 세워 두면 완장 넘기기가 쉬워집니다.`, "good", 1);
+    /* ⑥ 값은 비싼데 라커룸에서는 아무것도 아닌 사람 */
+    const oddL=(H.low||[]).map(x=>x.p).filter(p=>ovr20(p)>=13.5).sort((a,b)=>ovr20(b)-ovr20(a))[0];
+    if(oddL) say("🧊", `<b>${nmF(oddL)}</b>는 실력에 비해 라커룸에서 아직 아무것도 아닙니다. 온 지 얼마 안 됐거나, 동료들이 아직 인정을 안 한 겁니다.`, "", 1);
+    /* ⑦ 다혈질이 위에 있는가 */
+    const hot=lead.filter(p=>p.pers===3);
+    if(hot.length) say("💢", `<b>${hot.map(nmF).join(", ")}</b>는 불이 붙으면 라커룸 전체를 태웁니다. 기강 잡는 미팅은 이 사람 앞에서 조심하십시오.`, "warn", 2);
+    /* ⑧ 위쪽 계약 */
+    const exp=grp.filter(p=>(p.ct||3)<=1).sort((a,b)=>(a.ct||0)-(b.ct||0));
+    if(exp.length) say("📜", `<b>${exp.map(nmF).join(", ")}</b> 계약이 1년 이하입니다. 저 사람이 흔들리면 그 아래가 다 흔들립니다.`, "warn", 3);
+    /* ⑨ 포지션 쏠림 */
+    if(grp.length>=4){
+      const cnt={}; for(const p of grp) cnt[p.pos]=(cnt[p.pos]||0)+1;
+      const top=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0];
+      if(cnt[top]/grp.length>=0.6) say("📐", `라커룸의 목소리가 <b>${top}</b>에 몰려 있습니다(${cnt[top]}/${grp.length}). 다른 라인 이야기가 위로 안 올라옵니다.`, "warn", 1);
+    }
+    /* ⑩ 지난 미팅에서 한 약속 */
+    try{ const M=meetState();
+      if(M.vow && !M.vow.done){
+        const d=(G.day||0)-(M.vow.d|0);
+        if(d>60) say("📌", `지난 미팅에서 하신 말씀 — 「${M.vow.n}」. ${d}일이 지났습니다. 저 사람들, 아직 기억하고 있습니다.`, "bad", 4);
+        else say("📌", `지난 미팅의 약속 — 「${M.vow.n}」. 아직은 지켜보는 중입니다(${d}일).`, "", 2);
+      } }catch(e){}
+    /* ⑪ 전반적인 온도 */
+    if(all.length){
+      const mm=all.reduce((s,p)=>s+(p.morale||70),0)/all.length;
+      if(mm<=55) say("🌡️", `선수단 평균 사기가 <b>${mm.toFixed(0)}</b>입니다. 지금 라커룸을 한 번 모으셔야 합니다.`, "bad", 3);
+      else if(mm>=82) say("🌡️", `평균 사기 <b>${mm.toFixed(0)}</b> — 이 방은 지금 좋습니다. 굳이 흔들지 마십시오.`, "good", 1);
+    }
+  }catch(e){}
+  /* 인력 관리가 낮으면 애초에 이만큼밖에 못 본다 */
+  const capN=clamp(Math.round(lv/3.4)+(man?1:0), 1, 6);
+  O.sort((a,b)=>b.w-a.w);
+  const list=O.slice(0, capN);
+  const col=x=>x.tone==="bad"?"var(--red)":x.tone==="warn"?"#ff9d5c":x.tone==="good"?"var(--green)":"var(--fg)";
+  const head=`<p class="small" style="margin:0 0 8px;opacity:.75">
+    ${AC_TRAIT[c.trait]?AC_TRAIT[c.trait].ic+" "+AC_TRAIT[c.trait].n:""} ·
+    인력 관리 <b style="color:${acGrade(lv)[1]}">${lv}</b>${man?' · <span style="color:var(--green)">라커룸을 먼저 봅니다</span>':""}</p>`;
+  if(!list.length) return wrap(`<p class="small" style="opacity:.8">「특별히 드릴 말씀은 없습니다. 지금은 조용합니다.」</p>`, head);
+  return wrap(`<div style="display:flex;flex-direction:column;gap:9px">
+    ${list.map(x=>`<div class="hrSay"><span class="hrSayIc">${x.ic}</span>
+      <span class="small" style="color:${col(x)}">${x.txt}</span></div>`).join("")}
+  </div>${lv<9?`<p class="small" style="margin:9px 0 0;opacity:.6">인력 관리가 <b>${lv}</b>라 라커룸을 깊이 들여다보지는 못합니다 — 더 나은 수석코치라면 더 짚어 줍니다.</p>`:""}`, head);
+}
+/* 👑 세력 구도 화면 — ① 계층(피라미드+수석코치) ② 팀 미팅 */
+let HRTAB="tier";
+function hierSetTab(k){ HRTAB=k; show("hier"); }
+function hierView(){
+  const t=userTeam();
+  if(!t) return `<h2>👑 세력 구도</h2><p class="small">맡은 구단이 없습니다.</p>`;
+  const H=hierOf(t);
+  if(!H) return `<h2>👑 세력 구도</h2><p class="small">선수단이 없습니다.</p>`;
+  if(HRTAB!=="tier" && HRTAB!=="meet") HRTAB="tier";
+  const rdy=meetReady()||meetPending();
+  const tabs=`<div style="display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap">
+    <button class="mini ${HRTAB==="tier"?"sel":""}" style="padding:7px 14px" onclick="hierSetTab('tier')">👑 계층</button>
+    <button class="mini ${HRTAB==="meet"?"sel":""}" style="padding:7px 14px" onclick="hierSetTab('meet')">🗣️ 팀 미팅${tabBadge(rdy?1:0, 1)}</button>
+  </div>`;
+  return `<h2>👑 세력 구도 <span class="small">— 라커룸 계층</span></h2>${tabs}
+    ${HRTAB==="meet" ? hierMeetView(t, H) : hierTierView(t, H)}`;
+}
+/* ── 👑 계층 탭 — 좌: 피라미드 · 우: 수석코치 의견 ── */
+function hierTierView(t, H){
+  const cap=captainOf(t), vice=viceOf(t);
+  const card=(x)=>{
+    const p=x.p, tg=hierTag(t,x);
+    return `<div class="hrCard clickable" onclick="openPlayerMenu(event,${p.id})" oncontextmenu="showPlayerInfoPopup(event,${p.id})">
+      <div class="hrNm">${nmF(p)}${cap&&cap.id===p.id?' <span class="hrBand">C</span>':vice&&vice.id===p.id?' <span class="hrBand v">V</span>':""}</div>
+      <div class="hrSub" style="color:${tg[1]}">${tg[0]}</div>
+      <div class="hrMeta">${p.pos} · ${G.season-(p.by||2000)}세 · 영향력 <b>${x.v}</b></div>
+    </div>`;
+  };
+  const row=(T,i)=>{
+    const L=H[T.k]; if(!L.length) return "";
+    const w=[46,62,80,96][i];                 // 피라미드 — 위가 좁고 아래로 넓어진다
+    return `<div class="hrTier" style="width:${w}%">
+      <div class="hrBar" style="background:${T.c}">${T.n} <span style="font-size:11px;font-weight:700;opacity:.7;color:#12181f">${L.length}명</span></div>
+      <div class="hrRow">${L.map(card).join("")}</div>
+      <p class="small hrDesc">${T.d}</p>
+    </div>`;
+  };
+  return `<div class="msg info">선수를 누르면 선수 메뉴가 열립니다. 영향력은 <b>리더십·팀워크·의지</b>에 더해
+    <b>경기장에서 보여 준 것</b>과 <b>이 팀에서 보낸 시간</b>, 그리고 <b>완장</b>으로 정해집니다.
+    <span class="small">위로 갈수록 라커룸에서 말이 먹히고, 불만이 생기면 아래로 빠르게 번집니다.</span></div>
+  <div class="hrWrap">
+    <div class="hrLeft"><div class="hrPyr">${HIER_TIERS.map((T,i)=>row(T,i)).join("")}</div></div>
+    <div class="hrRight">${hierCoachRead(t, H)}</div>
+  </div>`;
+}
+/* ── 🗣️ 팀 미팅 탭 ── */
+function hierMeetView(t, H){
+  const M=meetState(), left=meetLeft(), fm=meetForm(t);
+  /* ① 역질문 진행 중 */
+  if(meetPending()) return hierMeetQView(t, M);
+  /* ② 주제 고르기 */
+  const pick = left ? `<div class="card">
+      <h3>🗣️ 팀 미팅 <span class="small">— 4주에 한 번</span></h3>
+      <p class="small" style="margin:2px 0 0">다음 미팅까지 <b>${left}일</b> 남았습니다.
+        <span style="opacity:.7">올 시즌 ${M.n|0}회 소집</span></p></div>`
+    : `<div class="card" style="border-color:var(--gold)">
+      <h3>🗣️ 팀 미팅 <span class="small">— 4주에 한 번</span></h3>
+      <p class="small" style="margin:2px 0 10px">라커룸을 모읍니다. <b>팀 리더들이 수긍하면</b> 아래로 퍼지고, 등을 돌리면 그 자리에서 역효과가 납니다.
+        이야기를 마치면 <b>리더들이 되묻습니다</b>.
+        <span style="opacity:.75">최근 5경기 ${fm>0?`<b style="color:var(--green)">+${fm}</b> (좋음)`:fm<0?`<b style="color:var(--red)">${fm}</b> (나쁨)`:"<b>0</b> (평범)"}</span></p>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${MEET_TOPIC.map(T=>{
+          const acc=meetAccept(t,T);
+          const col=acc>=0.6?"var(--green)":acc>=0.4?"var(--gold)":"var(--red)";
+          return `<button class="mini" style="padding:10px 13px;text-align:left" onclick="meetDo('${T.k}')">
+            <b>${T.ic} ${T.n}</b> <span style="color:${col};font-weight:800;float:right">${Math.round(acc*100)}%</span>
+            <br><span class="small" style="opacity:.75">${T.d}</span></button>`;
+        }).join("")}
+      </div></div>`;
+  return pick + hierMeetLast(t, M);
+}
+/* ── ❓ 역질문 화면 ── */
+function hierMeetQView(t, M){
+  const Q=M.q, T=MEET_TOPIC.find(x=>x.k===Q.tk)||MEET_TOPIC[0];
+  const step=Q.qs[Q.i|0];
+  const QD=step?MEET_Q.find(x=>x.k===step.k):null;
+  if(!step || !QD){ setTimeout(()=>meetFinish(), 0); return `<div class="card"><p class="small">미팅을 정리하는 중…</p></div>`; }
+  const asker=(t.players||[]).find(p=>p.id===step.who);
+  const H=hierOf(t);
+  const grp=H?H.lead.concat(H.high):[];
+  const roll=Q.roll||[];
+  const okN=roll.filter(x=>x.ok).length;
+  const chips=roll.map(x=>{
+    const p=(t.players||[]).find(q=>q.id===x.id);
+    if(!p) return "";
+    return `<span class="hrChip ${x.ok?"y":"n"}">${x.ok?"✔":"✖"} ${nmF(p)} <span style="opacity:.6">${x.a}%</span></span>`;
+  }).join("");
+  const logs=(Q.log||[]).map(L=>`<div class="hrQLog">
+    <div class="small" style="opacity:.7">${L.nm} — ${L.q}</div>
+    <div class="small"><b>내 대답</b> 「${L.an}」 →
+      <b style="color:${L.ok?"var(--green)":"var(--red)"}">${L.ok?"납득했습니다":"납득하지 못했습니다"}</b>
+      <span style="opacity:.6">(설득 가능성 ${L.land}%)</span>${L.vow?` · <span style="color:var(--gold)">📌 ${L.vow}</span>`:""}</div>
+  </div>`).join("");
+  return `<div class="card" style="border-color:var(--gold)">
+    <h3>🗣️ 팀 미팅 진행 중 <span class="small">— ${T.ic} ${T.n}</span></h3>
+    <p class="small" style="margin:2px 0 8px">리더 ${roll.length}명 중 <b style="color:var(--green)">${okN}명</b>이 먼저 수긍했습니다.
+      <span style="opacity:.7">현재 라커룸 분위기 <b>${Math.round((Q.lead||0.5)*100)}%</b></span></p>
+    <div class="hrChips">${chips}</div>
+    ${logs?`<div style="margin-top:10px">${logs}</div>`:""}
+  </div>
+  <div class="card" style="border-color:#e05a5a">
+    <h3>❓ 되묻습니다 <span class="small">— ${Q.i+1} / ${Q.qs.length}</span></h3>
+    <div class="hrAsk">
+      <div class="hrAskWho">${asker?nmF(asker):"팀 리더"}${asker?` <span class="small" style="opacity:.6">${asker.pos} · ${G.season-(asker.by||2000)}세</span>`:""}</div>
+      <div class="hrAskQ">${QD.q}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
+      ${QD.o.map((o,i)=>{
+        const land=meetQLand(t, o, asker);
+        const col=land>=0.6?"var(--green)":land>=0.42?"var(--gold)":"var(--red)";
+        const nd=o.need==="strong"?"성적이 받쳐 줘야 먹히는 말":o.need==="resp"?"선수단이 나를 믿어야 먹히는 말"
+                :o.need==="rich"?"곳간이 받쳐 줘야 먹히는 말":"";
+        return `<button class="mini" style="padding:11px 13px;text-align:left" onclick="meetAns(${i})">
+          <b>「${o.n}」</b> <span style="color:${col};font-weight:800;float:right">${Math.round(land*100)}%</span>
+          ${nd||o.vow?`<br><span class="small" style="opacity:.7">${nd}${nd&&o.vow?" · ":""}${o.vow?`<span style="color:var(--gold)">📌 약속 — ${o.vow}</span>`:""}</span>`:""}</button>`;
+      }).join("")}
+    </div>
+    <p class="small" style="margin:9px 0 0;opacity:.6">대답이 납득되면 라커룸이 더 열리고, 안 되면 그만큼 닫힙니다. 되돌릴 수 없습니다.</p>
+  </div>`;
+}
+/* ── 📋 지난 미팅 — 선수별 반응을 하나하나 ── */
+function hierMeetLast(t, M){
+  const L=M.last;
+  if(!L || !L.re || !L.re.length) return `<p class="small" style="opacity:.6;margin-top:10px">아직 이번 세이브에서 연 미팅이 없습니다.</p>`;
+  const T=MEET_TOPIC.find(x=>x.k===L.k)||{n:"?", ic:"🗣️"};
+  const TN={lead:"팀 리더", high:"매우 영향력", mid:"영향력", low:"그 외"};
+  const TC={lead:"#e05a5a", high:"#e0a03a", mid:"#e8d44a", low:"#7d848c"};
+  const nIn=L.re.filter(x=>x.r>0).length, nMid=L.re.filter(x=>x.r===0).length, nOut=L.re.filter(x=>x.r<0).length;
+  const logs=(L.log||[]).map(x=>`<div class="hrQLog">
+    <div class="small" style="opacity:.7">${x.nm} — ${x.q}</div>
+    <div class="small"><b>내 대답</b> 「${x.an}」 →
+      <b style="color:${x.ok?"var(--green)":"var(--red)"}">${x.ok?"납득":"반발"}</b>${x.vow?` · <span style="color:var(--gold)">📌 ${x.vow}</span>`:""}</div></div>`).join("");
+  const rows=L.re.map(x=>{
+    const c=x.r>0?"var(--green)":x.r<0?"var(--red)":"#8b949e";
+    const ic=x.r>0?"😀":x.r<0?"😠":"😐";
+    return `<div class="hrRe" style="border-left-color:${c}">
+      <div class="hrReTop">
+        <span class="hrReTier" style="color:${TC[x.tk]};border-color:${TC[x.tk]}">${TN[x.tk]}</span>
+        <b>${x.nm}</b> <span class="small" style="opacity:.55">${x.pos}</span>
+        <span style="margin-left:auto;font-size:12px;color:${c};font-weight:800">${ic} ${x.r>0?"공감":x.r<0?"반발":"무덤덤"}</span>
+      </div>
+      <div class="small" style="opacity:.8">${x.ln}
+        <span style="opacity:.6;margin-left:6px">사기 ${x.mor>=0?"+":""}${x.mor} · 관계 ${x.aff>=0?"+":""}${x.aff}</span></div>
+    </div>`;
+  }).join("");
+  return `<div class="card" style="margin-top:12px">
+    <h3>📋 지난 미팅 <span class="small">— ${T.ic} ${T.n} · ${L.s}시즌</span></h3>
+    <p class="small" style="margin:2px 0 10px">
+      리더 수용 <b>${L.lead}%</b> ·
+      <b style="color:var(--green)">공감 ${nIn}</b> · 무덤덤 ${nMid} · <b style="color:var(--red)">반발 ${nOut}</b> ·
+      조직력 ${L.fam>=0?"+":""}${L.fam} · 평균 사기 ${L.mor>=0?"+":""}${L.mor}</p>
+    ${logs?`<div style="margin-bottom:10px">${logs}</div>`:""}
+    <div class="hrReList">${rows}</div>
+  </div>`;
+}
 /* 🎯 새 시즌 목표를 아직 안 세웠는가 — 부임 절차를 마친 감독만 해당(부임 중엔 인사 흐름이 담당) */
 function goalNeeded(){
   if(G.jobless || !G.introDone) return false;
@@ -13926,6 +14591,11 @@ function acPoolTopUp(P){
 function acPoolFill(){
   G.acPool=[];
   acPoolTopUp(G.acPool);
+  /* 🎩 ⚠ 팀 선택 화면에서 만들어 둔 스태프를 여기서 넣는다 (요청).
+     newGame 안에서 넣어 봤더니 뒤이어 이 함수가 시장을 통째로 새로 깔면서 지워졌다(실측 0명).
+     시장이 «채워지는 그 자리»가 유일하게 안전한 지점이다. 세이브당 한 번만 넣는다. */
+  try{ const n=preStaffApply(); if(n && !PREGEN)
+        addNews(`🎩 <b>시작 전에 만들어 둔 스태프 ${n}명</b>이 무직 코치 시장에 합류했습니다 — 💸 이적시장 → 🎩 스태프에서 영입할 수 있습니다.`, "good", "club"); }catch(e){}
   G.acPoolS=(G&&G.season)||2026;
 }
 /* 시즌이 바뀌면 시장이 돈다 — 절반쯤 갈아 끼운다 */
@@ -28371,9 +29041,10 @@ function playerGenView(){
   };
   const SEL=(k,opts,cur)=>`<select onchange="pgSet('${k}', this.value)">${opts.map(o=>`<option value="${o[0]}" ${cur===o[0]?"selected":""}>${o[1]}</option>`).join("")}</select>`;
   const age=G.season-PG.by;
-  const pgTabs=`<div style="display:flex;gap:6px;margin-bottom:10px">
+  const pgTabs=`<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
     <button class="mini ${PGTAB==="make"?"sel":""}" style="padding:7px 14px" onclick="PGTAB='make';show('playerGen')">🧬 선수 만들기</button>
     <button class="mini ${PGTAB==="list"?"sel":""}" style="padding:7px 14px" onclick="PGTAB='list';show('playerGen')">📜 선수 생성 목록${tabBadge((G.pgMade&&G.pgMade.length)||0, 1)}</button>
+    <button class="mini ${PGTAB==="staff"?"sel":""}" style="padding:7px 14px" onclick="PGTAB='staff';show('playerGen')">🎩 스태프 만들기${tabBadge(((G.acPool||[]).filter(c=>c&&c.made)).length, 1)}</button>
   </div>`;
   /* 🧬 게임 시작 전 모드 — 넣을 리그가 없으니 「목록에만 생성」만 쓴다 */
   const preBar = PREGEN ? `<div class="msg info" style="border-width:2px">
@@ -28382,6 +29053,7 @@ function playerGenView(){
       <div style="margin-top:8px"><button class="mini" onclick="closePreGen()">◀ 팀 선택으로 돌아가기</button></div>
     </div>` : "";
   if(PGTAB==="list") return `<h2>🧬 선수 생성</h2>${preBar}${pgTabs}${pgMadeListView()}`;
+  if(PGTAB==="staff") return `<h2>🧬 선수·스태프 생성</h2>${preBar}${pgTabs}${pgStaffView()}`;
   return `<h2>🧬 선수 생성</h2>${preBar}
   ${pgTabs}
   <div class="msg info">이름부터 계약까지 정해 새 선수를 만듭니다. 만든 뒤 세부 능력치는 🛠️ 인게임 에디터에서 다듬을 수 있습니다.</div>
@@ -28479,6 +29151,143 @@ function engineEditorView(){
     <span class="small">선수 데이터와는 완전히 별개입니다 — 파일도 따로 저장하고 따로 공유합니다.</span></div>
   <div class="card">${body}</div>
   <button class="mini" onclick="show('settings')">↩ 설정으로 돌아가기</button>`;
+}
+/* ═══ 🎩 인게임 에디터 — 스태프 생성·수정 (요청) ══════════════════════════════
+   ⚠ 요청 원문 — 「인게임 에디터에서 스태프도 생성할 수 있게 해 주자. 그리고 그 생성한
+     스태프도 선수와 마찬가지로 고유번호 가지게 해 주고」.
+   ─ 고유번호는 이미 있는 배관(nextStaffUid · UID_STAFF 8001~)을 그대로 쓴다.
+     선수의 «생성 선수» 번호대(UID_GEN 900000~)와 같은 원리로, 에디터로 만든 스태프는
+     8001 번대 안에서 유일한 번호를 받고 이적·개명해도 바뀌지 않는다. */
+let EDS={id:null, src:"crew", mk:{role:"coach", n:"", age:42, tier:13, trait:"bal", dest:"pool"}};
+function edsList(){
+  try{ return EDS.src==="pool" ? (acPool()||[]) : (crew()||[]); }catch(e){ return []; }
+}
+function edsPick(){ try{ return edsList().find(c=>c && c.id===EDS.id) || null; }catch(e){ return null; } }
+function edsGo(k, v){
+  if(k==="src"){ EDS.src=v; EDS.id=null; }
+  else if(k==="id") EDS.id=v||null;
+  else EDS.mk[k]= (k==="n") ? edName(v, 12) : v;
+  show("editor");
+}
+function edsSetMkNum(k, v){
+  const n=edNum(v, k==="age"?20:6, k==="age"?78:20, 0);
+  if(n!=null) EDS.mk[k]=n;
+  show("editor");
+}
+/* 스태프 한 명의 값을 고친다 */
+function edsSet(field, v){
+  const c=edsPick(); if(!c) return;
+  if(field==="n"){ const nv=edName(v,12); if(nv) c.n=nv; }
+  else if(field==="age"){ const n=edNum(v,20,78,0); if(n!=null) c.age=n; }
+  else if(field==="career"){ c.career=edName(v,40); }
+  else if(field==="trait"){ if(AC_TRAIT[v]) c.trait=v; }
+  else if(field==="role"){
+    if(AC_ROLE[v]){ c.role=v;
+      /* 직책이 바뀌면 그 직책이 보는 항목이 달라진다 — 종합이 곧바로 다시 계산된다 */
+      if(v!=="ac") c.trait=null; else if(!c.trait) c.trait="bal"; }
+  }
+  else if(SA_KEYS.indexOf(field)>=0){ const n=edNum(v,1,20,0); if(n!=null){ c.a=c.a||{}; c.a[field]=n; } }
+  /* ⚠ 종합(acOvr)은 «파생된 최상위 키»(c.gkc 등)를 읽는다 — c.a 만 고치면 종합이 안 움직인다.
+     실측에서 능력치를 20 으로 올려도 종합이 그대로였다. 한 번 동기화해 준다. */
+  try{ acSync(c); }catch(e){}
+  try{ saveGame(); }catch(e){}
+  show("editor");
+}
+/* 새 스태프를 만든다 — 무직 시장 또는 우리 코치진으로 */
+function edsMake(){
+  const M=EDS.mk;
+  /* 🧬 게임 시작 전에는 우리 코치진이라는 개념이 없다 — 무직 시장으로만 만든다 (요청) */
+  try{ if(typeof PREGEN!=="undefined" && PREGEN) M.dest="pool"; }catch(e){}
+  const nm=edName(M.n,12);
+  if(!nm){ try{ flash("이름을 입력하세요.","warn"); }catch(e){} return; }
+  let c=null;
+  try{ c=acMake(M.role, clamp(+M.tier||13, 6, 20), M.role==="ac" ? (M.trait||"bal") : null); }catch(e){}
+  if(!c){ try{ flash("스태프를 만들지 못했습니다.","warn"); }catch(e){} return; }
+  c.n=nm;
+  c.age=clamp(+M.age||42, 20, 78);
+  if(!c.uid){ try{ c.uid=nextStaffUid(); }catch(e){} }
+  c.made=1;                                   // 🧬 에디터로 만든 사람 (목록에서 구분해 보여 준다)
+  if(M.dest==="crew"){
+    try{
+      if(roleFull(c.role)){ flash(`${AC_ROLE[c.role].n} 자리가 이미 찼습니다 — 무직 시장으로 넣습니다.`,"warn"); acPool().push(c); }
+      else { c.hired=1; crew().push(c); }
+    }catch(e){ try{ acPool().push(c); }catch(_){} }
+  } else { try{ acPool().push(c); }catch(e){} }
+  EDS.src = (M.dest==="crew" && crew().some(x=>x.id===c.id)) ? "crew" : "pool";
+  EDS.id=c.id;
+  EDS.mk.n="";
+  try{ saveGame(); }catch(e){}
+  try{ flash(`🎩 ${c.n} (${AC_ROLE[c.role].n}) 생성 — 고유번호 ${c.uid}`,"good"); }catch(e){}
+  show("editor");
+}
+function edsDelete(){
+  const c=edsPick(); if(!c) return;
+  showConfirm(`<b>🗑️ ${c.n} 을(를) 목록에서 지웁니다</b>\n\n되돌릴 수 없습니다.`, ()=>{
+    try{
+      const L=edsList(); const i=L.findIndex(x=>x&&x.id===c.id); if(i>=0) L.splice(i,1);
+      EDS.id=null; saveGame();
+    }catch(e){}
+    show("editor");
+  }, {okLabel:"지운다", cancelLabel:"취소", danger:true});
+}
+/* 🎩 스태프 생성·수정 화면 — 에디터 탭과 «게임 시작 전 생성기»가 함께 쓴다 (요청) */
+function pgStaffView(){
+  const L=edsList(), c=edsPick(), M=EDS.mk;
+  const pre=(typeof PREGEN!=="undefined" && PREGEN);
+  const srcBtn=(k,n)=>`<button class="mini ${EDS.src===k?"sel":""}" style="padding:6px 13px" onclick="edsGo('src','${k}')">${n}</button>`;
+  const roleOpts=(cur,fn)=>`<select onchange="${fn}" style="max-width:170px">${AC_ROLE_ORDER.map(k=>
+    `<option value="${k}" ${cur===k?"selected":""}>${AC_ROLE[k].ic} ${AC_ROLE[k].n}</option>`).join("")}</select>`;
+  const traitOpts=(cur,fn)=>`<select onchange="${fn}" style="max-width:170px">${Object.keys(AC_TRAIT).map(k=>
+    `<option value="${k}" ${cur===k?"selected":""}>${AC_TRAIT[k].n}</option>`).join("")}</select>`;
+  const mk=`<div class="card" style="border-color:var(--gold)">
+    <div class="edSec">🧬 새 스태프 만들기</div>
+    ${ED_ROW("이름 *", `<input type="text" value="${M.n}" maxlength="12" placeholder="필수" style="width:150px" onchange="edsGo('n', this.value)">`)}
+    ${ED_ROW("직책", roleOpts(M.role, "edsGo('role', this.value)"))}
+    ${ED_ROW("나이", `<input type="text" inputmode="decimal" value="${M.age}" style="width:70px" onchange="edsSetMkNum('age', this.value)">`)}
+    ${ED_ROW(`실력 등급 <span class="small">6~20 — 이 언저리로 능력치가 깔립니다 (특급은 17 이상)</span>`,
+      `<input type="text" inputmode="decimal" value="${M.tier}" style="width:70px" onchange="edsSetMkNum('tier', this.value)">`)}
+    ${M.role==="ac" ? ED_ROW(`성향 <span class="small">수석코치만</span>`, traitOpts(M.trait, "edsGo('trait', this.value)")) : ""}
+    ${pre ? "" : ED_ROW("넣을 곳", `<select onchange="edsGo('dest', this.value)" style="max-width:200px">
+      <option value="pool" ${M.dest==="pool"?"selected":""}>🕊️ 무직 코치 시장</option>
+      <option value="crew" ${M.dest==="crew"?"selected":""}>🎩 우리 코치진 (바로 합류)</option>
+    </select>`)}
+    <div style="margin-top:8px"><button class="mini sel" style="padding:9px 18px" onclick="edsMake()">🧬 만든다</button></div>
+    <p class="small" style="margin:8px 0 0;opacity:.75">만든 스태프는 선수와 마찬가지로 <b>고유번호</b>를 받습니다 (스태프 번호대 ${UID_STAFF}~).
+      개명하거나 다른 구단으로 옮겨도 번호는 바뀌지 않습니다. 세부 능력치는 아래에서 다듬을 수 있습니다.</p>
+  </div>`;
+  const listSel=`<select onchange="edsGo('id', this.value)" style="max-width:280px">
+    <option value="">— 스태프 선택 (${L.length}명) —</option>
+    ${L.map(x=>`<option value="${x.id}" ${EDS.id===x.id?"selected":""}>${AC_ROLE[x.role]?AC_ROLE[x.role].ic:""} ${x.n} · ${AC_ROLE[x.role]?AC_ROLE[x.role].n:x.role} · ${x.age}세 · 종합 ${acOvr(x)}${x.made?" 🧬":""}</option>`).join("")}
+  </select>`;
+  const edit = !c ? `<p class="small">위에서 스태프를 고르면 세부 능력치를 고칠 수 있습니다.</p>` : `
+    ${ED_ROW("🆔 고유번호", `<b style="font-family:monospace;font-size:15px">${c.uid||"—"}</b> <span class="small">${c.made?"🧬 직접 만든 스태프":"게임이 만든 스태프"}</span>`)}
+    ${ED_ROW("이름", `<input type="text" value="${c.n}" maxlength="12" style="width:150px" onchange="edsSet('n', this.value)">`)}
+    ${ED_ROW("직책", roleOpts(c.role, "edsSet('role', this.value)"))}
+    ${ED_ROW("나이", `<input type="text" inputmode="decimal" value="${c.age}" style="width:70px" onchange="edsSet('age', this.value)">`)}
+    ${c.role==="ac" ? ED_ROW("성향", traitOpts(c.trait, "edsSet('trait', this.value)")) : ""}
+    ${ED_ROW("경력 한 줄", `<input type="text" value="${c.career||""}" maxlength="40" style="width:230px" onchange="edsSet('career', this.value)">`)}
+    ${ED_ROW("종합", `<b style="color:var(--gold);font-size:15px">${acOvr(c)}</b> <span class="small">/ 20 — 아래 능력치에서 자동 계산됩니다 (직책이 보는 항목만 반영)</span>`)}
+    <div class="edSec">📊 세부 능력치 <span class="small">— <b style="color:var(--gold)">굵은 항목</b>이 이 직책의 종합에 들어갑니다</span></div>
+    ${SA_GRP.map(g=>`<div style="margin:6px 0 2px"><b class="small" style="color:var(--sub)">${g.n}</b></div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px 10px">${g.keys.map(k=>{
+        const on=acKeysOf(c).indexOf(k)>=0;
+        return `<label class="small" style="display:flex;align-items:center;gap:4px;${on?"color:var(--gold);font-weight:700":"opacity:.65"}">
+          ${SA_LABEL[k]||k}<input type="text" inputmode="decimal" value="${(c.a&&c.a[k])||1}" style="width:44px"
+            onchange="edsSet('${k}', this.value)"></label>`;
+      }).join("")}</div>`).join("")}
+    <div style="margin-top:10px"><button class="mini" style="padding:8px 14px;border-color:#f85149;color:#f85149" onclick="edsDelete()">🗑️ 이 스태프 지우기</button></div>`;
+  const preNote = pre ? `<div class="msg info" style="border-width:2px">🎩 <b>게임 시작 전 스태프 만들기</b> — 여기서 만든 스태프는 <b>브라우저에 보관</b>되고,
+      게임을 시작하면 <b>🕊️ 무직 코치 시장</b>에 들어갑니다. 그때 영입하면 됩니다.
+      <span class="small">지금 보이는 시장은 임시이며 저장되지 않습니다. 고유번호는 새 게임에서 다시 발급됩니다.</span></div>` : "";
+  return `${preNote}${mk}
+  <div class="card">
+    <div class="edSec">✏️ 스태프 수정</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      ${pre?"":srcBtn("crew","🎩 우리 코치진 ("+crew().length+")")}${srcBtn("pool","🕊️ 무직 코치 시장 ("+((G.acPool||[]).length)+")")}
+    </div>
+    ${ED_ROW("스태프", listSel)}
+    ${edit}
+  </div>`;
 }
 function editorView(){
   const t=edTeam(), p=edPlayer();
@@ -28641,6 +29450,9 @@ function editorView(){
         }).join("")}</div>`;
       }
     }
+  } else if(ED.tab==="staff"){
+    /* 🎩 스태프 생성·수정 — 화면은 «시작 전 생성기»와 같은 것을 쓴다 (요청) */
+    body = pgStaffView();
   } else if(ED.tab==="nick"){
     const C=customNicks();
     body = `
@@ -28808,7 +29620,7 @@ function editorView(){
     <span class="small">에디터 사용에 페널티는 없습니다 — 감독 마음입니다.</span></div>
   <div class="card">
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-      ${tabBtn("team","🏟️ 팀")} ${tabBtn("player","⚽ 선수")} ${tabBtn("mgr","👔 감독")} ${tabBtn("coaches","🧑‍💼 리그 감독")} ${tabBtn("comp","🏆 대회")} ${tabBtn("ref","🧑‍⚖️ 심판")} ${tabBtn("press","🎙️ 기자단")} ${tabBtn("nick","💬 닉네임")}
+      ${tabBtn("team","🏟️ 팀")} ${tabBtn("player","⚽ 선수")} ${tabBtn("staff","🎩 스태프")} ${tabBtn("mgr","👔 감독")} ${tabBtn("coaches","🧑‍💼 리그 감독")} ${tabBtn("comp","🏆 대회")} ${tabBtn("ref","🧑‍⚖️ 심판")} ${tabBtn("press","🎙️ 기자단")} ${tabBtn("nick","💬 닉네임")}
       ${ED.tab!=="mgr"?`<span style="margin-left:auto">${teamSel}</span>`:""}
     </div>
     ${body}
@@ -30137,6 +30949,46 @@ function setPreMade(a){
 function syncPreMade(){
   try{ if(PREGEN && G && Array.isArray(G.pgMade)) setPreMade(G.pgMade); }catch(e){}
 }
+/* ═══ 🎩 게임 시작 전 스태프 만들기 (요청) ══════════════════════════════════
+   선수와 같은 방식이다 — 팀 선택 화면의 임시 리그 위에서 만들고, 결과는 브라우저
+   보관함에 쌓인다. 실제로 게임을 시작하면 그 스태프들이 «무직 코치 시장»에 들어간다.
+   ⚠ 고유번호는 새 세이브에서 다시 발급한다 — 보관함의 번호를 그대로 들고 오면
+     그 세이브가 이미 쓰고 있는 번호와 겹칠 수 있다(번호는 세이브 안에서만 유일하면 된다). */
+const PRESTAFF_KEY="klm2026_prestaff";
+function preStaff(){
+  try{ const a=JSON.parse(localStorage.getItem(PRESTAFF_KEY)||"[]"); return Array.isArray(a)?a:[]; }
+  catch(e){ return []; }
+}
+function setPreStaff(a){
+  try{ localStorage.setItem(PRESTAFF_KEY, JSON.stringify((a||[]).slice(-60))); }catch(e){}
+}
+/* 임시 세계에서 만든 스태프(made 표식)를 보관함에 옮겨 적는다 */
+function syncPreStaff(){
+  try{
+    if(!PREGEN || !G) return;
+    const mk=(G.acPool||[]).filter(c=>c && c.made);
+    setPreStaff(mk);
+  }catch(e){}
+}
+/* 새 게임이 시작될 때 — 보관함의 스태프를 무직 코치 시장에 넣는다 */
+function preStaffApply(){
+  try{
+    if(!G || G._preStaffDone) return 0;      // 세이브당 한 번 (시즌마다 시장이 돌아도 다시 안 들어온다)
+    G._preStaffDone=1;
+    const box=preStaff(); if(!box.length) return 0;
+    const P=acPool();
+    let n=0;
+    for(const src of box){
+      const c=JSON.parse(JSON.stringify(src));
+      c.id="ac"+Math.floor(Math.random()*1e9).toString(36)+Date.now().toString(36).slice(-4)+(n);
+      c.uid=nextStaffUid();                   // 이 세이브 안에서 새 번호
+      delete c.hired; delete c.assign;
+      try{ acSync(c); }catch(e){}
+      P.push(c); n++;
+    }
+    return n;
+  }catch(e){ return 0; }
+}
 function openPreGen(){
   if(profLegacyLock()) return;
   pickOpt=false;
@@ -30144,6 +30996,12 @@ function openPreGen(){
   try{ newGame(D1[0].id); }catch(e){ PREGEN=false; renderTeamPick(); return; }
   G.introDone=true;
   G.pgMade=preMade();                       // 지금까지 만들어 둔 선수를 이어서 본다
+  /* 🎩 지금까지 만들어 둔 스태프도 이어서 본다 — 시장이 «깔린 뒤»에 얹는다
+     (acPool() 이 비어 있으면 acPoolFill 이 돌면서 통째로 새로 깔린다 — 실측으로 잡았다) */
+  try{ acPool(); const box=preStaff();
+       if(box.length){ const P=G.acPool;
+         for(const c of box) if(!P.some(x=>x && x.n===c.n && x.made))
+           P.push(Object.assign(JSON.parse(JSON.stringify(c)), {made:1})); } }catch(e){}
   try{ pgInit(); }catch(e){}
   PGTAB="make";
   try{ document.body.classList.add("preGen"); }catch(e){}
@@ -30156,6 +31014,7 @@ function openPreGen(){
 }
 function closePreGen(){
   syncPreMade();
+  syncPreStaff();
   PREGEN=false;
   try{ document.body.classList.remove("preGen"); }catch(e){}
   try{ G=null; }catch(e){}
@@ -37035,7 +37894,7 @@ function show(v){
   document.querySelectorAll(".navbtn").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
   {
     /* 🕊️ 무직 — 「일정 및 훈련」도 내가 짤 게 없다(제보). 구경거리(순위표·기록실·뉴스·자산)만 남긴다. */
-    const lockedNav=["squad","tactics","transfer","nego","offers","finance","youth","staff","contract","loancenter","renew","loan","match","player","fixtures"];
+    const lockedNav=["squad","hier","tactics","transfer","nego","offers","finance","youth","staff","contract","loancenter","renew","loan","match","player","fixtures"];
     /* 👑 ⚠ 제보 — 「구단주도 협상은 협상 메뉴에서, 발언·인터뷰는 인터뷰 메뉴에서 하게 해야 하지 않나」.
        맞다. 스폰서 협상은 «협상»이고 구단주 발언은 «인터뷰»다 — 오피스 안에 숨어 있을 이유가 없다.
        구단주에게는 이 둘을 연다. 나머지(스쿼드·전술·이적)는 감독의 일이라 그대로 잠근다. */
@@ -37126,7 +37985,7 @@ function show(v){
   // 안전망 — 기자회견·라커룸 같은 진행 화면이 하나도 열려 있지 않다면 버튼은 눌려야 한다.
   // 어느 흐름에서든 잠금 해제를 빠뜨리면 게임이 통째로 멈춘 것처럼 보이므로 여기서 되돌린다.
   if(typeof progBusy==="function" && !progBusy()) $("#advBtn").disabled=false;
-  const V={home,squad,tactics,table:tableView,fixtures,transfer,nego:negoView,offers:offersView,finance,mylife:mylifeView,youth,stats,player:playerView,match:matchTabIdleView,settings:settingsView, editor:editorView, engineEd:engineEditorView, playerGen:playerGenView, simwatch:simWatchView, staff:staffView, media:mediaView, renew:renewView, loan:loanView, contract:contractView, osquad:otherSquadView, loanin:loanInView, loancenter:loanCenterView, pvp:pvpView, comm:cmView};
+  const V={home,squad,tactics,table:tableView,fixtures,transfer,nego:negoView,offers:offersView,hier:hierView,finance,mylife:mylifeView,youth,stats,player:playerView,match:matchTabIdleView,settings:settingsView, editor:editorView, engineEd:engineEditorView, playerGen:playerGenView, simwatch:simWatchView, staff:staffView, media:mediaView, renew:renewView, loan:loanView, contract:contractView, osquad:otherSquadView, loanin:loanInView, loancenter:loanCenterView, pvp:pvpView, comm:cmView};
   const fx=flashHtml();
   if(typeof closeRoleMenu==="function") closeRoleMenu();   // 화면을 옮기면 열려 있던 역할 패널을 닫는다
   const freshTactics = (v==="tactics" && VIEWPREV!=="tactics");
@@ -37138,7 +37997,7 @@ function show(v){
   }
   /* 무직 — 팀 관리 화면은 잠긴다. 구경(순위표·기록실·뉴스·관전·개인 삶)은 자유다. */
   if(G.jobless){
-    const lockedV=["squad","tactics","transfer","nego","offers","finance","youth","staff","contract","loancenter","renew","loan","match","player","fixtures"];
+    const lockedV=["squad","hier","tactics","transfer","nego","offers","finance","youth","staff","contract","loancenter","renew","loan","match","player","fixtures"];
     /* 👑 구단주는 «협상»과 «인터뷰» 두 화면을 쓴다 (제보) */
     const _ownV = (typeof ownMine==="function") && ownMine();
     const _okV = _ownV && (v==="nego" || v==="match");
@@ -37247,7 +38106,7 @@ function notifCount(tab){
   /* 👑 구단주에게는 협상·인터뷰가 열려 있으므로 배지도 살아 있어야 한다 (제보 — 배선 점검에서 잡았다) */
   {
     const _ownB=(function(){ try{ return !!(G.jobless && typeof ownMine==="function" && ownMine()); }catch(e){ return false; } })();
-    const _mute=["squad","tactics","transfer","offers","finance","youth","staff","contract","loancenter","renew","loan","player"]
+    const _mute=["squad","hier","tactics","transfer","offers","finance","youth","staff","contract","loancenter","renew","loan","player"]
                 .concat(_ownB?[]:["nego","match"]);
     if(G.jobless && _mute.includes(tab)) return 0;
   }
@@ -37290,6 +38149,7 @@ function notifCount(tab){
       if(typeof tacDirty==="function" && tacDirty()) c++;                                  // 저장 안 한 전술 변경
       return c;
     }
+    case "hier": { try{ return meetReady()?1:0; }catch(e){ return 0; } }   /* 🗣️ 팀 미팅을 열 수 있다 */
     case "youth": return (G.youthNew||0);
     case "table": return 0;
     case "fixtures": {
@@ -89246,7 +90106,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5117";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5123";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
