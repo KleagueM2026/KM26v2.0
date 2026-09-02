@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5101-->
+<!--B:20260913-5106-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -9090,6 +9090,8 @@ function newGame(teamId){
   G.aclTeams=["jeonbuk","pohang","daejeon"].filter(id=>G.teams[id]&&G.teams[id].div===1&&eaclEligible(id));
   setupACL();
   try{ G._sponInit=0; sponSeason(); G._sponInit=1; }catch(e){ G._sponInit=1; }   // 🤝 개막 전 스폰서 계약 — 모든 구단이 이 표에서 살림을 시작한다
+  /* 🗣️ 외국인 감독 — 부임 시즌을 기억해 둔다 (「부임 n년 차」 질문이 이걸 읽는다) */
+  try{ G.lang={kr:8, ip:1, ask:0, s0:G.season}; }catch(e){}
   /* 🎩 감독 프로필 — 팀 선택 화면에서 만든 프로필을 이 게임에 심는다 */
   try{ G.prof=profTake(); }catch(e){}
   try{ profOf(); }catch(e){}
@@ -14482,6 +14484,35 @@ function attBase0(t){
   try{ const s=STADIUM[t.id]; if(s && s.avg) return s.avg; }catch(e){}
   return (sd && (sd.avg||1000)) || 1000;
 }
+/* 🏛️ 명문도 — 구단이 쌓아 온 «역사»가 관중의 천장을 밀어 올린다.
+   ⚠ 재료는 오직 «치른 성적»뿐이다 — 우승컵과 대륙 무대 성과. 관중 실측은 절대 넣지 않는다.
+     관중을 되먹이면 개막 특수·더비가 섞여 리그 총량이 무한히 불어난다(옛 실측 10시즌 +120%).
+   ⚠ 옛 세이브도 그대로 산다 — G.history·G.eaclHonors·G.cwcHonors 는 이미 쌓여 있던 자료다. */
+const PRST_W={k1:6, k2:2, eacl:14, eaclRun:7, eaclSF:4.5, eaclQF:3, eaclApp:1.5,
+              cwc:22, cwcRun:12, cwcSF:8, cwcQF:5, cwcApp:3};
+function prestigeOf(t){
+  if(!t) return 0;
+  let p=0;
+  /* 리그 우승 — 역대 시즌 기록에서 센다 (구단명 기준) */
+  try{ for(const h of (G.history||[])){
+    if(h.champ===t.name) p+=PRST_W.k1; else if(h.champ2===t.name) p+=PRST_W.k2; } }catch(e){}
+  try{ const e=(typeof eaclHonorOf==="function")?eaclHonorOf(t.id):null; if(e)
+    p += (e.champ||0)*PRST_W.eacl + (e.runner||0)*PRST_W.eaclRun + (e.qf||0)*PRST_W.eaclQF + (e.apps||0)*PRST_W.eaclApp; }catch(e){}
+  try{ const c=(typeof cwcHonorOf==="function")?cwcHonorOf(t.id):null; if(c)
+    p += (c.champ||0)*PRST_W.cwc + (c.runner||0)*PRST_W.cwcRun + (c.qf||0)*PRST_W.cwcQF + (c.apps||0)*PRST_W.cwcApp; }catch(e){}
+  /* 4강은 명예 집계에 갈래가 없다 — 트로피 캐비닛에서 센다 */
+  try{ for(const x of (G.trophies||[])){
+    if(x.team!==t.name) continue;
+    if(x.kind==="eaclSF") p+=PRST_W.eaclSF; else if(x.kind==="cwcSF") p+=PRST_W.cwcSF; } }catch(e){}
+  return Math.round(p*10)/10;
+}
+/* 명문도가 천장에 주는 몫 — 100점(리그 우승 3 + 아챔 우승 4 + 클월 4강 수준)에서 약 +0.72 */
+function prstK(t){ try{ return clamp(prestigeOf(t)/100*0.85, 0, 0.95); }catch(e){ return 0; } }
+/* 🏢 운영 주체 — 모기업이 붙으면 마케팅·중계 노출이 달라져 담을 수 있는 시장이 넓어진다 */
+function attOwnK(t){
+  try{ const k=clubType(t).k;
+    return k==="corp" ? 0.18 : k==="mixed" ? 0.09 : k==="mine" ? 0.12 : 0; }catch(e){ return 0; }
+}
 function attFloorOf(t){
   const trad=ATT_FLOOR[t.id]||0;
   const b0=attBase0(t);
@@ -14495,6 +14526,9 @@ function attCeilOf(t){
      🛠️ 리모델링·패밀리존은 이 천장 자체를 밀어 올린다 (제보 — 점유율을 높이는 시스템) */
   let capK=0.92, baseK=1.6;
   if(t && t.fac){ capK += clamp(t.fac.remod||0,0,3)*0.02; baseK += clamp(t.fac.remod||0,0,3)*0.05 + clamp(t.fac.family||0,0,3)*0.03; }
+  /* 🏛️ 명문도 · 🏢 운영 주체 — 쌓은 역사만큼 천장이 올라간다 (제보 — 「10년을 우승해도 관중이 안 는다」).
+     예전에는 baseK 가 1.6 에 못 박혀 있어, 7시즌이면 무엇을 이뤄도 더 늘지 않았다(실측). */
+  baseK += prstK(t) + attOwnK(t);
   return Math.min(Math.round((sd.cap||30000)*Math.min(capK,0.98)), Math.round(attBase0(t)*baseK));
 }
 /* 시즌 종료 시 — 성적을 보고 기준 관중을 옮긴다 (전 구단 공통).
@@ -14518,14 +14552,24 @@ function attSeasonAdjust(){
         if(t.div===2 && pos<=2)  k*=1.05;            // 승격
       }
     }catch(e){}
-    /* ② 아시아 무대 */
-    try{ if(G.eacl && Array.isArray(G.eacl.teams) && G.eacl.teams.indexOf(t.id)>=0) k*=1.02; }catch(e){}
+    /* ② 아시아·세계 무대 — 예전에는 «참가»만 +2% 였다. 우승도 4강도 같은 값이었다(제보). */
+    try{
+      if(G.eacl && G.eacl.champ===t.id) k*=1.10;
+      else if(G.eacl && G.eacl.ko && G.eacl.ko.f && (G.eacl.ko.f.a===t.id||G.eacl.ko.f.b===t.id)) k*=1.06;
+      else if(G.eacl && Array.isArray(G.eacl.teams) && G.eacl.teams.indexOf(t.id)>=0) k*=1.025;
+    }catch(e){}
+    try{
+      if(G.cwc && G.cwc.champ===t.id) k*=1.14;
+      else if(G.cwc && Array.isArray(G.cwc.teams) && G.cwc.teams.indexOf(t.id)>=0) k*=1.05;
+    }catch(e){}
     /* ③ 승강 — 부가 바뀐 그 다음 시즌에 한 번 크게 움직인다 */
     if(t._attDiv!=null && t._attDiv!==t.div) k *= (t.div===1 ? 1.10 : 0.90);
     t._attDiv=t.div;
     /* 늘 때는 빠르고, 빠질 때는 느리다 — 팬은 하루아침에 사라지지 않는다 */
     let target=sd.avg*k;
-    const up=Math.round(sd.avg*0.07)+30, dn=Math.round(sd.avg*0.045)+20;
+    /* 늘 때의 상한도 «그 시즌에 무엇을 했는지»를 따라간다 — 예전에는 무엇을 이뤄도 한 시즌 +7% 였다.
+       평범한 우승은 +7% 그대로, 아챔·클월까지 얹은 해는 최대 +16% 까지 열린다. */
+    const up=Math.round(sd.avg*clamp((k-1)*0.95, 0.07, 0.16))+30, dn=Math.round(sd.avg*0.045)+20;
     target = clamp(Math.round(target), sd.avg-dn, sd.avg+up);
     const lo=attFloorOf(t), hi=attCeilOf(t);
     const before=sd.avg;
@@ -14534,7 +14578,9 @@ function attSeasonAdjust(){
       const up2=sd.avg>before;
       let why = up2 ? "지난 시즌 성적에 팬이 늘었습니다" : "지난 시즌 성적에 팬이 빠졌습니다";
       if(sd.avg<=lo && (ATT_FLOOR[t.id]||0)>0) why="전통의 지지층이 버텨 주고 있습니다";
-      else if(sd.avg>=hi) why="구장 규모가 한계입니다 — 더 늘리려면 증축이 필요합니다";
+      else if(sd.avg>=hi) why=(hi>=Math.round((sd.cap||30000)*0.92))
+        ? "구장 수용 인원이 한계입니다 — 더 늘리려면 증축이 필요합니다"
+        : `이 구장이 담을 수 있는 한계입니다 — 명문도(${prestigeOf(t)})가 더 쌓이면 천장이 올라갑니다`;
       try{ addNews(`${up2?"🎟️":"🪑"} 기준 관중이 <b>${before.toLocaleString()}명 → ${sd.avg.toLocaleString()}명</b>으로 조정되었습니다 — ${why}.`,
         up2?"good":"warn", "club"); }catch(e){}
     }
@@ -20828,6 +20874,7 @@ function startNewSeason(){
   try{ donSeasonTick(); }catch(e){}
   /* 🎟️ 기준 관중 갱신 — 지난 시즌 실제 관중과 성적을 본다. 순위표·회계가 지워지기 전에 먼저. */
   try{ attSeasonAdjust(); }catch(e){}
+  try{ langSeasonTick(); }catch(e){}   /* 🗣️ 외국인 감독 — 한 시즌을 살면 한국어가 는다 */
   /* 🔒 ⚠ 제보 — 시즌을 넘길 때마다 에디터로 고친 구단 명칭을 다시 못 박는다(원상복구 방지) */
   try{ edLockSweep(); }catch(e){}
   try{ uidIntegrity(); }catch(e){}   // 🆔 유스 승격·영입으로 늘어난 선수까지 번호 정합성 유지
@@ -29369,7 +29416,9 @@ function profApplyBg(P, k){
   P.a={}; for(const q of SA_KEYS) P.a[q]=profFloor(P, q);
 }
 function profDraftGet(){
-  if(!PROF_DRAFT){ PROF_DRAFT={sur:"", giv:"", h:178, w:74, bg:"pro", a:{}, done:false}; profApplyBg(PROF_DRAFT, "pro"); }
+  if(!PROF_DRAFT){ PROF_DRAFT={sur:"", giv:"", nat:PROF_NAT_KR, en:"", h:178, w:74, bg:"pro", a:{}, done:false}; profApplyBg(PROF_DRAFT, "pro"); }
+  if(PROF_DRAFT.nat==null) PROF_DRAFT.nat=PROF_NAT_KR;
+  if(PROF_DRAFT.en==null) PROF_DRAFT.en="";
   return PROF_DRAFT;
 }
 function profDraftSpent(P){ let v=0; for(const k of SA_KEYS) v+=Math.max(0,(P.a[k]|0)-profFloor(P,k)); return v; }
@@ -29377,19 +29426,31 @@ function profDraftLeft(P){ return (PROF_BG[P.bg]||PROF_BG.semi).pts - profDraftS
 /* newGame 이 가져간다 — 이름은 반드시 살균해서 넘긴다(edName) */
 function profTake(){
   const P=profDraftGet();
-  const o={sur:edName(P.sur,6), giv:edName(P.giv,8), h:clamp(P.h|0,150,210), w:clamp(P.w|0,45,140),
+  const frn=profIsFrn(P);
+  const o={sur:edName(P.sur, frn?12:6), giv:edName(P.giv, frn?12:8),
+           nat:profNatList().indexOf(P.nat)>=0?P.nat:PROF_NAT_KR, en:edName(P.en,28),
+           h:clamp(P.h|0,150,210), w:clamp(P.w|0,45,140),
            bg:PROF_BG[P.bg]?P.bg:"semi", a:{}};
   for(const k of SA_KEYS) o.a[k]=clamp(P.a[k]|0, 1, 20);
   return o;
 }
 function profSetBg(k){ const P=profDraftGet(); if(!PROF_BG[k]) return; profApplyBg(P,k); renderTeamPick(); }
+/* 🌍 국적 선택 — 이름 순서와 칸 길이가 함께 바뀐다. 이미 적어 둔 이름은 그대로 둔다. */
+function profSetNat(v){
+  const P=profDraftGet();
+  P.nat = (profNatList().indexOf(v)>=0) ? v : PROF_NAT_KR;
+  if(!profIsFrn(P)){ P.en=""; P.sur=edName(P.sur,6); P.giv=edName(P.giv,8); }
+  renderTeamPick();
+}
 /* ⚠ 모바일 점검에서 나온 것 — 여기서 renderTeamPick() 을 부르면 입력칸이 통째로 새로 그려진다.
    「성」을 치고 「이름」을 탭하면 blur→change→재렌더가 일어나 방금 누른 칸이 사라지고
    포커스가 body 로 떨어져, 폰에서는 이름을 아예 입력할 수 없었다.
    그래서 값만 조용히 넣고(quiet) 머리말 한 줄만 갱신한다. 되돌린 값을 반환해 호출부가 칸에 쓴다. */
 function profSetTxt(f, v, quiet){ const P=profDraftGet(); let out=v;
-  if(f==="sur"){ P.sur=edName(v,6); out=P.sur; }
-  else if(f==="giv"){ P.giv=edName(v,8); out=P.giv; }
+  const _fx=profIsFrn(P);
+  if(f==="sur"){ P.sur=edName(v, _fx?12:6); out=P.sur; }
+  else if(f==="giv"){ P.giv=edName(v, _fx?12:8); out=P.giv; }
+  else if(f==="en"){ P.en=edName(v,28); out=P.en; }
   else if(f==="h"){ P.h=clamp(parseInt(v,10)||178,150,210); out=P.h; }
   else if(f==="w"){ P.w=clamp(parseInt(v,10)||74,45,140); out=P.w; }
   if(quiet){ try{ profHeadSync(); }catch(e){} return out; }
@@ -29398,8 +29459,8 @@ function profSetTxt(f, v, quiet){ const P=profDraftGet(); let out=v;
 function profHeadSync(){
   const el=document.getElementById("profHeadLine"); if(!el) return;
   const P=profDraftGet(), B=PROF_BG[P.bg]||PROF_BG.semi, left=profDraftLeft(P);
-  const nm=(String(P.sur||"")+String(P.giv||"")).trim();
-  el.innerHTML=`${nm?`<b>${nm}</b> · `:""}${B.n} · ${P.h}cm ${P.w}kg · 종합 <b>${profDraftOvr(P)}</b>/20`
+  const nm=profNameOf(P);
+  el.innerHTML=`${nm?`${profFlag(P.nat)}<b>${nm}</b> · `:""}${profIsFrn(P)?`${P.nat} · `:""}${B.n} · ${P.h}cm ${P.w}kg · 종합 <b>${profDraftOvr(P)}</b>/20`
     +` · 남은 포인트 <b style="color:${left>0?"var(--gold)":"var(--green)"}">${left}</b>`;
 }
 function profBump(k, d){
@@ -29432,7 +29493,7 @@ function profPendName(){
 function profConfirm(){
   const P=profDraftGet();
   if(!String(P.sur||"").trim() || !String(P.giv||"").trim()){
-    try{ flash("성과 이름을 모두 입력하세요.","warn"); }catch(e){}
+    try{ flash(profIsFrn(P)?"이름과 성을 모두 입력하세요.":"성과 이름을 모두 입력하세요.","warn"); }catch(e){}
     profTab="me"; renderTeamPick(); return;
   }
   if(profDraftLeft(P)>0){
@@ -29495,7 +29556,7 @@ function profNext(){
   if(profTab==="bg"){ profTab="me"; renderTeamPick(); return; }
   if(profTab==="me"){
     if(!String(P.sur||"").trim() || !String(P.giv||"").trim()){
-      try{ flash("성과 이름을 모두 입력하세요.","warn"); }catch(e){} renderTeamPick(); return;
+      try{ flash(profIsFrn(P)?"이름과 성을 모두 입력하세요.":"성과 이름을 모두 입력하세요.","warn"); }catch(e){} renderTeamPick(); return;
     }
     profTab="at"; renderTeamPick(); return;
   }
@@ -29527,18 +29588,40 @@ function profPanel(){
           <br>기본 강점 — ${sg}</p></div>`;
     }).join("");
   } else if(profTab==="me"){
+    const _frn=profIsFrn(P);
+    /* 🌍 국적 — 자주 앉는 나라는 버튼으로, 나머지는 목록에서 고른다 */
+    const natBtns=PROF_NAT_TOP.map(v=>`<button class="mini" style="padding:6px 11px;font-size:12.5px;${P.nat===v?"border-color:var(--gold);color:var(--gold);font-weight:800":""}"
+      onclick="profSetNat('${v}')">${profFlag(v,10)}${v}</button>`).join("");
+    const natRest=profNatList().filter(v=>PROF_NAT_TOP.indexOf(v)<0);
     body=`<div class="card">
+      <h3>국적</h3>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px">${natBtns}</div>
+      <label class="small" style="display:block">그 외
+        <select onchange="profSetNat(this.value)" style="width:100%;padding:10px 9px;border-radius:8px;font-size:15px">
+          <option value="">— 목록에서 고르기 —</option>
+          ${natRest.map(v=>`<option value="${v}"${P.nat===v?" selected":""}>${v}</option>`).join("")}
+        </select></label>
+      <p class="small" style="margin:7px 0 0;opacity:.75">${_frn
+        ? `<b style="color:var(--gold)">${P.nat}</b> 국적으로 시작합니다 — 이름은 <b>이름 성</b> 순서로 «띄어 써서» 표기됩니다.
+           국적은 능력치·평판에 영향을 주지 않습니다. 실력은 출신과 능력치가 정합니다.`
+        : `한국 국적입니다 — 이름은 <b>성이름</b> 순서로 붙여 씁니다.`}</p>
+    </div>
+    <div class="card">
       <h3>신상</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-        <label class="small" style="flex:1;min-width:110px">성
-          <input type="text" value="${P.sur}" maxlength="6" placeholder="" autocomplete="off" enterkeyhint="next"
+        <label class="small" style="flex:${_frn?"2":"1"};min-width:${_frn?"140":"110"}px">${_frn?"이름 (한글 표기)":"성"}
+          <input type="text" value="${_frn?P.giv:P.sur}" maxlength="${_frn?12:6}" placeholder="${_frn?"펩":""}" autocomplete="off" enterkeyhint="next"
             style="width:100%;padding:11px 9px;border-radius:8px;font-size:16px"
-            oninput="profSetTxt('sur',this.value,1)" onchange="this.value=profSetTxt('sur',this.value,1)"></label>
-        <label class="small" style="flex:2;min-width:140px">이름
-          <input type="text" value="${P.giv}" maxlength="8" placeholder="" autocomplete="off" enterkeyhint="done"
+            oninput="profSetTxt('${_frn?"giv":"sur"}',this.value,1)" onchange="this.value=profSetTxt('${_frn?"giv":"sur"}',this.value,1)"></label>
+        <label class="small" style="flex:${_frn?"2":"2"};min-width:140px">${_frn?"성 (한글 표기)":"이름"}
+          <input type="text" value="${_frn?P.sur:P.giv}" maxlength="${_frn?12:8}" placeholder="${_frn?"과르디올라":""}" autocomplete="off" enterkeyhint="${_frn?"next":"done"}"
             style="width:100%;padding:11px 9px;border-radius:8px;font-size:16px"
-            oninput="profSetTxt('giv',this.value,1)" onchange="this.value=profSetTxt('giv',this.value,1)"></label>
+            oninput="profSetTxt('${_frn?"sur":"giv"}',this.value,1)" onchange="this.value=profSetTxt('${_frn?"sur":"giv"}',this.value,1)"></label>
       </div>
+      ${_frn?`<label class="small" style="display:block;margin-bottom:8px">로마자 표기 <span style="opacity:.6">(선택)</span>
+        <input type="text" value="${P.en}" maxlength="28" placeholder="Pep Guardiola" autocomplete="off" enterkeyhint="done"
+          style="width:100%;padding:11px 9px;border-radius:8px;font-size:16px"
+          oninput="profSetTxt('en',this.value,1)" onchange="this.value=profSetTxt('en',this.value,1)"></label>`:""}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <label class="small" style="flex:1;min-width:110px">키 (cm)
           <input type="number" inputmode="numeric" value="${P.h}" min="150" max="210"
@@ -29550,7 +29633,8 @@ function profPanel(){
             onchange="this.value=profSetTxt('w',this.value,1)"></label>
       </div>
       <p class="small" style="margin-top:8px;opacity:.75">이름은 뉴스·기록실·루머 게시판에 그대로 실립니다.
-        선수와 스태프는 여전히 «감독님»이라고 부릅니다.</p>
+        선수와 스태프는 여전히 «감독님»이라고 부릅니다.${_frn?`
+        <br>기사에는 <b>${profNameOf(P)||"이름 성"}</b>${P.en?` <span style="opacity:.7">(${P.en})</span>`:""} 으로 나갑니다 — 한국 언론이 외국인 감독을 부르는 방식입니다.`:""}</p>
     </div>`;
   } else {
     body=SA_GRP.map(g=>`<div class="card" style="margin:6px 0">
@@ -29570,11 +29654,11 @@ function profPanel(){
       }).join("")}
     </div>`).join("");
   }
-  const nm=(String(P.sur||"")+String(P.giv||"")).trim();
+  const nm=profNameOf(P);
   return `<div class="pkPanel pkOptP">
     <div class="pkHead" style="border-left:6px solid var(--gold)">
       <div class="pkName" style="color:var(--gold)">감독 프로필 작성${profLegacy?` — <span style="color:#e8eef6">${(userTeam()||{}).name||""}</span> <span class="small" style="color:var(--sub)">(이전 세이브 · 1회)</span>`:(profPendTeam?` — <span style="color:#e8eef6">${profPendName()}</span>`:"")}</div>
-      <div class="small" id="profHeadLine">${nm?`<b>${nm}</b> · `:""}${B.n} · ${P.h}cm ${P.w}kg · 종합 <b>${profDraftOvr(P)}</b>/20
+      <div class="small" id="profHeadLine">${nm?`${profFlag(P.nat)}<b>${nm}</b> · `:""}${profIsFrn(P)?`${P.nat} · `:""}${B.n} · ${P.h}cm ${P.w}kg · 종합 <b>${profDraftOvr(P)}</b>/20
         · 남은 포인트 <b style="color:${left>0?"var(--gold)":"var(--green)"}">${left}</b></div>
     </div>
     <div class="pkOptBody">
@@ -30214,13 +30298,16 @@ const PROF_BG_ORDER=["none","ama","semi","pro","ntl"];
 function profOf(){
   if(!G) return null;
   if(!G.prof || typeof G.prof!=="object"){
-    G.prof={sur:"", giv:"", h:178, w:74, bg:"semi", legacy:1, a:{}};
+    G.prof={sur:"", giv:"", nat:PROF_NAT_KR, en:"", h:178, w:74, bg:"semi", legacy:1, a:{}};
     for(const k of SA_KEYS) G.prof.a[k]=10;
     try{ acSync(G.prof); }catch(e){}
   }
   if(!G.prof.a) G.prof.a={};
   for(const k of SA_KEYS) if(typeof G.prof.a[k]!=="number") G.prof.a[k]=10;
   if(!PROF_BG[G.prof.bg]) G.prof.bg="semi";
+  /* 🌍 국적이 없던 시절의 세이브 — 한국인으로 본다 (이름 조립 방식이 그대로 유지된다) */
+  if(G.prof.nat==null) G.prof.nat=PROF_NAT_KR;
+  if(G.prof.en==null) G.prof.en="";
   return G.prof;
 }
 function profBg(){ try{ return PROF_BG[profOf().bg] || PROF_BG.semi; }catch(e){ return PROF_BG.semi; } }
@@ -30234,9 +30321,73 @@ function mgrTag(t, full){
   return nm ? (s0 ? `${s0} ${nm}` : nm) : s0;
 }
 function profA(k){ try{ const v=profOf().a[k]; return (typeof v==="number")?v:10; }catch(e){ return 10; } }
-/* 이름 — 성+이름. 비어 있으면 예전처럼 「감독님」이다(옛 세이브가 그대로 굴러가게) */
-function profName(){
-  try{ const P=profOf(); const n=String((P.sur||"")+(P.giv||"")).trim(); return n||""; }catch(e){ return ""; }
+/* 🌍 감독 국적 — 「해외 감독으로 시작하고 싶다」(요청).
+   ⚠ 성적·능력치에는 손대지 않는다. 이름을 부르는 «순서»와 기사·기록실 표기만 달라진다.
+     외국인 감독에게 자동으로 평판을 얹거나 깎지 않는다 — 실력은 출신·능력치가 정한다. */
+const PROF_NAT_KR="한국";
+/* 실제로 K리그 사령탑에 자주 앉는 나라를 앞에 둔다. 그 밖은 «그 외»에서 고른다. */
+const PROF_NAT_TOP=["한국","브라질","포르투갈","스페인","일본","독일","네덜란드","잉글랜드",
+                    "아르헨티나","이탈리아","프랑스","세르비아","크로아티아","우즈베키스탄"];
+function profNatList(){
+  try{ const rest=(PG_NATIONS||[]).filter(x=>PROF_NAT_TOP.indexOf(x)<0);
+       return PROF_NAT_TOP.concat(rest.sort()); }catch(e){ return PROF_NAT_TOP.slice(); }
+}
+function profIsFrn(P){ try{ return String((P||profOf()).nat||PROF_NAT_KR)!==PROF_NAT_KR; }catch(e){ return false; } }
+/* 이름 조립 — 한국은 「성이름」 붙여 쓰고, 해외는 「이름 성」 띄어 쓴다 */
+function profNameOf(P){
+  if(!P) return "";
+  const su=String(P.sur||"").trim(), gi=String(P.giv||"").trim();
+  if(!su && !gi) return "";
+  return profIsFrn(P) ? (gi+" "+su).trim() : (su+gi).trim();
+}
+/* 이름 — 비어 있으면 예전처럼 「감독님」이다(옛 세이브가 그대로 굴러가게) */
+function profName(){ try{ return profNameOf(profOf())||""; }catch(e){ return ""; } }
+/* 로마자 표기 — 프로필·기록실에서 이름 옆에 붙는다 (선택 입력) */
+function profNameEn(){ try{ return String(profOf().en||"").trim(); }catch(e){ return ""; } }
+function profNat(){ try{ return String(profOf().nat||PROF_NAT_KR); }catch(e){ return PROF_NAT_KR; } }
+/* ═══ 🗣️ 외국인 감독의 한국어 ═══════════════════════════════════════════
+   요청 — 「외국인 감독일 경우 언어 문제를 기자들이 물어봤으면」.
+   ⚠ 경기력에는 손대지 않는다. 회견에서 «무엇을 묻고 무엇을 답하는가»만 달라진다.
+     답이 쌓이면 한국어가 늘고, 통역 뒤에 숨으면 제자리다. 라커룸 반응은 기존 배관(o.m)이 맡는다. */
+const LANG_MAX=100;
+function langOn(){ try{ return !!G && !G.jobless && profIsFrn(); }catch(e){ return false; } }
+function langSt(){
+  if(!G) return null;
+  if(!G.lang || typeof G.lang!=="object") G.lang={kr:8, ip:1, ask:0, s0:(G.season||2026)};
+  if(typeof G.lang.kr!=="number") G.lang.kr=8;
+  if(typeof G.lang.ip!=="number") G.lang.ip=1;
+  return G.lang;
+}
+function langKr(){ try{ return langOn()? clamp(langSt().kr|0, 0, LANG_MAX) : LANG_MAX; }catch(e){ return LANG_MAX; } }
+/* 0~29 통역 · 30~59 더듬거림 · 60~84 의사소통 가능 · 85+ 유창 */
+function langBand(){ const v=langKr(); return v>=85?3 : v>=60?2 : v>=30?1 : 0; }
+function langLabel(){ return ["통역에 의존","더듬거리는 수준","의사소통 가능","유창"][langBand()]; }
+function langAdd(d, why){
+  if(!langOn() || !d) return;
+  const S=langSt(); S.kr=clamp(Math.round((S.kr+d)*10)/10, 0, LANG_MAX);
+  if(S.kr>=60) S.ip=0;
+  try{ if(why) G.langLog=[{d, why, s:G.season, d0:G.day||0}].concat(G.langLog||[]).slice(0,12); }catch(e){}
+}
+/* 시즌마다 한 해를 살면 조금씩 는다 — 통역을 계속 끼고 있으면 훨씬 느리다 */
+function langSeasonTick(){
+  if(!langOn()) return;
+  const S=langSt(), before=S.kr;
+  langAdd(S.ip? 4+R(4) : 9+R(7), "한국에서 한 시즌을 보냈습니다");
+  if(S.kr>=60 && before<60){
+    try{ addNews(`🗣️ <b>${profName()} 감독, 통역 없이 회견</b> — 부임 ${G.season-(S.s0||G.season)}년 만에 한국어로 직접 답했다.`, "good", "manager",
+      {cat:"manager", ic:"🗣️", tone:1, tid:G.userTeamId, src:pick(MEDIA),
+       head:`"이제 통역 필요 없습니다"`, sub:`${profName()} 감독이 오늘 회견을 처음부터 끝까지 한국어로 진행했다.`}); }catch(e){}
+  }
+}
+/* 국기 — 대륙 대회 국기표를 그대로 쓴다. 없는 나라는 국적명만 나온다. */
+function profFlag(nat, h){
+  try{
+    const T=(typeof CWC_FLAG_SVG!=="undefined")?CWC_FLAG_SVG:((typeof EACL_FLAG_SVG!=="undefined")?EACL_FLAG_SVG:null);
+    const b=T && T[nat||profNat()];
+    if(!b) return "";
+    return `<svg viewBox="0 0 30 20" style="height:${h||11}px;width:auto;vertical-align:-1px;border-radius:2px;
+      box-shadow:0 0 0 1px #0006;margin-right:4px">${b}</svg>`;
+  }catch(e){ return ""; }
 }
 /* 감독 종합 — 스태프와 같은 자(acOvr)로 잰다 */
 function profOvr(){
@@ -36346,7 +36497,15 @@ function donCard(){
         <div style="height:100%;width:${(prog*100).toFixed(1)}%;background:linear-gradient(90deg,#e3b341,#f0c674)"></div></div>
       <p class="small" style="margin-top:6px;color:var(--sub)">${need>0?`<b>${need}억</b>이 더 모이면 그 겨울에 공사에 들어갑니다.`:`다음 기부에 곧바로 착공합니다.`}
         수용 인원 <b>${(sd.cap||0).toLocaleString()}명</b> · 기준 관중 <b>${(sd.avg||0).toLocaleString()}명</b>
-        · 관중 상한 <b>${attCeilOf(t).toLocaleString()}명</b> → <b style="color:var(--gold)">${Math.min(Math.round((sd.cap+DON_STEP)*0.92), Math.round((( sd._base0||sd.avg)+DON_STEP*0.40)*1.6)).toLocaleString()}명</b></p>
+        · 관중 상한 <b>${attCeilOf(t).toLocaleString()}명</b> → <b style="color:var(--gold)">${(function(){
+          /* ⚠ 여기 1.6 이 못 박혀 있어서 명문도·운영 주체가 올린 천장이 미리보기에 안 나왔다 */
+          const bk=1.6 + (t.fac?(clamp(t.fac.remod||0,0,3)*0.05 + clamp(t.fac.family||0,0,3)*0.03):0) + prstK(t) + attOwnK(t);
+          const ck=0.92 + (t.fac?clamp(t.fac.remod||0,0,3)*0.02:0);
+          return Math.min(Math.round((sd.cap+DON_STEP)*Math.min(ck,0.98)), Math.round(((sd._base0||sd.avg)+DON_STEP*0.40)*bk)).toLocaleString();
+        })()}명</b></p>
+      <p class="small" style="margin:4px 0 0;color:var(--sub)">🏛️ 명문도 <b>${prestigeOf(t)}</b>
+        <span style="color:#8b949e">— 리그 우승·아시아·세계 무대 성과가 쌓일수록 이 구장이 담을 수 있는 관중의 천장이 올라갑니다
+        (지금 ${(attCeilOf(t)/Math.max(1,attBase0(t))).toFixed(2)}배${attCeilOf(t)>=Math.round(sd.cap*0.92)?" · <b>지금은 수용 인원이 한계입니다 — 증축이 필요합니다</b>":""})</span></p>
     </div>`}
     ${d.pend>0?`<div class="msg" style="margin-top:9px;background:#3fb95022;border-color:#3fb95066">
       🏗️ <b>${d.pend.toLocaleString()}석</b> 규모 구장 개선 공사 중 — 다음 시즌 개막에 맞춰 개방됩니다.</div>`:""}
@@ -36960,8 +37119,20 @@ function profCard(){
           <i style="display:block;height:100%;width:${Math.round(v/20*100)}%;background:${col}"></i></div>
         <b style="min-width:22px;text-align:right;color:${col}">${v}</b></div>`; };
     return `<div class="card">
-      <h3>🎩 ${nm||"감독"} <span class="small" style="font-weight:400">— ${B.ic} ${B.n} · ${P.h}cm ${P.w}kg · 종합 <b>${profOvr()}</b>/20 · 평판 <b>${mgrRep()}</b></span></h3>
+      <h3>🎩 ${profFlag(P.nat,13)}${nm||"감독"}${profNameEn()?` <span class="small" style="font-weight:400;opacity:.65">${profNameEn()}</span>`:""}
+        <span class="small" style="font-weight:400">— ${profIsFrn(P)?`${P.nat} · `:""}${B.ic} ${B.n} · ${P.h}cm ${P.w}kg · 종합 <b>${profOvr()}</b>/20 · 평판 <b>${mgrRep()}</b></span></h3>
       <p class="small" style="margin:0 0 8px;opacity:.85">${B.d}</p>
+      ${(typeof langOn==="function" && langOn())?`<div style="margin:0 0 9px">
+        <div class="small" style="display:flex;align-items:center;gap:8px">
+          <span style="flex:0 0 auto">🗣️ 한국어</span>
+          <div style="flex:1;height:7px;background:#20262e;border-radius:4px;overflow:hidden">
+            <i style="display:block;height:100%;width:${langKr()}%;background:${langBand()>=2?"var(--green)":langBand()>=1?"var(--gold)":"var(--sub)"}"></i></div>
+          <b style="min-width:80px;text-align:right;color:${langBand()>=2?"var(--green)":langBand()>=1?"var(--gold)":"var(--sub)"}">${langKr()} · ${langLabel()}</b></div>
+        <p class="small" style="margin:4px 0 0;opacity:.7">${langBand()===0
+          ? "회견은 통역을 거칩니다. 기자 질문에 한국어로 답할수록, 그리고 한국에서 시즌을 보낼수록 늘어납니다."
+          : langBand()===1 ? "회견 절반은 직접 답합니다. 60을 넘으면 통역을 뗍니다."
+          : langBand()===2 ? "통역 없이 회견합니다." : "유창합니다 — 이제 국적을 묻는 기자가 없습니다."}</p>
+      </div>`:""}
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0 18px">${top.map(bar).join("")}</div>
       <p class="small" style="margin-top:8px;opacity:.7">
         선수단 신뢰 ${profRespect()>=0?"+":""}${Math.round(profRespect()*100)} · 코치가 보는 눈 ${profStaffPull()>=0?"+":""}${profStaffPull().toFixed(1)}
@@ -52775,6 +52946,20 @@ function h2hLast(a,b){
   const rs=G.results.filter(r=>r.s===G.season&&((r.hid===a&&r.aid===b)||(r.hid===b&&r.aid===a)));
   return rs.length?rs[rs.length-1]:null;
 }
+/* 🗣️ 외국인 감독의 한국어 — 기자가 이걸 안 물어볼 리 없다 (요청).
+   ⚠ buildCtx 는 부임 회견에서 «일찍» 돌려주는 갈래가 따로 있다. 두 곳 다 이걸 부른다. */
+function langCtx(ctx, stage){
+  ctx.langOn = (typeof langOn==="function") && langOn();
+  if(!ctx.langOn) return ctx;
+  const S=langSt(), me=userTeam();
+  ctx.langKr=langKr(); ctx.langBand=langBand(); ctx.langIp=!!S.ip;
+  ctx.langNat=profNat();
+  ctx.langYrs=Math.max(1,(G.season||2026)-(S.s0||G.season||2026)+1);
+  /* 같은 질문을 매 회견마다 하지 않는다 — 라운드 간격을 둔다 */
+  const _rd=(me && me.div===1?G.r1:G.r2)||0;
+  ctx.langAsk = ((S.ask|0)===0) || (_rd-(S.ask|0) >= 5) || (stage==="intro");
+  return ctx;
+}
 function buildCtx(stage, M){
   if(stage==="sign"){   // 영입 발표 기자회견 — 상대팀도 경기도 없다
     const me=userTeam();
@@ -52801,10 +52986,14 @@ function buildCtx(stage, M){
     const rv=RIVALS.find(([a,b])=>a===me.id||b===me.id);
     const rivalTeam = rv ? G.teams[rv[0]===me.id?rv[1]:rv[0]] : null;
     const star=[...me.players].sort((a,b)=>b.ovr-a.ovr)[0];
-    return {stage, me, div2: me.div===2,
+    /* ⚠ 이 갈래는 여기서 곧바로 돌려준다 — 아래쪽에서 붙이는 상황값이 하나도 안 붙는다.
+         🗣️ 언어 상황을 여기서도 붙여 줘야 부임 회견에 언어 질문이 나온다(실측으로 잡았다). */
+    const _c0={stage, me, div2: me.div===2,
       bigClub: (me.wageCap||0)>=110 || me.fans>=45,
       small: (me.wageCap||0)<=55,
       rivalTeam, star};
+    try{ langCtx(_c0, stage); }catch(e){ _c0.langOn=false; }
+    return _c0;
   }
   const me=userTeam();
   const opp = M.home.isUser? M.away : M.home;
@@ -52858,6 +53047,7 @@ function buildCtx(stage, M){
   if(M && M.opts && (M.opts.eacl||M.opts.cwc)){ ctx.opening=false; ctx.opened=false; ctx.splitSoon=false; ctx.finalRd=false; ctx.lastRds=false; ctx.titleRace=false; }
   /* 🆕 지금 이 구단·이 감독을 둘러싼 사정 (요청: 기자회견도 현재 환경에 맞게).
      기자는 순위표만 보고 오지 않는다 — 월급이 밀렸으면 그것부터 묻는다. */
+  try{ langCtx(ctx, stage); }catch(e){ ctx.langOn=false; }
   try{ const _a=waOf(me.id); ctx.wageM=_a?(_a.m|0):0; ctx.wageTot=_a?(_a.tot||0):0; }catch(e){ ctx.wageM=0; }
   ctx.wageBan=(ctx.wageM>=3);
   try{ if(G.saOffer){ const _sp=me.players.find(x=>x.id===G.saOffer.pid);
@@ -53008,7 +53198,8 @@ function qPool(stage,c){
   const QF=(tone,cond,q,opts)=>{ if(cond) P.push({tone,q,opts,filler:true}); };
   // QP: 그 경기에만 있는 특별한 사정(개막전·더비·강등권·연패 등). 이게 걸리면 무조건 먼저 나간다.
   const QP=(tone,cond,q,opts)=>{ if(cond) P.push({tone,q,opts,pri:true}); };
-  const O=(t,m,r,re)=>({t,m,r,re});
+  /* 🗣️ 5번째 인자로 부가 효과를 싣는다 — 지금은 lg(한국어 능력)만 쓴다 */
+  const O=(t,m,r,re,x)=>Object.assign({t,m,r,re}, x||{});
   /* ══ 💀 감독 개인 재정 — 어느 회견이든 이게 걸리면 가장 먼저 물어본다 ══ */
   if(c.stkAsk==="bank"){
     QP(2,true,`감독님, 개인 파산 소식이 크게 보도됐습니다. 주식 투자로 전 재산을 잃으셨다는데 — 팀을 이끄실 수 있는 상태입니까?`,[
@@ -53042,6 +53233,56 @@ function qPool(stage,c){
         O("칭찬은 감사하지만 경기는 경기죠. 최선을 다하겠습니다.",2,1,"프로다우십니다."),
         O("그런 말씀 들으니 부담이 더 큽니다. (웃음)",1,2,"인간적인 답변이네요."),
         O("서로 예의는 지키되, 승점은 저희가 가져가겠습니다.",3,2,"자신 있으시군요.")]);
+  }
+  /* ══ 🗣️ 언어 — 외국인 감독에게 한국 기자가 반드시 묻는 것 (요청) ══
+       ⚠ 능력에 따라 «묻는 결»이 다르다. 갓 온 감독에게 「이제 유창하시네요」라고 물으면 우습다. */
+  if(c.langOn && c.langAsk){
+    const _kb=c.langBand;
+    if(stage==="intro"){
+      QP(1,true,`${c.langNat}에서 오셨습니다. 한국어는 어느 정도 하십니까? 선수들과는 어떻게 소통하실 계획인지요.`,[
+        O("축구 용어는 이미 익혔습니다. 나머지는 훈련장에서 배우겠습니다.",2,2,"의욕이 있으시네요. 기대하겠습니다.",{lg:6}),
+        O("당장은 통역을 씁니다. 대신 6개월 안에 통역 없이 회견하겠습니다. 약속드립니다.",3,3,"…그 말씀, 6개월 뒤에 다시 여쭙겠습니다.",{lg:8}),
+        O("축구는 말로 하는 게 아닙니다. 그라운드에서는 다 통합니다.",1,-1,"…그렇게만 되면 좋겠습니다만.",{lg:-1}),
+        O("솔직히 못 합니다. 그래서 매일 두 시간씩 배우고 있습니다.",2,3,"솔직하시네요. 오히려 믿음이 갑니다.",{lg:7})]);
+    } else if(_kb===0){
+      QP(2,true,`통역을 거쳐 지시가 나가면 한 박자 늦습니다. 경기 중에 그 시간 차이가 실점으로 이어진 적은 없습니까?`,[
+        O("그래서 지시를 짧게 자릅니다. 세 단어 안에 끝냅니다.",2,2,"준비가 되어 있으셨군요.",{lg:3}),
+        O("솔직히 있습니다. 제 책임입니다. 그래서 한국어를 배우고 있습니다.",2,3,"인정하고 고치시겠다는 거군요.",{lg:6}),
+        O("통역이 저보다 축구를 잘 압니다. 문제없습니다.",1,0,"…통역분이 들으면 좋아하시겠네요.",{lg:0}),
+        O("그건 핑계입니다. 전술이 명확하면 말이 필요 없습니다.",1,-1,"강경하시네요.",{lg:-1})]);
+      QF(1,true,`선수들이 감독님 지시를 «정확히» 이해하고 있다고 보십니까? 라커룸에서 웃는 얼굴로 고개만 끄덕이는 경우도 있습니다만.`,[
+        O("그래서 매번 되물어봅니다. 네가 이해한 걸 말해 봐라, 하고요.",3,2,"확인하고 넘어가시는군요.",{lg:4}),
+        O("고참 선수 두 명에게 따로 확인받습니다. 그들이 라커룸의 통역입니다.",3,3,"현장에서 나온 방법이네요.",{lg:3}),
+        O("이해 못 했으면 경기에서 티가 납니다. 그때 다시 잡습니다.",1,0,"…한 경기를 잃고 나서요?",{lg:1}),
+        O("우리 선수들을 그렇게 보지 않습니다.",1,-1,"...질문의 뜻은 그게 아니었습니다만.",{lg:0})]);
+      QF(2,true,`한국말로 «욕»은 배우셨습니까? 라커룸에서 화를 내야 할 순간이 올 텐데요. (웃음)`,[
+        O("(웃음) 그건 제일 먼저 배웠습니다. 아직 쓸 일은 없었고요.",2,3,"오늘 헤드라인이 나왔네요. (웃음)",{lg:2}),
+        O("화는 표정으로 냅니다. 그건 번역이 필요 없더군요.",2,2,"…그건 확실히 통하죠.",{lg:1}),
+        O("저는 소리 지르는 감독이 아닙니다.",1,1,"조용한 쪽이시군요.",{lg:0}),
+        O("배울 겁니다. 필요한 날이 오면요.",1,2,"(웃음) 그날은 안 왔으면 좋겠습니다.",{lg:1})]);
+    } else if(_kb===1){
+      QP(1,true,`부임 ${c.langYrs}년 차입니다. 요즘 회견에서 한국어를 쓰시는데 — 통역은 이제 안 쓰십니까?`,[
+        O("반은 제가 하고, 어려운 건 통역이 받습니다. 조금씩 줄이고 있습니다.",2,2,"늘고 계시네요.",{lg:5}),
+        O("아직 서툽니다. 틀리게 말하는 게 창피하지만, 그래야 늡니다.",3,3,"…그 태도가 좋습니다.",{lg:8}),
+        O("경기 이야기만 하시죠.",0,-3,"…알겠습니다.",{lg:-2}),
+        O("선수들과는 이제 통역 없이 합니다. 회견이 제일 어렵더군요. (웃음)",2,3,"라커룸이 먼저였군요. (웃음)",{lg:4})]);
+      QF(2,true,`한국어로 심판에게 항의하시는 장면이 잡혔습니다. 뜻이 제대로 전달됐다고 보십니까?`,[
+        O("전달됐으니까 경고를 받았겠죠. (웃음)",2,3,"(웃음) 그건 확실하네요.",{lg:3}),
+        O("전달됐습니다. 다만 표현이 거칠었다면 사과드립니다.",2,1,"깔끔합니다.",{lg:2}),
+        O("항의는 만국 공통입니다. 말이 필요 없습니다.",1,1,"…그것도 맞는 말씀이네요.",{lg:0}),
+        O("그 장면은 다시 보고 싶지 않습니다. 제 잘못입니다.",2,2,"돌아보시는군요.",{lg:1})]);
+    } else {
+      QF(1,true,`이제 통역 없이 회견하십니다. ${c.langNat} 출신 감독 중에 이렇게까지 한국어를 하시는 분은 드문데요.`,[
+        O("여기서 일하니까요. 당연한 겁니다.",3,3,"…멋있는 말씀이네요.",{lg:2}),
+        O("선수들에게 직접 말하고 싶었습니다. 그게 전부입니다.",3,3,"그게 이유였군요.",{lg:2}),
+        O("아직 사투리는 못 알아듣습니다. (웃음)",2,3,"(웃음) 그건 저희도 어렵습니다.",{lg:2}),
+        O("칭찬 감사합니다. 다만 오늘은 경기 얘기를 하고 싶습니다.",1,1,"알겠습니다, 감독님.",{lg:0})]);
+      QF(2,true,`한국 무대가 길어지셨습니다. 이제 «외국인 감독»이라는 말이 어색하지 않으십니까?`,[
+        O("저는 이 리그 감독입니다. 국적은 여권에만 있는 겁니다.",3,3,"…그 말씀 그대로 쓰겠습니다.",{lg:1}),
+        O("어색합니다. 그래도 사실이니 어쩔 수 없죠. (웃음)",2,2,"솔직하시네요.",{lg:0}),
+        O("여전히 배우는 게 많습니다. 아직 손님이라고 생각합니다.",2,2,"겸손하십니다.",{lg:1}),
+        O("그 말이 없어지는 날까지 일하겠습니다.",3,3,"오늘 헤드라인입니다.",{lg:1})]);
+    }
   }
   /* ══ 💸 임금 체불 — 순위표보다 먼저 나오는 질문이다 (요청: 현재 환경 반영) ══ */
   if(c.wageM>=1){
@@ -54124,6 +54365,16 @@ function ivAnswer(i){
   }
   if(o.r){ G.press.rel=clamp(G.press.rel+o.r,0,100); fxArr.push(`언론 ${o.r>0?"+":""}${o.r}`); }
   if(o.ck){ try{ coachTalkFx(o.ck, iv.ctx, fxArr); }catch(e){} }
+  /* 🗣️ 언어 질문에 답하면 한국어가 는다(또는 제자리다) — 회견 자체가 연습이다 */
+  if(o.lg!=null && typeof langOn==="function" && langOn()){
+    try{
+      const _b0=langBand();
+      langAdd(o.lg, "회견에서 한국어로 답했습니다");
+      const S=langSt(); S.ask=((t.div===1?G.r1:G.r2)||0)||1;
+      if(o.lg) fxArr.push(`한국어 ${o.lg>0?"+":""}${o.lg}`);
+      if(langBand()>_b0) fxArr.push(`<b style="color:var(--green)">${langLabel()}</b>`);
+    }catch(e){}
+  }
   /* 🎙️ 상대 감독 발언에 대한 답 — 여기서 정산 예약이 걸린다 (요청) */
   try{
     if(G.oppSaid && !G.oppSaid.answered && iv.ctx && iv.ctx.oppSaid && q.q.indexOf(G.oppSaid.cn)>=0){
@@ -74509,7 +74760,7 @@ class MatchSim{
         const _spd=HYP((_b.vx||0)*PITCH_AR, _b.vy||0)*ISO_TO_M/SIM_DT;      // m/s
         const _gk=this.side(lastSide).find(a=>a.slot==="GK");
         const _gkd=_gk ? HYP((_gk.x-x)*PITCH_AR, _gk.y-y)*ISO_TO_M : 99;
-        if(_spd>=12 && _gkd>6){    /* 8m/s·5m 로는 경기당 0.25골 — 실축(0.17)보다 잦고 총 득점을 밀어 올렸다 */
+        if(_spd>=13 && _gkd>6.5){    /* 8m/s·5m 로는 경기당 0.25골 — 실축(0.17)보다 잦고 총 득점을 밀어 올렸다 */
           /* 🥅 자책골 주인 — 마지막으로 공을 「찬」 사람이 우선이다.
              ⚠ 제보 — 「우리 팀 골인데 상대 골키퍼 이름이 나오는 자책골이 많다」. 원인이 여기였다:
                공이 골라인을 넘는 순간은 LOOSE 라 ownerId·_rollOwner 가 둘 다 비어 있고,
@@ -74532,8 +74783,19 @@ class MatchSim{
               if(d<_ogD){ _ogD=d; _og=q; }
             }
           }
-          if(!_og) _og=this.side(lastSide).find(q=>q.slot!=="GK")||this.side(lastSide)[0];
-          this.rollInGoal(this.opp(lastSide), _og); return true;
+          if(!_og) _og=this.side(lastSide).find(q=>q.slot!=="GK" && !(q.p&&q.p.pos==="GK"))||this.side(lastSide)[0];
+          /* 🥅 ⚠ 제보 — 「롱볼·다이렉트를 쓰면 한 시즌에 자책골이 5~6개씩 나온다」.
+             실측(30경기×3전술): 다이렉트 경기당 0.567 · 롱볼 0.433 · 숏패스 0.267
+             → 38경기 환산 21.5 / 16.5 / 10.1 개. 실제 K리그는 리그 전체가 한 시즌 20여 개,
+               한 팀 기준 1~2개다. 10~20배였다.
+             원인은 조건을 만족한 장면이 «전부» 골이 된 것이다. 롱볼·다이렉트는 자기 진영에서
+             빠르게 걷어내는 장면 자체가 훨씬 많아, 같은 규칙이 전술에 따라 두 배로 증폭됐다.
+             ─ 조건을 통과한 장면 중 «수비수가 실제로 방향을 놓친 경우»만 골로 남긴다.
+               침착성·위치선정이 좋은 수비수일수록 골문 대신 옆으로 흘려보낸다.
+               떨어진 나머지는 예전처럼 코너킥이다(아래로 흘러간다). */
+          const _ogA=(function(){ try{ return attrAvg(_og.p,["cmp","pos_"],70); }catch(e){ return 70; } })();
+          const _ogP=clamp(0.34 - (_ogA-60)*0.010, 0.06, 0.34);
+          if(Math.random()<_ogP){ this.rollInGoal(this.opp(lastSide), _og); return true; }
         }
       }
       /* 🥅 골라인을 넘은 공(골이 아닌 공)은 골망 뒤·포스트 바깥에 놓는다 — placeGoalOut 주석 참고.
@@ -88452,7 +88714,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5101";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5106";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
