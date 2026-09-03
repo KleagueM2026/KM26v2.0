@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5123-->
+<!--B:20260913-5127-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -5653,6 +5653,15 @@ function legPathTxt(legs){
 }
 function joinClub(t, p, lock){
   try{ delete p._banAct; }catch(e){}       // 🟥 소속이 바뀌면 「다음 경기 대회」 표식은 무효다
+  /* ⛔ ⚠ 제보 원문 — 「이적시장에서 1경기 리그 출장정지가 있는 상태로 영입했는데,
+       리그가 1경기 지났는데도 안 풀리고 2경기째가 지나서야 풀렸다」.
+     원인 — banNew 는 「퇴장당한 그 라운드는 차감하지 않는다」는 한 번짜리 유예다.
+       원소속 구단에서 카드를 받고 그 유예가 아직 살아 있는 채로 이적해 오면,
+       새 구단에서 치르는 첫 라운드가 유예로 통째로 소모된다. 그래서 「1경기 정지」가
+       실제로는 두 라운드를 앉아 있게 된다 — 화면에는 계속 1경기로만 적혀 있었다.
+     ─ 유예는 «그 경기를 뛴 팀»에서만 의미가 있다. 소속이 바뀌면 끊는다.
+       남은 정지 경기 수가 곧 새 구단에서 못 나오는 경기 수가 된다. */
+  try{ if(p.banNew) delete p.banNew; }catch(e){}
   /* 🔁 ⚠ 제보 원문 — 「이적시장에 ai가 능력 좋은 선수를 영입했을 때 해당 팀 출전 횟수가 0이면
      임대를 쉽게 보내줍니다. 능력 좋은 선수는 임대가 어렵게 개선해야 할 것 같습니다」.
      ─ 「언제 이 팀에 왔는가」를 새겨 둔다. 갓 입단한 선수를 출전 기록으로 재면 무조건
@@ -14601,7 +14610,11 @@ function acPoolFill(){
 /* 시즌이 바뀌면 시장이 돈다 — 절반쯤 갈아 끼운다 */
 function acPoolRoll(){
   const P=acPool();
-  for(let i=P.length-1;i>=0;i--) if(Math.random()<0.40) P.splice(i,1);
+  /* 🧬 직접 만든 사람과 🏟️ 구단 소속으로 지정한 사람은 물갈이에서 빼 준다 —
+     애써 만들어 둔 스태프가 시즌이 바뀌면 사라지면 안 된다. */
+  for(let i=P.length-1;i>=0;i--){ const c=P[i];
+    if(c && (c.made || c.club)) continue;
+    if(Math.random()<0.40) P.splice(i,1); }
   acPoolTopUp(P);
   G.acPoolS=(G&&G.season)||2026;
 }
@@ -22384,6 +22397,7 @@ function loanOut(pid, clubId, share, buyOpt, halfSeason){
   const t=userTeam(); const p=t.players.find(x=>x.id===pid); const club=G.teams[clubId];
   if(!p||!club) return;
   if(p.armyCall){ flash(`🎖️ ${p.name} 선수는 입영 통지를 받았습니다 — 입소(D-${armyCallLeft(p)})까지는 임대 보낼 수 없습니다.`,"warn"); return; }
+  if(p.army){ flash(`🎖️ ${p.name} 선수는 복무 중입니다 — 우리 소유가 아니라 임대를 보낼 수 없습니다.`,"warn"); return; }
   /* ⚠ 제보 — 「난색·거절 유력 구단도 더블 클릭·광클하면 임대를 보낼 수 있다」.
      제안 버튼을 누를 때마다 수락 주사위를 새로 굴렸다 — 5% 확률도 광클이면 뚫린다.
      거절당하면 그 구단에는 「조건을 올리거나」 7일이 지나야 다시 제안할 수 있다.
@@ -22748,15 +22762,25 @@ function armySweep(){
     const home=gc || (p.army && p.army.own && G.teams[p.army.own]);
     if(home && !home.players.includes(p)){ home.players.push(p); try{ joinClub(home, p, false); }catch(e){} }
   }
-  /* 이미 다른 구단이 데려간 경우도 원상 복구한다 — 복무 중에는 상무 외 어느 팀에도 소속될 수 없다 */
+  /* 이미 다른 구단이 데려간 경우도 원상 복구한다 — 복무 중에는 상무 외 어느 팀에도 소속될 수 없다.
+     ⚠ 제보(상무 감독이 제의를 수락해 선수가 팔려 나간 건)로 만들어진 옛 세이브가 여기로 온다.
+     예전에는 말없이 되돌렸다 — 감독은 선수가 사라진 줄로만 알았다. 이제 알린다. */
   if(gc){
+    const fixed=[];
     for(const id in G.teams){ const t=G.teams[id];
       if(isArmyTeam(t)) continue;
       for(const p of [...t.players]){
         if(!p.army) continue;
         t.players.splice(t.players.indexOf(p),1);
         if(!gc.players.includes(p)){ gc.players.push(p); try{ joinClub(gc, p, false); }catch(e){} }
+        fixed.push(`${p.name}(${t.short})`);
       }
+    }
+    if(fixed.length){
+      try{ addNews(`🎖️ <b>연맹, 복무 중인 선수 ${fixed.length}명의 이적을 무효 처리</b> — ${fixed.join(", ")}. `
+        +`현역 군인은 상무 외 어느 구단에도 등록될 수 없습니다. 전원 부대로 복귀합니다.`, "warn", "club"); }catch(e){}
+      try{ if(gc.isUser) notify(`🎖️ <b>복무 중인 선수 ${fixed.length}명이 부대로 돌아왔습니다.</b> `
+        +`<span class="small">잘못 성사됐던 이적을 되돌렸습니다 — ${fixed.join(", ")}</span>`,"warn"); }catch(e){}
     }
   }
 }
@@ -23260,6 +23284,8 @@ function listForSale(pid, quiet){
   const ut=userTeam(); const p=ut.players.find(x=>x.id===pid); if(!p) return;
   if(p.emg){ flash("🚨 긴급 등록 선수는 임시 소집 신분입니다 — 이적·판매할 수 없습니다.","warn"); return; }
   if(p.loan){ flash("🔁 임대 선수는 우리 소유가 아닙니다 — 판매할 수 없습니다.","warn"); return; }
+  if(p.armyCall){ flash(`🎖️ ${p.name} 선수는 입영 통지를 받았습니다 — 입소(D-${armyCallLeft(p)})까지는 이적명단에 올릴 수 없습니다.`,"warn"); return; }
+  if(p.army){ flash(`🎖️ ${p.name} 선수는 복무 중입니다 — 우리 소유가 아니라 이적명단에 올릴 수 없습니다.`,"warn"); return; }
   if(G.transferBids.some(b=>b.pid===pid)) return;
   G.transferBids.push({pid});
   addNews(`📤 ${p.name} 이적명단 등록 (예상 이적료 약 ${marketValue(p)}억)`);
@@ -23487,6 +23513,10 @@ function genOffers(){
   /* 🕊️ 무직 — 내 선수가 없으니 나에게 오는 영입 제안도 없다.
      ⚠ 가드를 함수 맨 위에 두면 AI끼리의 이적·방출까지 멈춰 리그가 얼어붙는다. 여기가 맞는 자리다. */
   if(G.jobless){ G.offers=[]; return; }
+  /* 🎖️ 상무 감독에게는 우리 선수를 사겠다는 제의 자체가 오지 않는다.
+     전원이 원소속 구단에서 파견된 현역이라 사고팔 대상이 아니다.
+     ⚠ AI 사이의 이적·방출은 위에서 이미 돌았다 — 여기서 끊어도 리그는 멈추지 않는다. */
+  if(armyUserClub()){ G.offers=[]; return; }
   const ut=userTeam();
   /* ⚠ 제보 — "3/31에 온 제안이 진행 누르면 확인도 못 하고 증발". 유저가 제의 탭을 아직
      열어보지 않은 제안(o.seen 없음)은 만료를 최대 3번까지 유예한다 — 볼 기회는 준다. */
@@ -23519,7 +23549,7 @@ function genOffers(){
     }
   }
   if(Math.random()<0.14){ // 핵심 선수 노리는 기습 오퍼
-    const stars=ut.players.filter(p=>p.ovr>=75&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
+    const stars=ut.players.filter(p=>p.ovr>=75&&!p.army&&!p.armyCall&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
     if(stars.length){
       const p=pick(stars);
       const rich=Object.values(G.teams).filter(t2=>!t2.isUser && !isArmyTeam(t2) && t2.budget>marketValue(p)*0.5);
@@ -23595,7 +23625,7 @@ function genOffers(){
     }
   }
   if(Math.random()<0.18){ // 준주전급에도 협상 요청이 온다
-    const mids=ut.players.filter(p=>p.ovr>=68&&p.ovr<75&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
+    const mids=ut.players.filter(p=>p.ovr>=68&&p.ovr<75&&!p.army&&!p.armyCall&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
     if(mids.length){
       const p=pick(mids);
       const _b2=Object.values(G.teams).filter(t2=>!t2.isUser && !isArmyTeam(t2) && !ceAusterity(t2.id));
@@ -23647,6 +23677,31 @@ function completeSale(pid, tid, fee, swapPid){
   const ut=userTeam(), buyer=G.teams[tid];
   const p=ut.players.find(x=>x.id===pid); if(!p) return false;
   if(p.emg){ notify("🚨 긴급 등록 선수는 임시 소집 신분이라 이적할 수 없습니다.","warn"); return false; }
+  /* 🎖️ ⚠ 제보 원문 — 「김천상무로 시작해서 다른 팀에서 상무팀에 있는 선수에게 이적 요청해서
+     거기 수락하니까 선수가 없어진다」.
+     원인 — 이적명단 등록(listForSale)에만 관문이 있었다. AI가 먼저 넣는 「기습 오퍼」와
+       「준주전급 타진」은 명단과 무관하게 만들어지므로, 상무 감독에게도 제의가 왔고
+       수락 경로(acceptOffer → completeSale)에는 관문이 없었다.
+       팔린 선수는 p.army 를 단 채 남의 팀으로 넘어가고, 그 팀의 명단에서는 「군 복무」로
+       빠지며, 전역 처리(tickArmy)는 상무 명단만 훑기 때문에 영영 돌아오지 않았다 —
+       감독 눈에는 그냥 사라진 것이다.
+     ─ 복무 중인 선수는 우리 소유가 아니다. 마지막 창구에서 막는다. */
+  /* 📨 함께 발견 — 입영 통지를 받은 선수는 화면에 「그때까지 이적·임대 불가」라고 적어 두고
+     임대만 막고 있었다. 판매는 그대로 뚫려 있었다. 적힌 대로 막는다. */
+  if(p.armyCall){
+    notify(`🎖️ <b>${p.name}</b> 선수는 입영 통지를 받았습니다 — 입소(D-${armyCallLeft(p)})까지는 이적할 수 없습니다.`,"warn");
+    G.offers=(G.offers||[]).filter(x=>x.pid!==pid);
+    G.transferBids=(G.transferBids||[]).filter(b=>b.pid!==pid);
+    if(G.snego&&G.snego.pid===pid) G.snego=null;
+    return false;
+  }
+  if(p.army || isArmyTeam(ut)){
+    notify(`🎖️ <b>${p.name}</b> 선수는 원소속 구단에서 파견된 <b>현역 군인</b>입니다 — 이적료를 받고 팔 수 없습니다.`,"warn");
+    G.offers=(G.offers||[]).filter(x=>x.pid!==pid);
+    G.transferBids=(G.transferBids||[]).filter(b=>b.pid!==pid);
+    if(G.snego&&G.snego.pid===pid) G.snego=null;
+    return false;
+  }
   // 선수 포함 딜(스왑)인 경우 — 상대 선수가 이미 다른 곳으로 옮겨졌으면 스왑 없이 현금 이적으로 대체 진행
   let swapP = swapPid ? buyer.players.find(x=>x.id===swapPid) : null;
   // 스왑은 나간 자리에 선수가 들어오므로 스쿼드 인원이 줄지 않는다 — 순수 판매(스왑 없음)일 때만 최소 인원을 확인한다
@@ -23713,9 +23768,23 @@ function offerGone(){
   notify("📨 그 제의는 이미 처리되었거나 만료됐습니다. 목록을 새로 불러옵니다.","warn");
   show("offers");
 }
+/* 🎖️ 복무 중인 선수 한 명이 우리 명단에 섞여 있는 경우 — 그 선수만 막는다 */
+function armySoldGuard(pid){
+  try{
+    const p=(userTeam()&&userTeam().players||[]).find(x=>x.id===pid);
+    if(!p || !p.army) return false;
+    notify(`🎖️ <b>${p.name}</b> 선수는 복무 중입니다 — 계약은 원소속 구단(${(G.teams[p.army.own]||{}).short||"원소속"})과 맺은 것이라 우리가 팔 수 없습니다.`,"warn");
+    G.offers=(G.offers||[]).filter(x=>x.pid!==pid);
+    G.transferBids=(G.transferBids||[]).filter(b=>b.pid!==pid);
+    show("offers");
+    return true;
+  }catch(e){ return false; }
+}
 function acceptOffer(pid, tid){
   const o=findOffer(pid, tid); if(!o) return offerGone();
   const ut=userTeam();
+  if(armyGate("선수 판매")){ G.offers=(G.offers||[]).filter(x=>x.pid!==o.pid); return; }
+  if(armySoldGuard(o.pid)) return;
   if(!o.swapPid && ut.players.length<=18){
     notify("⚠️ 스쿼드가 18명 이하라 선수를 팔 수 없습니다. 먼저 선수를 보강하세요.","warn"); return;
   }
@@ -23757,6 +23826,8 @@ function negoStay(){ try{ return (VIEW==="offers") ? "offers" : "nego"; }catch(e
 /* 판매 역협상: 오퍼 금액을 올려받기 */
 function startSellNego(pid, tid){
   const o=findOffer(pid, tid); if(!o) return offerGone();
+  if(armyGate("선수 판매")){ G.offers=(G.offers||[]).filter(x=>x.pid!==o.pid); return; }
+  if(armySoldGuard(o.pid)) return;
   if(G.snego){ notify("🤝 이미 진행 중인 판매 협상이 있습니다. 그 협상을 먼저 끝내세요.","warn"); show(negoStay()); return; }
   const buyer=G.teams[o.tid]; const p=userTeam().players.find(x=>x.id===o.pid);
   if(!p || !buyer){ G.offers=(G.offers||[]).filter(x=>x!==o); return offerGone(); }
@@ -29158,20 +29229,80 @@ function engineEditorView(){
    ─ 고유번호는 이미 있는 배관(nextStaffUid · UID_STAFF 8001~)을 그대로 쓴다.
      선수의 «생성 선수» 번호대(UID_GEN 900000~)와 같은 원리로, 에디터로 만든 스태프는
      8001 번대 안에서 유일한 번호를 받고 이적·개명해도 바뀌지 않는다. */
-let EDS={id:null, src:"crew", mk:{role:"coach", n:"", age:42, tier:13, trait:"bal", dest:"pool"}};
+/* 🎩 스태프 신상 — ⚠ 요청 원문 —
+     「스태프 설정에 성별, 국적, 前 직업, 외국인일 경우 외국 전용 이름칸, 키, 몸무게 등」
+     「스태프 스탯도 선수 생성처럼」 「지정 구단에 바로 넣어주는 시스템」.
+   ─ 국적은 선수 생성기가 쓰는 목록(PG_NATIONS)을 그대로 쓴다. 대한민국이 아니면 외국인이며,
+     그때만 «외국 전용 이름칸»(원어 표기)이 열린다 — 선수의 K리그 등록명과 같은 원리다. */
+const STAFF_SEX={m:{n:"남성", ic:"👔"}, f:{n:"여성", ic:"👩‍💼"}};
+function staffNatls(){ try{ return ["대한민국"].concat(PG_NATIONS); }catch(e){ return ["대한민국"]; } }
+function acIsFrn(c){ return !!(c && (c.frn || (c.natl && c.natl!=="대한민국"))); }
+/* 카드에 붙는 신상 한 줄 — 값이 있는 것만 나온다 */
+function acBioLine(c){
+  if(!c) return "";
+  const b=[];
+  try{
+    if(c.natl && c.natl!=="대한민국") b.push(`🌐 ${c.natl}`);
+    if(c.sex==="f") b.push(`${STAFF_SEX.f.ic} ${STAFF_SEX.f.n}`);
+    if(c.h) b.push(`${c.h}cm`);
+    if(c.w) b.push(`${c.w}kg`);
+    if(c.fullN) b.push(`<span style="opacity:.7">${c.fullN}</span>`);
+  }catch(e){}
+  return b.length ? `<span class="small" style="opacity:.8">${b.join(" · ")}</span>` : "";
+}
+/* 🏟️ 지정 구단 소속으로 만든 스태프 — 무직 시장에는 안 뜬다 */
+function acClubStaff(tid){ try{ return (acPool()||[]).filter(c=>c && c.club===tid); }catch(e){ return []; } }
+let EDS={id:null, src:"crew", dr:null,
+  mk:{role:"coach", n:"", age:42, tier:13, trait:"bal", dest:"pool", club:"",
+      sex:"m", natl:"대한민국", fullN:"", h:0, w:0, career:""}};
+/* 🧬 초안 — 만들기 전에 능력치를 눈으로 보고 손볼 수 있게 한 벌 미리 굴려 둔다
+   (요청 「스태프 스탯도 선수 생성처럼」). 직책·등급·성향이 바뀌면 다시 굴린다. */
+function edsDraftKey(){ const M=EDS.mk; return `${M.role}|${M.tier}|${M.role==="ac"?M.trait:""}`; }
+function edsDraft(force){
+  const M=EDS.mk;
+  if(!force && EDS.dr && EDS.dr._k===edsDraftKey()) return EDS.dr;
+  let c=null;
+  try{ c=acMake(M.role, clamp(+M.tier||13, 6, 20), M.role==="ac" ? (M.trait||"bal") : null); }catch(e){}
+  if(!c) return EDS.dr;
+  c._k=edsDraftKey();
+  EDS.dr=c;
+  return c;
+}
+function edsDrRoll(){ edsDraft(true); show("editor"); }
+/* 초안 능력치 한 칸을 직접 지정한다 — 종합은 그 자리에서 다시 계산된다 */
+function edsSetDr(k, v){
+  const c=edsDraft();
+  if(!c || SA_KEYS.indexOf(k)<0){ show("editor"); return; }
+  const n=edNum(v,1,20,0);
+  if(n!=null){ c.a=c.a||{}; c.a[k]=n; try{ acSync(c); }catch(e){} }
+  show("editor");
+}
 function edsList(){
-  try{ return EDS.src==="pool" ? (acPool()||[]) : (crew()||[]); }catch(e){ return []; }
+  try{
+    if(EDS.src==="pool")  return (acPool()||[]).filter(c=>c && !c.club);
+    if(EDS.src==="club")  return (acPool()||[]).filter(c=>c && c.club);
+    return (crew()||[]);
+  }catch(e){ return []; }
 }
 function edsPick(){ try{ return edsList().find(c=>c && c.id===EDS.id) || null; }catch(e){ return null; } }
 function edsGo(k, v){
   if(k==="src"){ EDS.src=v; EDS.id=null; }
   else if(k==="id") EDS.id=v||null;
-  else EDS.mk[k]= (k==="n") ? edName(v, 12) : v;
+  else if(k==="n")      EDS.mk.n=edName(v, 12);
+  else if(k==="fullN")  EDS.mk.fullN=edName(v, 24);
+  else if(k==="career") EDS.mk.career=edName(v, 40);
+  else if(k==="natl"){
+    EDS.mk.natl=edName(v, 14) || "대한민국";
+    if(EDS.mk.natl==="대한민국") EDS.mk.fullN="";       // 국내 스태프에게는 원어 이름칸이 없다
+  }
+  else if(k==="role" || k==="trait" || k==="tier"){ EDS.mk[k]=v; edsDraft(false); }
+  else EDS.mk[k]=v;
   show("editor");
 }
 function edsSetMkNum(k, v){
-  const n=edNum(v, k==="age"?20:6, k==="age"?78:20, 0);
-  if(n!=null) EDS.mk[k]=n;
+  const R={age:[20,78], tier:[6,20], h:[0,215], w:[0,160]}[k] || [0,20];
+  const n=edNum(v, R[0], R[1], 0);
+  if(n!=null){ EDS.mk[k]=n; if(k==="tier") edsDraft(false); }
   show("editor");
 }
 /* 스태프 한 명의 값을 고친다 */
@@ -29179,7 +29310,22 @@ function edsSet(field, v){
   const c=edsPick(); if(!c) return;
   if(field==="n"){ const nv=edName(v,12); if(nv) c.n=nv; }
   else if(field==="age"){ const n=edNum(v,20,78,0); if(n!=null) c.age=n; }
-  else if(field==="career"){ c.career=edName(v,40); }
+  else if(field==="career"){ c.career=edName(v, 40); }
+  else if(field==="sex"){ if(STAFF_SEX[v]) c.sex=v; }
+  else if(field==="natl"){
+    c.natl=edName(v, 14) || "대한민국";
+    c.frn = (c.natl==="대한민국") ? 0 : 1;
+    if(!c.frn) delete c.fullN;
+  }
+  else if(field==="fullN"){ const t=edName(v, 24); if(t) c.fullN=t; else delete c.fullN; }
+  else if(field==="h"){ const n=edNum(v,0,215,0); if(n!=null){ if(n) c.h=n; else delete c.h; } }
+  else if(field==="w"){ const n=edNum(v,0,160,0); if(n!=null){ if(n) c.w=n; else delete c.w; } }
+  else if(field==="club"){
+    /* 🏟️ 소속을 옮긴다 — 우리 팀을 고르면 코치진으로, 다른 구단이면 그 구단 소속으로,
+       비우면 무직 시장으로 돌아간다 */
+    try{ edsMove(c, v); }catch(e){}
+    return;
+  }
   else if(field==="trait"){ if(AC_TRAIT[v]) c.trait=v; }
   else if(field==="role"){
     if(AC_ROLE[v]){ c.role=v;
@@ -29196,28 +29342,69 @@ function edsSet(field, v){
 /* 새 스태프를 만든다 — 무직 시장 또는 우리 코치진으로 */
 function edsMake(){
   const M=EDS.mk;
-  /* 🧬 게임 시작 전에는 우리 코치진이라는 개념이 없다 — 무직 시장으로만 만든다 (요청) */
-  try{ if(typeof PREGEN!=="undefined" && PREGEN) M.dest="pool"; }catch(e){}
+  /* 🧬 게임 시작 전에는 «우리 코치진»이 없다 — 시장/구단 소속으로만 만든다 (요청) */
+  try{ if(typeof PREGEN!=="undefined" && PREGEN){ if(M.dest==="crew") M.dest="pool"; } }catch(e){}
   const nm=edName(M.n,12);
   if(!nm){ try{ flash("이름을 입력하세요.","warn"); }catch(e){} return; }
-  let c=null;
-  try{ c=acMake(M.role, clamp(+M.tier||13, 6, 20), M.role==="ac" ? (M.trait||"bal") : null); }catch(e){}
+  if(M.dest==="club" && !M.club){ try{ flash("넣을 구단을 고르세요.","warn"); }catch(e){} return; }
+  /* 화면에서 다듬어 둔 «초안»을 그대로 쓴다 — 여기서 다시 굴리면 손본 값이 날아간다 */
+  let c=edsDraft(false);
   if(!c){ try{ flash("스태프를 만들지 못했습니다.","warn"); }catch(e){} return; }
+  c=JSON.parse(JSON.stringify(c));
+  delete c._k;
+  c.id="ac"+Math.floor(Math.random()*1e9).toString(36)+Date.now().toString(36).slice(-4);
+  try{ c.uid=nextStaffUid(); }catch(e){}
   c.n=nm;
   c.age=clamp(+M.age||42, 20, 78);
-  if(!c.uid){ try{ c.uid=nextStaffUid(); }catch(e){} }
+  /* 🎩 신상 (요청) */
+  c.sex = STAFF_SEX[M.sex] ? M.sex : "m";
+  c.natl = edName(M.natl, 14) || "대한민국";
+  c.frn = (c.natl==="대한민국") ? 0 : 1;
+  if(c.frn && M.fullN) c.fullN=edName(M.fullN, 24); else delete c.fullN;
+  if(+M.h) c.h=clamp(+M.h, 140, 215); else delete c.h;
+  if(+M.w) c.w=clamp(+M.w, 35, 160);  else delete c.w;
+  if(M.career) c.career=edName(M.career, 40);
+  try{ acSync(c); }catch(e){}
   c.made=1;                                   // 🧬 에디터로 만든 사람 (목록에서 구분해 보여 준다)
+  let landed="pool";
   if(M.dest==="crew"){
     try{
       if(roleFull(c.role)){ flash(`${AC_ROLE[c.role].n} 자리가 이미 찼습니다 — 무직 시장으로 넣습니다.`,"warn"); acPool().push(c); }
-      else { c.hired=1; crew().push(c); }
+      else { c.hired=1; crew().push(c); landed="crew"; }
     }catch(e){ try{ acPool().push(c); }catch(_){} }
+  } else if(M.dest==="club"){
+    /* 🏟️ 지정 구단 — 내 구단이면 곧바로 코치진, 남의 구단이면 그 구단 소속으로 둔다.
+       그 구단 지휘봉을 잡는 순간 이 사람이 벤치에 앉아 있다. */
+    const mine = (typeof G!=="undefined" && G.userTeamId===M.club && !G.jobless);
+    if(mine && !roleFull(c.role)){ c.hired=1; c.club=M.club; crew().push(c); landed="crew"; }
+    else { c.club=M.club; try{ acPool().push(c); }catch(e){} landed="club"; }
   } else { try{ acPool().push(c); }catch(e){} }
-  EDS.src = (M.dest==="crew" && crew().some(x=>x.id===c.id)) ? "crew" : "pool";
+  EDS.src = landed==="crew" ? "crew" : landed==="club" ? "club" : "pool";
   EDS.id=c.id;
-  EDS.mk.n="";
+  EDS.mk.n=""; EDS.mk.fullN="";
+  edsDraft(true);                              // 다음 사람을 위해 초안을 새로 굴려 둔다
   try{ saveGame(); }catch(e){}
-  try{ flash(`🎩 ${c.n} (${AC_ROLE[c.role].n}) 생성 — 고유번호 ${c.uid}`,"good"); }catch(e){}
+  try{
+    const cl=(landed==="club") ? ` · ${(G.teams[c.club]||{}).short||c.club} 소속` : landed==="crew" ? " · 우리 코치진 합류" : " · 무직 시장";
+    flash(`🎩 ${c.n} (${AC_ROLE[c.role].n}) 생성 — 고유번호 ${c.uid}${cl}`,"good");
+  }catch(e){}
+  show("editor");
+}
+/* 🏟️ 이미 만든 스태프의 소속을 옮긴다 */
+function edsMove(c, tid){
+  if(!c) return;
+  try{
+    const P=acPool(), C=crew();
+    const rmP=()=>{ const i=P.indexOf(c); if(i>=0) P.splice(i,1); };
+    const rmC=()=>{ const i=C.indexOf(c); if(i>=0) C.splice(i,1); };
+    if(!tid){ rmC(); delete c.club; delete c.hired; delete c.assign; if(!P.includes(c)) P.push(c); EDS.src="pool"; }
+    else if(typeof G!=="undefined" && G.userTeamId===tid && !G.jobless){
+      if(roleFull(c.role) && !C.includes(c)){ flash(`${AC_ROLE[c.role].n} 자리가 이미 찼습니다.`,"warn"); }
+      else { rmP(); c.club=tid; c.hired=1; if(!C.includes(c)) C.push(c); EDS.src="crew"; }
+    }
+    else { rmC(); delete c.hired; delete c.assign; c.club=tid; if(!P.includes(c)) P.push(c); EDS.src="club"; }
+    saveGame();
+  }catch(e){}
   show("editor");
 }
 function edsDelete(){
@@ -29239,25 +29426,71 @@ function pgStaffView(){
     `<option value="${k}" ${cur===k?"selected":""}>${AC_ROLE[k].ic} ${AC_ROLE[k].n}</option>`).join("")}</select>`;
   const traitOpts=(cur,fn)=>`<select onchange="${fn}" style="max-width:170px">${Object.keys(AC_TRAIT).map(k=>
     `<option value="${k}" ${cur===k?"selected":""}>${AC_TRAIT[k].n}</option>`).join("")}</select>`;
+  const dr=edsDraft(false);
+  const natlOpts=(cur,fn)=>`<select onchange="${fn}" style="max-width:150px">${staffNatls().map(n=>
+    `<option value="${n}" ${cur===n?"selected":""}>${n}</option>`).join("")}</select>`;
+  const sexOpts=(cur,fn)=>`<select onchange="${fn}" style="max-width:120px">${Object.keys(STAFF_SEX).map(k=>
+    `<option value="${k}" ${cur===k?"selected":""}>${STAFF_SEX[k].ic} ${STAFF_SEX[k].n}</option>`).join("")}</select>`;
+  /* 前 직업 — 직책별로 실제 쓰이는 이력에서 고르고, 원하면 직접 적는다 */
+  const carOpts=(role,cur,fn)=>{
+    const L=(AC_CAREER[role]||AC_CAREER.ac||[]);
+    return `<select onchange="${fn}" style="max-width:200px">
+      <option value="" ${!cur?"selected":""}>— 자동 —</option>
+      ${L.map(x=>`<option value="${x}" ${cur===x?"selected":""}>${x}</option>`).join("")}
+      ${cur && L.indexOf(cur)<0 ? `<option value="${cur}" selected>${cur} (직접 입력)</option>` : ""}
+    </select>`;
+  };
+  const clubOpts=(cur,fn)=>`<select onchange="${fn}" style="max-width:220px">
+    <option value="" ${!cur?"selected":""}>— 구단 선택 —</option>
+    ${Object.values(G.teams).sort((a,b)=>a.div-b.div||a.name.localeCompare(b.name,"ko")).map(x=>
+      `<option value="${x.id}" ${cur===x.id?"selected":""}>${x.div===2?"[K2] ":""}${x.name}${x.isUser?" ★":""}</option>`).join("")}
+  </select>`;
+  const isFrn=(M.natl && M.natl!=="대한민국");
+  const drOvr=dr?acOvr(dr):0, drG=acGrade(drOvr);
   const mk=`<div class="card" style="border-color:var(--gold)">
     <div class="edSec">🧬 새 스태프 만들기</div>
     ${ED_ROW("이름 *", `<input type="text" value="${M.n}" maxlength="12" placeholder="필수" style="width:150px" onchange="edsGo('n', this.value)">`)}
     ${ED_ROW("직책", roleOpts(M.role, "edsGo('role', this.value)"))}
-    ${ED_ROW("나이", `<input type="text" inputmode="decimal" value="${M.age}" style="width:70px" onchange="edsSetMkNum('age', this.value)">`)}
-    ${ED_ROW(`실력 등급 <span class="small">6~20 — 이 언저리로 능력치가 깔립니다 (특급은 17 이상)</span>`,
-      `<input type="text" inputmode="decimal" value="${M.tier}" style="width:70px" onchange="edsSetMkNum('tier', this.value)">`)}
     ${M.role==="ac" ? ED_ROW(`성향 <span class="small">수석코치만</span>`, traitOpts(M.trait, "edsGo('trait', this.value)")) : ""}
-    ${pre ? "" : ED_ROW("넣을 곳", `<select onchange="edsGo('dest', this.value)" style="max-width:200px">
+    <div class="edSec">🪪 신상</div>
+    ${ED_ROW("성별", sexOpts(M.sex, "edsGo('sex', this.value)"))}
+    ${ED_ROW("국적", natlOpts(M.natl, "edsGo('natl', this.value)")+(isFrn?` <span class="small" style="color:var(--gold)">외국인 스태프</span>`:""))}
+    ${isFrn ? ED_ROW(`외국 전용 이름칸 <span class="small">원어·전체 이름 — 카드에 함께 보입니다</span>`,
+      `<input type="text" value="${M.fullN||""}" maxlength="24" placeholder="예) Rui Manuel Cardoso" style="width:220px" onchange="edsGo('fullN', this.value)">`) : ""}
+    ${ED_ROW("나이", `<input type="text" inputmode="decimal" value="${M.age}" style="width:70px" onchange="edsSetMkNum('age', this.value)">`)}
+    ${ED_ROW(`키 · 몸무게 <span class="small">비우면(0) 표시하지 않습니다</span>`,
+      `<input type="text" inputmode="decimal" value="${M.h||0}" style="width:60px" onchange="edsSetMkNum('h', this.value)"> cm
+       <input type="text" inputmode="decimal" value="${M.w||0}" style="width:60px" onchange="edsSetMkNum('w', this.value)"> kg`)}
+    ${ED_ROW("前 직업", carOpts(M.role, M.career, "edsGo('career', this.value)")+
+      ` <input type="text" value="${M.career||""}" maxlength="40" placeholder="직접 입력" style="width:170px" onchange="edsGo('career', this.value)">`)}
+    <div class="edSec">📊 능력치 <span class="small">— 등급으로 한 벌 깔고, 칸마다 직접 지정할 수 있습니다 (선수 생성과 같은 방식)</span></div>
+    ${ED_ROW(`실력 등급 <span class="small">6~20 — 이 언저리로 능력치가 깔립니다 (특급은 17 이상)</span>`,
+      `<input type="text" inputmode="decimal" value="${M.tier}" style="width:70px" onchange="edsSetMkNum('tier', this.value)">
+       <button class="mini" style="padding:5px 11px" onclick="edsDrRoll()">🎲 다시 뽑기</button>`)}
+    ${dr ? `${ED_ROW("종합", `<b style="color:${drG[1]};font-size:15px">${drOvr}</b>/20 <span style="color:${drG[1]}">${drG[0]}</span>
+        <span class="small">— 아래 능력치에서 자동 계산됩니다 (직책이 보는 항목만 반영)</span>`)}
+      ${SA_GRP.map(g=>`<div style="margin:6px 0 2px"><b class="small" style="color:var(--sub)">${g.n}</b></div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px 10px">${g.keys.map(k=>{
+          const on=acKeysOf(dr).indexOf(k)>=0;
+          return `<label class="small" style="display:flex;align-items:center;gap:4px;${on?"color:var(--gold);font-weight:700":"opacity:.6"}">
+            ${SA_LABEL[k]||k}<input type="text" inputmode="decimal" value="${(dr.a&&dr.a[k])||1}" style="width:44px"
+              onchange="edsSetDr('${k}', this.value)"></label>`;
+        }).join("")}</div>`).join("")}` : ""}
+    <div class="edSec">📍 넣을 곳</div>
+    ${ED_ROW("소속", `<select onchange="edsGo('dest', this.value)" style="max-width:220px">
       <option value="pool" ${M.dest==="pool"?"selected":""}>🕊️ 무직 코치 시장</option>
-      <option value="crew" ${M.dest==="crew"?"selected":""}>🎩 우리 코치진 (바로 합류)</option>
+      ${pre?"":`<option value="crew" ${M.dest==="crew"?"selected":""}>🎩 우리 코치진 (바로 합류)</option>`}
+      <option value="club" ${M.dest==="club"?"selected":""}>🏟️ 지정 구단 소속</option>
     </select>`)}
+    ${M.dest==="club" ? ED_ROW("구단", clubOpts(M.club, "edsGo('club', this.value)")) : ""}
     <div style="margin-top:8px"><button class="mini sel" style="padding:9px 18px" onclick="edsMake()">🧬 만든다</button></div>
     <p class="small" style="margin:8px 0 0;opacity:.75">만든 스태프는 선수와 마찬가지로 <b>고유번호</b>를 받습니다 (스태프 번호대 ${UID_STAFF}~).
-      개명하거나 다른 구단으로 옮겨도 번호는 바뀌지 않습니다. 세부 능력치는 아래에서 다듬을 수 있습니다.</p>
+      개명하거나 다른 구단으로 옮겨도 번호는 바뀌지 않습니다.
+      <b>지정 구단 소속</b>으로 넣으면 무직 시장에는 뜨지 않고, 그 구단 지휘봉을 잡는 순간 코치진에 들어옵니다.</p>
   </div>`;
   const listSel=`<select onchange="edsGo('id', this.value)" style="max-width:280px">
     <option value="">— 스태프 선택 (${L.length}명) —</option>
-    ${L.map(x=>`<option value="${x.id}" ${EDS.id===x.id?"selected":""}>${AC_ROLE[x.role]?AC_ROLE[x.role].ic:""} ${x.n} · ${AC_ROLE[x.role]?AC_ROLE[x.role].n:x.role} · ${x.age}세 · 종합 ${acOvr(x)}${x.made?" 🧬":""}</option>`).join("")}
+    ${L.map(x=>`<option value="${x.id}" ${EDS.id===x.id?"selected":""}>${AC_ROLE[x.role]?AC_ROLE[x.role].ic:""} ${x.n} · ${AC_ROLE[x.role]?AC_ROLE[x.role].n:x.role} · ${x.age}세 · 종합 ${acOvr(x)}${acIsFrn(x)?" 🌐":""}${x.club&&G.teams[x.club]?" · "+G.teams[x.club].short:""}${x.made?" 🧬":""}</option>`).join("")}
   </select>`;
   const edit = !c ? `<p class="small">위에서 스태프를 고르면 세부 능력치를 고칠 수 있습니다.</p>` : `
     ${ED_ROW("🆔 고유번호", `<b style="font-family:monospace;font-size:15px">${c.uid||"—"}</b> <span class="small">${c.made?"🧬 직접 만든 스태프":"게임이 만든 스태프"}</span>`)}
@@ -29265,7 +29498,18 @@ function pgStaffView(){
     ${ED_ROW("직책", roleOpts(c.role, "edsSet('role', this.value)"))}
     ${ED_ROW("나이", `<input type="text" inputmode="decimal" value="${c.age}" style="width:70px" onchange="edsSet('age', this.value)">`)}
     ${c.role==="ac" ? ED_ROW("성향", traitOpts(c.trait, "edsSet('trait', this.value)")) : ""}
-    ${ED_ROW("경력 한 줄", `<input type="text" value="${c.career||""}" maxlength="40" style="width:230px" onchange="edsSet('career', this.value)">`)}
+    ${ED_ROW("성별", sexOpts(c.sex||"m", "edsSet('sex', this.value)"))}
+    ${ED_ROW("국적", natlOpts(c.natl||"대한민국", "edsSet('natl', this.value)")+(acIsFrn(c)?` <span class="small" style="color:var(--gold)">외국인 스태프</span>`:""))}
+    ${acIsFrn(c) ? ED_ROW("외국 전용 이름칸", `<input type="text" value="${c.fullN||""}" maxlength="24" placeholder="원어·전체 이름" style="width:220px" onchange="edsSet('fullN', this.value)">`) : ""}
+    ${ED_ROW("키 · 몸무게", `<input type="text" inputmode="decimal" value="${c.h||0}" style="width:60px" onchange="edsSet('h', this.value)"> cm
+       <input type="text" inputmode="decimal" value="${c.w||0}" style="width:60px" onchange="edsSet('w', this.value)"> kg`)}
+    ${ED_ROW("前 직업", carOpts(c.role, c.career, "edsSet('career', this.value)")+
+      ` <input type="text" value="${c.career||""}" maxlength="40" placeholder="직접 입력" style="width:170px" onchange="edsSet('career', this.value)">`)}
+    ${pre ? "" : ED_ROW(`소속 <span class="small">비우면 무직 시장으로 돌아갑니다</span>`, `<select onchange="edsSet('club', this.value)" style="max-width:220px">
+      <option value="" ${!c.club&&!c.hired?"selected":""}>🕊️ 무직 코치 시장</option>
+      ${Object.values(G.teams).sort((a,b)=>a.div-b.div||a.name.localeCompare(b.name,"ko")).map(x=>
+        `<option value="${x.id}" ${c.club===x.id?"selected":""}>${x.div===2?"[K2] ":""}${x.name}${x.isUser?" ★":""}</option>`).join("")}
+    </select>${c.hired?` <span class="small" style="color:var(--gold)">🎩 우리 코치진</span>`:""}`)}
     ${ED_ROW("종합", `<b style="color:var(--gold);font-size:15px">${acOvr(c)}</b> <span class="small">/ 20 — 아래 능력치에서 자동 계산됩니다 (직책이 보는 항목만 반영)</span>`)}
     <div class="edSec">📊 세부 능력치 <span class="small">— <b style="color:var(--gold)">굵은 항목</b>이 이 직책의 종합에 들어갑니다</span></div>
     ${SA_GRP.map(g=>`<div style="margin:6px 0 2px"><b class="small" style="color:var(--sub)">${g.n}</b></div>
@@ -29283,7 +29527,7 @@ function pgStaffView(){
   <div class="card">
     <div class="edSec">✏️ 스태프 수정</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-      ${pre?"":srcBtn("crew","🎩 우리 코치진 ("+crew().length+")")}${srcBtn("pool","🕊️ 무직 코치 시장 ("+((G.acPool||[]).length)+")")}
+      ${pre?"":srcBtn("crew","🎩 우리 코치진 ("+crew().length+")")}${srcBtn("pool","🕊️ 무직 코치 시장 ("+((G.acPool||[]).filter(x=>x&&!x.club).length)+")")}${srcBtn("club","🏟️ 구단 소속 ("+((G.acPool||[]).filter(x=>x&&x.club).length)+")")}
     </div>
     ${ED_ROW("스태프", listSel)}
     ${edit}
@@ -30288,7 +30532,7 @@ function pTags(p){
   s+=(function(){
     try{
       if(p._banL!=null || p._banLC!=null){    // 대회 경기 진행 중 — 지금 ban 자리가 그 대회 장부
-        return p.ban>0 ? ` <span class="tag inj">출전정지 ${p.ban}경기</span>` : "";
+        return p.ban>0 ? ` <span class="tag inj">출전정지 ${p.ban}경기${p.banNew?" (다음 경기부터)":""}</span>` : "";
       }
       const C=(typeof BAN_CTX!=="undefined")?BAN_CTX:"league";
       const LB={league:"리그", eacl:(typeof eaclShort==="function"?eaclShort():"EACL"),
@@ -30299,7 +30543,10 @@ function pTags(p){
       const hit=list.find(x=>x.k===C);
       if(hit) out+=` <span class="tag inj" title="${p.banNew&&hit.k==="league"?"이번 경기부터 적용됩니다":"남은 출전정지 경기 수"}">${LB[hit.k]} 출전정지 ${hit.n}경기${(p.banNew&&hit.k==="league")?" (다음 경기부터)":""}</span>`;
       const rest=list.filter(x=>x!==hit);
-      if(rest.length) out+=` <span class="tag" style="background:#2a3038;color:#a9b4c0" title="다음 경기(${LB[C]||"리그"})에는 출전할 수 있습니다 — 해당 대회에서만 정지입니다">${rest.map(x=>`${LB[x.k]} ${x.n}경기 정지`).join(" · ")}</span>`;
+      /* ⛔ ⚠ 제보와 함께 발견 — 리그 화면이 아닌 곳(이적시장 카드 등)에서는 유예 표시가
+         빠져 「1경기」로만 보였다. 실제로는 다음 라운드가 유예로 지나가 두 경기를 쉰다.
+         어느 화면에서든 유예가 남아 있으면 그렇게 적는다. */
+      if(rest.length) out+=` <span class="tag" style="background:#2a3038;color:#a9b4c0" title="다음 경기(${LB[C]||"리그"})에는 출전할 수 있습니다 — 해당 대회에서만 정지입니다">${rest.map(x=>`${LB[x.k]} ${x.n}경기 정지${(x.k==="league"&&p.banNew)?" (다음 경기부터)":""}`).join(" · ")}</span>`;
       return out;
     }catch(e){ return p.ban>0?` <span class="tag inj">출전정지 ${p.ban}경기</span>`:""; }
   })();
@@ -45276,7 +45523,9 @@ function squadSortVal(p, k){
     case "star": try{ return prefStarVal(p); }catch(e){ return 0; }
     case "pos":  return posSortIdx(p);            // 🧭 제보 — 세부 자리 차례로 (GK·RB·CB·LB·DM…ST)
     case "age":  return G.season-(p.by||2000);
-    case "cond": return p.cond||0;
+    /* ⚠ 제보 — 슬롯 머리글이 「체력」인데 정렬은 컨디션으로 서 있었다.
+       표에 찍히는 값(matchStartFit — 컨디션에서 지난 경기 잔여 피로를 뺀 값)으로 세운다. */
+    case "cond": try{ return matchStartFit(p); }catch(e){ return p.cond||0; }
     case "mood": return p.morale||0;
     case "rt":   return p.seasonRating||0;
   }
@@ -45351,7 +45600,7 @@ function sqHeadRow(scope, sticky){
     sqTh(scope,"idx",scope==="bench"?"슬롯":"기본"),
     `<td colspan="2" style="${st}"></td>`,
     sqTh(scope,"star","능력"), sqTh(scope,"pos","포지션"),
-    sqTh(scope,"age","나이"), sqTh(scope,"cond","컨디션"),
+    sqTh(scope,"age","나이"), sqTh(scope,"cond","체력"),
     `<td class="fmOpt" style="${st}"></td>`,
     sqTh(scope,"mood","반응",null,true), sqTh(scope,"rt","평점",null,true)
   ].map(h=>sticky?cell(h):h).join("");
@@ -46600,7 +46849,7 @@ function fmLiveTable(t, pitchAndGap, bench, slotOf, sd){
       ${benchRows?`<tr class="fmDiv"><td colspan="11"><span class="fmSecLbl">🪑 교체 대기</span></td></tr>
       <tr class="fmTr sub" style="background:#0d1117">
         ${sqTh("bench","name","선수")}${sqTh("bench","idx","S#")}<td colspan="2"></td>
-        ${sqTh("bench","star","능력")}${sqTh("bench","pos","포지션")}${sqTh("bench","age","나이")}${sqTh("bench","cond","컨디션")}<td class="fmOpt"></td><td class="fmOpt"></td>${sqTh("bench","rt","평점",null,true)}</tr>${benchRows}`:""}
+        ${sqTh("bench","star","능력")}${sqTh("bench","pos","포지션")}${sqTh("bench","age","나이")}${sqTh("bench","cond","체력")}<td class="fmOpt"></td><td class="fmOpt"></td>${sqTh("bench","rt","평점",null,true)}</tr>${benchRows}`:""}
     </table></div>
   </div>`;
 }
@@ -50630,6 +50879,8 @@ function acCard(c, t){
       <b style="font-size:15px">${c.n}</b>
       ${TR?`<span class="small">${TR.ic} ${TR.n}</span>`:""}
       <span class="small">${c.age}세 · ${c.career}</span>
+      ${acBioLine(c)}
+      ${c.club && c.club===G.userTeamId ? `<span class="tag" style="background:#1f3a2a;color:#7ee2a0">🏟️ 우리 구단 소속</span>` : ""}
       <span style="margin-left:auto" class="small">종합 <b style="color:${gr[1]}">≈${o}</b>/20 <span style="color:${gr[1]}">${gr[0]}</span>
         · 요구 연봉 <b class="money">${c.wage}억</b></span>
     </div>
@@ -50648,7 +50899,9 @@ function acCard(c, t){
     </div></div>`;
 }
 function acFiltered(){
-  let L=acPool().slice();
+  /* 🏟️ 다른 구단 소속으로 지정된 스태프는 무직 시장에 없다 — 그 구단 사람이다.
+     내 구단 소속인데 자리가 없어 코치진에 못 들어온 사람은 그대로 영입할 수 있다. */
+  let L=acPool().filter(c=>c && (!c.club || c.club===G.userTeamId));
   const q=(acFilt.q||"").trim();
   if(acFilt.rk) L=L.filter(c=>c.role===acFilt.rk);
   if(q) L=L.filter(c=>c.n.indexOf(q)>=0 || acRole(c).n.indexOf(q)>=0 || String(c.career||"").indexOf(q)>=0
@@ -50671,6 +50924,7 @@ function acMineRow(c, t){
       <span class="tag" style="background:#30363d">${R.ic} ${R.n}</span>
       <b>${c.n}</b>
       <span class="small">${c.age}세${TR?` · ${TR.ic} ${TR.n}`:""} · 계약 ${Math.max(0,c.ct||0)}년 · 연 <b class="money">${c.wage}억</b></span>
+      ${acBioLine(c)}
       ${R.slot?`<span class="small" style="margin-left:4px">담당
         <select onchange="acAssign('${c.id}',this.value)" style="padding:2px 5px">
           <option value=""${!c.assign?" selected":""}>— 미배정 —</option>
@@ -59476,6 +59730,10 @@ function acEnsure(){
     /* ②-b 고유번호 백필 — 번호 체계가 생기기 전에 만들어진 스태프에게도 붙여 준다 */
     for(const c of C) if(c && !c.uid) c.uid=nextStaffUid();
     for(const c of (G.acPool||[])) if(c && !c.uid) c.uid=nextStaffUid();
+    /* ②-c 🏟️ 지정 구단 소속 — 에디터에서 「이 구단 소속」으로 만들어 둔 스태프는
+       그 구단 지휘봉을 잡는 순간 벤치에 앉아 있어야 한다. 기본 코치진을 깔기 «전»에
+       불러야 자리를 잡는다. 구단당 한 번만 돈다. */
+    try{ if(t) acClubIntake(t); }catch(e){}
     /* ③ 기본 코치진 — ⚠ 선택: 「기본 4명 자동 배정」.
        없던 사람을 만드는 게 아니라, 원래 벤치에 있던 스태프에게 이름을 주는 것이다.
        이 상태가 효과 1.00 기준이라 지금보다 나빠지지 않는다.
@@ -59494,6 +59752,32 @@ function acEnsure(){
     if(!Array.isArray(G.acPool) || !G.acPool.length) acPoolFill();
     else if(G.acPool.length < AC_POOL_N) acPoolTopUp(G.acPool);   // 시장이 넓어졌으면 그만큼 채운다
   }catch(e){}
+}
+/* 🏟️ 이 구단 소속으로 지정된 스태프를 코치진으로 데려온다 (에디터 요청).
+   ⚠ 자리가 빈 곳만 채운다 — 옮겨 다니는 감독이 데리고 다니는 사람을 밀어내지 않는다.
+   ⚠ 구단당 한 번만 — 해임해서 비운 자리를 매일 다시 채우면 안 된다. */
+function acClubIntake(t){
+  if(!t || !t.id) return 0;
+  if(!G.staff) return 0;
+  if(G.staff.crewFor===t.id) return 0;
+  G.staff.crewFor=t.id;
+  const C=crew(), P=acPool();
+  const mine=P.filter(c=>c && c.club===t.id);
+  if(!mine.length) return 0;
+  const got=[];
+  for(const c of mine){
+    const rk=c.role||"ac";
+    if(C.some(x=>x && x.role===rk && (rk==="ac" || AC_ROLE[rk] && C.filter(y=>y&&y.role===rk).length>=AC_ROLE[rk].cap))) continue;
+    if(rk!=="ac" && crewCount()>=crewCap(t)) continue;
+    const i=P.indexOf(c); if(i>=0) P.splice(i,1);
+    c.hired=1; c.ct=Math.max(c.ct||0, 2); c.since=G.season;
+    C.push(c); got.push(c);
+  }
+  if(got.length){
+    try{ addNews(`🎩 <b>${t.short} 코치진 소개</b> — ${got.map(c=>`${c.n}(${(AC_ROLE[c.role]||{}).n||c.role})`).join(", ")}`
+      +` <span class="small">구단에 원래 있던 스태프입니다.</span>`, null, "club"); }catch(e){}
+  }
+  return got.length;
 }
 function staffLog(txt){
   const st=staffOpt();
@@ -90106,7 +90390,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5123";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5127";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
