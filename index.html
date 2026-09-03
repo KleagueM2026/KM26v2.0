@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5151-->
+<!--B:20260913-5153-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -72,6 +72,24 @@ body{background:var(--bg); color:var(--txt); font-family:'Segoe UI','Malgun Goth
 /* ---------- main ---------- */
 #mainWrap{flex:1; min-width:0; display:flex; flex-direction:column;}
 #main{padding:20px 24px; max-width:1100px;}
+/* 🧬 게임 시작 전 생성기 — 인게임 껍데기(사이드바·날짜 바·진행 버튼)를 통째로 감춘다.
+   ⚠ 요청 — 「팀 선택 화면에서 선수 만들기를 누르면 인게임으로 들어가서 만들어야 하네?
+     아예 독립적으로 못하니?」. 능력치 환산·구단 목록 때문에 임시 리그는 계속 필요하지만,
+     화면만큼은 자기 화면으로 선다. */
+body.preGen #side{display:none !important;}
+body.preGen #topBar{display:none !important;}
+body.preGen #main{max-width:1160px; margin:0 auto; padding:0 24px 40px;}
+body.preGen #app{display:block;}
+.pgTop{position:sticky; top:0; z-index:700; margin:0 -24px 14px; padding:12px 24px;
+  background:linear-gradient(180deg,#131a22,#0f151c); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap; box-shadow:0 3px 12px rgba(0,0,0,.4);}
+.pgTop .pgTtl{font-size:17px; font-weight:800; color:var(--gold); margin-right:auto;}
+.pgTop .pgTtl small{display:block; font-size:11px; font-weight:600; color:var(--sub); margin-top:2px;}
+@media (max-width:760px){
+  body.preGen #main{padding:0 10px 30px;}
+  .pgTop{margin:0 -10px 10px; padding:10px;}
+  .pgTop .pgTtl{font-size:15px; width:100%;}
+}
 /* ── 상단 날짜 바 — FM처럼 지금이 며칠인지 늘 보이게 ── */
 #topBar{
   position:sticky; top:0; z-index:800; display:flex; align-items:center; justify-content:space-between;
@@ -279,6 +297,17 @@ select,input[type=number]{background:var(--bg3); color:var(--txt); border:1px so
 /* 불러오기 — 조용한 보조 동작 */
 .pkGo.pkLoad{flex:0 1 auto; background:transparent; color:var(--sub); border-color:var(--line);}
 .pkGo.pkLoad:hover{background:var(--bg2); color:var(--txt); border-color:#4a545f;}
+/* 🧬🎩 만들기 — 이어하기 줄 바로 아래에 나란히 (요청: 선수 생성 옆에 스태프 생성) */
+.pkResume.pkMake{margin-top:-9px;}
+.pkGo.pkMk{flex:1 1 0; background:transparent; color:var(--sub); border-color:var(--line);
+  flex-direction:column; gap:2px; padding:11px 10px; font-size:14px;}
+.pkGo.pkMk:hover{background:var(--bg2); color:var(--gold); border-color:#4a545f;}
+.pkGo.pkMk .pkSub{font-size:11px; font-weight:700; color:var(--gold); opacity:.85;}
+/* 🗑️ 세이브 삭제 — 되돌릴 수 없는 일이라 평소엔 조용히 있다가 손이 닿으면 붉어진다 */
+.pkGo.pkWipe{flex:0 0 auto; width:46px; padding:0; font-size:16px; color:var(--sub);
+  background:transparent; border-color:var(--line);}
+.pkGo.pkWipe:hover{background:#3a1c1c; color:#ff8f8f; border-color:#7a3535;}
+.pkGo.pkWipe:active{transform:translateY(1px);}
 /* 설정 — 아이콘 버튼. 자리를 거의 차지하지 않는다 */
 .pkGo.pkCog{flex:0 0 auto; width:46px; padding:0; font-size:17px; color:var(--sub);
   background:transparent; border-color:var(--line);}
@@ -1602,6 +1631,7 @@ tr.yArmy{background:linear-gradient(90deg,rgba(201,162,39,.12),rgba(201,162,39,0
   .pkResume .pkGo{padding:12px 8px; font-size:13.5px;}
   .pkResume .pkGo.pkLoad{flex:1 1 0;}
   .pkResume .pkGo.pkCog{width:42px;}
+  .pkResume .pkGo.pkWipe{width:42px;}
   #main{padding:12px 10px; max-width:none;}
   h2{font-size:18px;} h3{font-size:14.5px;}
   .card{padding:12px 12px; border-radius:9px;}
@@ -26271,6 +26301,71 @@ function idbAlive(){ return IDB_OK!==false; }
 function savePtr(){
   try{ const v=localStorage.getItem(SAVE_PTR); return v?JSON.parse(v):null; }catch(e){ return null; }
 }
+/* ═══ 🗑️ 자동 저장 세이브 지우기 ═══════════════════════════════════════════
+   ⚠ 요청 — 「팀 선택 화면에서 세이브 삭제 버튼을 만들고 자동 저장 세이브파일 지우는 것도 구현하자」.
+   ─ 세이브는 «두 저장소»에 나뉘어 있다. 기본 저장소(localStorage)의 사본과
+     큰 저장소(IndexedDB)의 본체, 그리고 각각의 불러오기 백업(_bak)과 이정표(_at).
+     한쪽만 지우면 다음에 켤 때 남은 쪽에서 되살아난다 — 다섯 자리를 모두 지운다.
+   ─ 되돌릴 수 없는 일이라 지우기 전에 «무엇을 지우는지»를 보여 주고,
+     내보내기로 백업할 길을 같은 화면에서 안내한다. */
+let SAVE_OFF=false;      // 🔒 지운 직후 — 새 게임을 시작하거나 세이브를 불러올 때까지 저장하지 않는다
+function saveWipeAll(){
+  let ok=false;
+  SAVE_OFF=true;
+  try{ saveFlush(); }catch(e){}
+  try{ if(_svTimer){ clearTimeout(_svTimer); _svTimer=null; } }catch(e){}
+  for(const k of [SAVE_KEY, SAVE_KEY+"_bak", SAVE_PTR]){
+    try{ if(localStorage.getItem(k)!=null) ok=true; localStorage.removeItem(k); }catch(e){}
+  }
+  try{ idbDel(SAVE_KEY); idbDel(SAVE_KEY+"_bak"); ok=true; }catch(e){}
+  SAVE_SIZE=0; SAVE_LAST=0; SAVE_FAIL=0; IDB_SIZE=0; IDB_LAST=0;
+  return ok;
+}
+/* 세이브를 열어 「무엇을 지우게 되는지」만 훑는다 (통째로 들고 있지 않는다) */
+function savePeek(cb){
+  const parse=(raw, where)=>{
+    try{
+      const o=JSON.parse(raw); if(!o || !o.teams) return null;
+      const t=o.teams[o.userTeamId];
+      let mgr=""; try{ const P=o.prof||{}; mgr=((P.sur||"")+(P.giv||"")).trim() || (P.en||"").trim(); }catch(e){}
+      let when="";
+      try{
+        if(o.season && o.day!=null){
+          const dt=new Date(o.season, CAL_START[0], CAL_START[1]); dt.setDate(dt.getDate()+(o.day|0));
+          when=`${dt.getMonth()+1}월 ${dt.getDate()}일`;
+        }
+      }catch(e){}
+      return {team:(t&&(t.name||t.short))||"(알 수 없는 구단)", season:o.season||"?", when,
+              mgr, size:raw.length, where};
+    }catch(e){ return null; }
+  };
+  let ls=null;
+  try{ const raw=localStorage.getItem(SAVE_KEY); if(raw) ls=parse(raw, "기본 저장소"); }catch(e){}
+  if(ls) return cb(ls);
+  try{ idbGet(SAVE_KEY).then(raw=>cb(typeof raw==="string" ? parse(raw, "큰 저장소") : null)).catch(()=>cb(null)); }
+  catch(e){ cb(null); }
+}
+function askSaveWipe(){
+  savePeek(info=>{
+    const dl=(info && info.when) ? " · "+info.when : "";
+    const body = info
+      ? `<b>🗑️ 자동 저장 세이브를 지웁니다</b>\n\n`
+        + `<b>${info.team}</b> · ${info.season} 시즌${dl}\n`
+        + (info.mgr?`감독 <b>${info.mgr}</b>\n`:"")
+        + `<span class="small">${info.where} · ${(info.size/1024/1024).toFixed(2)}MB</span>\n\n`
+        + `<b style="color:#ff9d5c">이 진행 상황은 되돌릴 수 없습니다.</b>\n`
+        + `기본 저장소와 큰 저장소 양쪽, 불러오기 백업까지 함께 지웁니다.\n\n`
+        + `<span class="small">남겨 두고 싶다면 먼저 <b>이어하기 → ⚙ 설정 → 세이브파일 내보내기</b>로 파일을 받아 두세요. 내보낸 파일은 <b>📂 불러오기</b>로 언제든 되살릴 수 있습니다.</span>`
+      : `<b>🗑️ 자동 저장 세이브를 지웁니다</b>\n\n`
+        + `세이브를 읽지 못했지만 저장 흔적이 남아 있습니다. 남은 자리를 전부 비웁니다.\n\n`
+        + `<b style="color:#ff9d5c">되돌릴 수 없습니다.</b>`;
+    showConfirm(body, ()=>{
+      const had=saveWipeAll();
+      try{ renderTeamPick(); }catch(e){}
+      try{ flash(had?"🗑️ 자동 저장 세이브를 지웠습니다.":"지울 세이브가 없었습니다.", had?"good":"warn"); }catch(e){}
+    }, {okLabel:"🗑️ 지운다", cancelLabel:"그만둔다"});
+  });
+}
 /* 이어하기가 가능한가 — 기본 저장소든 큰 저장소든 하나라도 있으면 된다 */
 function haveSave(){
   try{ if(localStorage.getItem(SAVE_KEY)) return true; }catch(e){}
@@ -26308,6 +26403,9 @@ function saveGameNow(){
   /* 🧬 팀 선택 화면에서 연 「선수 만들기」는 임시 세계다 — 저장소를 절대 건드리지 않는다.
      여기서 만든 선수는 preMade()(브라우저 별도 보관함)에 따로 쌓이고, 새 게임에 옮겨진다. */
   if(typeof PREGEN!=="undefined" && PREGEN) return true;
+  /* 🗑️ ⚠ 실측 — 세이브를 지운 뒤 탭을 닫으면, 창이 닫힐 때 도는 저장이 «메모리에 남아 있던
+     그 게임»을 그대로 다시 써 넣었다(1.55M 글자 그대로 부활). 지운 순간부터 잠근다. */
+  if(SAVE_OFF) return false;
   stripCaches();
   G._svAt=Date.now();                        // 어느 저장소가 더 최신인지 비교용
   let s;
@@ -29843,6 +29941,129 @@ function pgMadeListView(){
      :`<p class="small">아직 만든 선수가 없습니다. [🧬 선수 만들기]에서 첫 선수를 만들어 보세요.</p>`}
   </div>`;
 }
+/* 🧬 게임 시작 전 생성기의 «자기 머리글» — 인게임 사이드바를 대신한다 */
+function pgTopBar(title, sub, note){
+  return `<div class="pgTop">
+    <div class="pgTtl">${title}<small>${sub}</small></div>
+    <button class="mini" style="padding:8px 14px" onclick="${PREGEN_MODE==="staff"?"show('playerGen')":"show('staffGen')"}">${PREGEN_MODE==="staff"?"🧬 선수 만들기로":"🎩 스태프 만들기로"}</button>
+    <button class="mini" style="padding:8px 14px;border-color:var(--gold);color:var(--gold)" onclick="closePreGen()">◀ 팀 선택으로</button>
+  </div>${note?`<div class="msg info" style="border-width:2px">${note}</div>`:""}`;
+}
+/* ═══ 🎩 스태프 생성 — 선수 생성과 나란한 «자기 메뉴» (요청) ═══════════════════ */
+let SGTAB="make";
+/* 직접 만든 스태프를 어디에 있든 전부 모은다 — 무직 시장 · 구단 소속 · 우리 코치진 */
+function sgMadeAll(){
+  const out=[], seen={};
+  const push=(c, whereTxt)=>{ if(!c || !c.made || seen[c.id]) return; seen[c.id]=1; out.push({c, where:whereTxt}); };
+  try{ for(const c of (crew()||[])) push(c, "🎩 우리 코치진"); }catch(e){}
+  try{ for(const c of (acPool()||[])){
+    if(!c) continue;
+    push(c, c.club ? `🏟️ ${(G.teams[c.club]||{}).short||"구단"}` : "🕊️ 무직 코치 시장");
+  } }catch(e){}
+  return out;
+}
+function sgDelMade(id){
+  try{
+    const P=acPool();
+    for(let i=P.length-1;i>=0;i--) if(P[i] && P[i].id===id) P.splice(i,1);
+    const t=userTeam();
+    if(t && Array.isArray(t.staff)) for(let i=t.staff.length-1;i>=0;i--) if(t.staff[i] && t.staff[i].id===id) t.staff.splice(i,1);
+    if(G.staff && Array.isArray(G.staff.crew)) for(let i=G.staff.crew.length-1;i>=0;i--) if(G.staff.crew[i] && G.staff.crew[i].id===id) G.staff.crew.splice(i,1);
+  }catch(e){}
+  try{ if(EDS && EDS.id===id) EDS.id=null; }catch(e){}
+  try{ syncPreStaff(); }catch(e){}
+  saveGame(); show("staffGen");
+}
+const SG_SHARE_KIND="klm2026_staff";
+function sgExportMade(){
+  const L=sgMadeAll().map(x=>x.c);
+  if(!L.length){ flash("아직 만든 스태프가 없습니다.","warn"); return show("staffGen"); }
+  try{
+    const obj={kind:SG_SHARE_KIND, v:1, made:new Date().toISOString().slice(0,10), staff:L};
+    const blob=new Blob([JSON.stringify(obj)],{type:"application/json"});
+    const url=URL.createObjectURL(blob), a=document.createElement("a");
+    a.href=url; a.download=`klm2026_생성스태프_${obj.made.replace(/-/g,"")}_${L.length}명.json`;
+    a.style.display="none"; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ try{ URL.revokeObjectURL(url); a.remove(); }catch(e){} }, 800);
+    flash(`📤 생성 스태프 ${L.length}명을 내보냈습니다.`,"good");
+  }catch(e){ flash("내보내기에 실패했습니다.","warn"); }
+  show("staffGen");
+}
+function sgImportMade(input){
+  const f=input && input.files && input.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const obj=JSON.parse(String(r.result||""));
+      if(!obj || obj.kind!==SG_SHARE_KIND || !Array.isArray(obj.staff)) throw new Error("형식");
+      showConfirm(`<b>📥 생성 스태프 ${obj.staff.length}명을 불러옵니다.</b>\n\n`
+        + `🕊️ <b>무직 코치 시장</b>에 들어갑니다 — 거기서 영입하면 됩니다.\n`
+        + `<span class="small">고유번호는 이 세이브에서 새로 발급됩니다.</span>`,
+        ()=>{
+          const P=acPool(); let ok=0, dup=0;
+          for(const src of obj.staff.slice(0,60)){
+            if(!src || !src.n) continue;
+            if(P.some(x=>x && x.n===src.n && x.made)){ dup++; continue; }
+            const c=JSON.parse(JSON.stringify(src));
+            c.id="ac"+Math.floor(Math.random()*1e9).toString(36)+Date.now().toString(36).slice(-4)+ok;
+            try{ c.uid=nextStaffUid(); }catch(e){}
+            c.made=1; delete c.hired; delete c.assign; delete c.club;
+            try{ acSync(c); }catch(e){}
+            P.push(c); ok++;
+          }
+          try{ syncPreStaff(); }catch(e){}
+          saveGame(); SGTAB="list";
+          showConfirm(`<b>✅ ${ok}명을 무직 코치 시장에 넣었습니다.</b>${dup?`\n· ${dup}명은 이미 있어 건너뜀`:""}`,
+            ()=>show("staffGen"), {okLabel:"확인", cancelLabel:""});
+        }, {okLabel:"불러온다", cancelLabel:"취소"});
+    }catch(e){ flash("생성 스태프 파일(klm2026_생성스태프_*.json)이 아닙니다.","warn"); show("staffGen"); }
+    try{ input.value=""; }catch(e2){}
+  };
+  r.readAsText(f);
+}
+/* 📜 스태프 생성 목록 (요청) */
+function sgMadeListView(){
+  const L=sgMadeAll();
+  const rows=L.slice().reverse().map(({c, where})=>{
+    const R=AC_ROLE[c.role]||{ic:"",n:c.role};
+    const g=acGrade(acOvr(c));
+    return `<tr><td><b>${c.n}</b>${c.fullN?`<br><span class="small" style="opacity:.7">${c.fullN}</span>`:""}</td>
+      <td>${R.ic} ${R.n}${c.role==="ac"&&c.trait&&AC_TRAIT[c.trait]?`<br><span class="small">${AC_TRAIT[c.trait].n}</span>`:""}</td>
+      <td>${c.age}세</td>
+      <td class="small">${acIsFrn(c)?`🌐 ${c.natl}`:c.natl||"대한민국"}${(c.h||c.w)?`<br>${c.h||"-"}cm/${c.w||"-"}kg`:""}</td>
+      <td class="small">${c.career||"-"}</td>
+      <td><b style="color:${g[1]}">${acOvr(c)}</b>/20 <span class="small" style="color:${g[1]}">${g[0]}</span></td>
+      <td class="small">${where}</td>
+      <td class="small"><b style="font-family:monospace">${c.uid||"—"}</b></td>
+      <td><button class="mini" style="padding:1px 7px;font-size:10.5px" title="이 스태프를 지웁니다" onclick="sgDelMade('${c.id}')">🧹</button></td></tr>`;
+  }).join("");
+  return `<div class="card">
+    <h3>📜 스태프 생성 목록 <span class="small">— ${L.length}명 (최근이 위)</span></h3>
+    <p class="small" style="margin:2px 0 8px">직접 만든 스태프만 모읍니다 — 무직 시장에 있든, 구단에 넣어 뒀든, 이미 우리 코치진이든 전부 여기서 보입니다.
+      ${PREGEN?"게임을 시작하면 이 목록이 그대로 <b>🕊️ 무직 코치 시장</b>에 들어갑니다.":"파일로 내보내면 다른 사람이 같은 스태프를 받아 쓸 수 있습니다."}</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="mini" onclick="sgExportMade()" ${L.length?"":"disabled"}>📤 목록 내보내기 (${L.length}명)</button>
+      <label class="mini" style="cursor:pointer">📥 생성 스태프 불러오기
+        <input type="file" accept="application/json,.json" style="display:none" onchange="sgImportMade(this)"></label>
+    </div>
+    ${L.length?`<div class="tblScroll" style="max-height:360px;overflow-y:auto"><table>
+      <tr><th>이름</th><th>직책</th><th>나이</th><th>신상</th><th>前 직업</th><th>종합</th><th>소속</th><th>🆔</th><th></th></tr>
+      ${rows}</table></div>`
+     :`<p class="small">아직 만든 스태프가 없습니다. [🎩 스태프 만들기]에서 첫 스태프를 만들어 보세요.</p>`}
+  </div>`;
+}
+function staffGenView(){
+  const n=sgMadeAll().length;
+  const tabs=`<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+    <button class="mini ${SGTAB==="make"?"sel":""}" style="padding:7px 14px" onclick="SGTAB='make';show('staffGen')">🎩 스태프 만들기</button>
+    <button class="mini ${SGTAB==="list"?"sel":""}" style="padding:7px 14px" onclick="SGTAB='list';show('staffGen')">📜 스태프 생성 목록${tabBadge(n,1)}</button>
+    ${PREGEN?"":`<button class="mini" style="padding:7px 14px" onclick="show('playerGen')">🧬 선수 생성 ▶</button>`}
+  </div>`;
+  const top = PREGEN ? pgTopBar("🎩 스태프 만들기", "게임 시작 전 · 만든 스태프는 브라우저에 보관됩니다",
+      `여기서 만든 스태프는 <b>브라우저에 보관</b>되고, 게임을 시작하면 <b>🕊️ 무직 코치 시장</b>에 들어갑니다. 지금 보이는 시장은 임시이며 저장되지 않습니다 — 고유번호는 새 게임에서 다시 발급됩니다.`) : "";
+  const body = SGTAB==="list" ? sgMadeListView() : pgStaffView();
+  return `${top}${PREGEN?"":"<h2>🎩 스태프 생성</h2>"}${tabs}${body}`;
+}
 function playerGenView(){
   if(!PG) pgInit();
   /* ⚠ inputmode="decimal"을 전 칸에 걸면 모바일에서 이름 칸에도 숫자패드가 뜬다 — 글자 칸은 text로 */
@@ -29852,20 +30073,17 @@ function playerGenView(){
   };
   const SEL=(k,opts,cur)=>`<select onchange="pgSet('${k}', this.value)">${opts.map(o=>`<option value="${o[0]}" ${cur===o[0]?"selected":""}>${o[1]}</option>`).join("")}</select>`;
   const age=G.season-PG.by;
+  /* ⚠ 요청 — 「왜 선수생성 메뉴와 스태프 생성 메뉴가 같이 있는거지?」. 갈랐다.
+     선수 생성은 [만들기 / 생성 목록], 스태프 생성은 자기 화면(staffGen)에서 같은 두 탭을 쓴다. */
   const pgTabs=`<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
     <button class="mini ${PGTAB==="make"?"sel":""}" style="padding:7px 14px" onclick="PGTAB='make';show('playerGen')">🧬 선수 만들기</button>
     <button class="mini ${PGTAB==="list"?"sel":""}" style="padding:7px 14px" onclick="PGTAB='list';show('playerGen')">📜 선수 생성 목록${tabBadge((G.pgMade&&G.pgMade.length)||0, 1)}</button>
-    <button class="mini ${PGTAB==="staff"?"sel":""}" style="padding:7px 14px" onclick="PGTAB='staff';show('playerGen')">🎩 스태프 만들기${tabBadge(((G.acPool||[]).filter(c=>c&&c.made)).length, 1)}</button>
+    ${PREGEN?"":`<button class="mini" style="padding:7px 14px" onclick="show('staffGen')">🎩 스태프 생성 ▶</button>`}
   </div>`;
-  /* 🧬 게임 시작 전 모드 — 넣을 리그가 없으니 「목록에만 생성」만 쓴다 */
-  const preBar = PREGEN ? `<div class="msg info" style="border-width:2px">
-      🧬 <b>게임 시작 전 선수 만들기</b> — 여기서 만든 선수는 <b>브라우저에 보관</b>되고,
-      게임을 시작하면 <b>📜 선수 생성 목록</b>에 그대로 들어옵니다. 지금 화면의 구단·순위는 임시이며 저장되지 않습니다.
-      <div style="margin-top:8px"><button class="mini" onclick="closePreGen()">◀ 팀 선택으로 돌아가기</button></div>
-    </div>` : "";
-  if(PGTAB==="list") return `<h2>🧬 선수 생성</h2>${preBar}${pgTabs}${pgMadeListView()}`;
-  if(PGTAB==="staff") return `<h2>🧬 선수·스태프 생성</h2>${preBar}${pgTabs}${pgStaffView()}`;
-  return `<h2>🧬 선수 생성</h2>${preBar}
+  const preBar = PREGEN ? pgTopBar("🧬 선수 만들기", "게임 시작 전 · 만든 선수는 브라우저에 보관됩니다",
+      `여기서 만든 선수는 <b>브라우저에 보관</b>되고, 게임을 시작하면 <b>📜 선수 생성 목록</b>에 그대로 들어옵니다. 지금 화면의 구단·순위는 임시이며 저장되지 않습니다.`) : "";
+  if(PGTAB==="list") return `${preBar}${PREGEN?"":"<h2>🧬 선수 생성</h2>"}${pgTabs}${pgMadeListView()}`;
+  return `${preBar}${PREGEN?"":"<h2>🧬 선수 생성</h2>"}
   ${pgTabs}
   <div class="msg info">이름부터 계약까지 정해 새 선수를 만듭니다. 만든 뒤 세부 능력치는 🛠️ 인게임 에디터에서 다듬을 수 있습니다.</div>
   <div class="card">
@@ -30008,14 +30226,21 @@ function edsDraft(force){
   EDS.dr=c;
   return c;
 }
-function edsDrRoll(){ edsDraft(true); show("editor"); }
+/* 🎩 스태프를 고치고 나면 «지금 있던 화면»으로 돌아간다 —
+   에디터 탭에서 왔으면 에디터로, 스태프 생성 메뉴에서 왔으면 거기로. */
+function edsView(){
+  try{ if(typeof PREGEN!=="undefined" && PREGEN) return "staffGen"; }catch(e){}
+  try{ if(VIEW==="staffGen") return "staffGen"; }catch(e){}
+  return "editor";
+}
+function edsDrRoll(){ edsDraft(true); show(edsView()); }
 /* 초안 능력치 한 칸을 직접 지정한다 — 종합은 그 자리에서 다시 계산된다 */
 function edsSetDr(k, v){
   const c=edsDraft();
-  if(!c || SA_KEYS.indexOf(k)<0){ show("editor"); return; }
+  if(!c || SA_KEYS.indexOf(k)<0){ show(edsView()); return; }
   const n=edNum(v,1,20,0);
   if(n!=null){ c.a=c.a||{}; c.a[k]=n; try{ acSync(c); }catch(e){} }
-  show("editor");
+  show(edsView());
 }
 function edsList(){
   try{
@@ -30037,13 +30262,13 @@ function edsGo(k, v){
   }
   else if(k==="role" || k==="trait" || k==="tier"){ EDS.mk[k]=v; edsDraft(false); }
   else EDS.mk[k]=v;
-  show("editor");
+  show(edsView());
 }
 function edsSetMkNum(k, v){
   const R={age:[20,78], tier:[6,20], h:[0,215], w:[0,160]}[k] || [0,20];
   const n=edNum(v, R[0], R[1], 0);
   if(n!=null){ EDS.mk[k]=n; if(k==="tier") edsDraft(false); }
-  show("editor");
+  show(edsView());
 }
 /* 스태프 한 명의 값을 고친다 */
 function edsSet(field, v){
@@ -30077,7 +30302,7 @@ function edsSet(field, v){
      실측에서 능력치를 20 으로 올려도 종합이 그대로였다. 한 번 동기화해 준다. */
   try{ acSync(c); }catch(e){}
   try{ saveGame(); }catch(e){}
-  show("editor");
+  show(edsView());
 }
 /* 새 스태프를 만든다 — 무직 시장 또는 우리 코치진으로 */
 function edsMake(){
@@ -30128,7 +30353,7 @@ function edsMake(){
     const cl=(landed==="club") ? ` · ${(G.teams[c.club]||{}).short||c.club} 소속` : landed==="crew" ? " · 우리 코치진 합류" : " · 무직 시장";
     flash(`🎩 ${c.n} (${AC_ROLE[c.role].n}) 생성 — 고유번호 ${c.uid}${cl}`,"good");
   }catch(e){}
-  show("editor");
+  show(edsView());
 }
 /* 🏟️ 이미 만든 스태프의 소속을 옮긴다 */
 function edsMove(c, tid){
@@ -30145,7 +30370,7 @@ function edsMove(c, tid){
     else { rmC(); delete c.hired; delete c.assign; c.club=tid; if(!P.includes(c)) P.push(c); EDS.src="club"; }
     saveGame();
   }catch(e){}
-  show("editor");
+  show(edsView());
 }
 function edsDelete(){
   const c=edsPick(); if(!c) return;
@@ -30154,7 +30379,7 @@ function edsDelete(){
       const L=edsList(); const i=L.findIndex(x=>x&&x.id===c.id); if(i>=0) L.splice(i,1);
       EDS.id=null; saveGame();
     }catch(e){}
-    show("editor");
+    show(edsView());
   }, {okLabel:"지운다", cancelLabel:"취소", danger:true});
 }
 /* 🎩 스태프 생성·수정 화면 — 에디터 탭과 «게임 시작 전 생성기»가 함께 쓴다 (요청) */
@@ -30260,10 +30485,7 @@ function pgStaffView(){
             onchange="edsSet('${k}', this.value)"></label>`;
       }).join("")}</div>`).join("")}
     <div style="margin-top:10px"><button class="mini" style="padding:8px 14px;border-color:#f85149;color:#f85149" onclick="edsDelete()">🗑️ 이 스태프 지우기</button></div>`;
-  const preNote = pre ? `<div class="msg info" style="border-width:2px">🎩 <b>게임 시작 전 스태프 만들기</b> — 여기서 만든 스태프는 <b>브라우저에 보관</b>되고,
-      게임을 시작하면 <b>🕊️ 무직 코치 시장</b>에 들어갑니다. 그때 영입하면 됩니다.
-      <span class="small">지금 보이는 시장은 임시이며 저장되지 않습니다. 고유번호는 새 게임에서 다시 발급됩니다.</span></div>` : "";
-  return `${preNote}${mk}
+  return `${mk}
   <div class="card">
     <div class="edSec">✏️ 스태프 수정</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
@@ -30653,7 +30875,13 @@ function settingsView(){
     </div>
     <div class="card"><h3>🧬 선수 생성</h3>
       <p class="small" style="margin-bottom:10px">이름·신체·성격·능력·특성·계약을 정해 새 선수를 만듭니다. 구단 입단, FA 시장, 해외 시장 어디로든 보낼 수 있습니다.</p>
-      <button class="mini" onclick="pgInit();show('playerGen')">🧬 선수 만들기</button>
+      <button class="mini" onclick="pgInit();PGTAB='make';show('playerGen')">🧬 선수 만들기</button>
+      <button class="mini" onclick="pgInit();PGTAB='list';show('playerGen')">📜 선수 생성 목록${tabBadge((G.pgMade&&G.pgMade.length)||0,1)}</button>
+    </div>
+    <div class="card"><h3>🎩 스태프 생성 <span class="small">— 선수와 따로</span></h3>
+      <p class="small" style="margin-bottom:10px">직책·성향·신상·능력치를 정해 코치·스카우트·팀닥터를 만듭니다. 무직 시장, 지정 구단, 우리 코치진 어디로든 넣을 수 있습니다.</p>
+      <button class="mini" onclick="SGTAB='make';show('staffGen')">🎩 스태프 만들기</button>
+      <button class="mini" onclick="SGTAB='list';show('staffGen')">📜 스태프 생성 목록${tabBadge((function(){ try{ return sgMadeAll().length; }catch(e){ return 0; } })(),1)}</button>
     </div>
   </div>
   <div class="card">
@@ -31928,6 +32156,7 @@ function togglePickOpt(){ if(profLegacyLock()) return; pickOpt=!pickOpt; renderT
    만든 선수는 게임이 아니라 브라우저 보관함(preMade)에 쌓이고,
    실제로 게임을 시작하면 그 목록이 그대로 📜 선수 생성 목록으로 따라 들어간다. */
 let PREGEN=false;
+let PREGEN_MODE="player";        // 🧬 "player" | "staff" — 팀 선택 화면에서 어느 쪽으로 들어왔나
 const PREMADE_KEY="klm2026_premade";
 function preMade(){
   try{ const a=JSON.parse(localStorage.getItem(PREMADE_KEY)||"[]"); return Array.isArray(a)?a:[]; }
@@ -31980,9 +32209,10 @@ function preStaffApply(){
     return n;
   }catch(e){ return 0; }
 }
-function openPreGen(){
+function openPreGen(mode){
   if(profLegacyLock()) return;
   pickOpt=false;
+  PREGEN_MODE=(mode==="staff")?"staff":"player";
   PREGEN=true;
   try{ newGame(D1[0].id); }catch(e){ PREGEN=false; renderTeamPick(); return; }
   G.introDone=true;
@@ -31994,14 +32224,13 @@ function openPreGen(){
          for(const c of box) if(!P.some(x=>x && x.n===c.n && x.made))
            P.push(Object.assign(JSON.parse(JSON.stringify(c)), {made:1})); } }catch(e){}
   try{ pgInit(); }catch(e){}
-  PGTAB="make";
+  PGTAB="make"; SGTAB="make";
   try{ document.body.classList.add("preGen"); }catch(e){}
   $("#teamPick").classList.add("hidden");
   $("#app").classList.remove("hidden");
-  try{ const b=$("#clubBadge"); if(b){ b.style.background="#21262d"; b.style.color="#e6edf3";
-        b.innerHTML=`🧬 선수 만들기<small>게임 시작 전 · 저장되지 않습니다</small>`; } }catch(e){}
-  VIEW="playerGen";
-  show("playerGen");
+  const v=(PREGEN_MODE==="staff")?"staffGen":"playerGen";
+  VIEW=v;
+  show(v);
 }
 function closePreGen(){
   syncPreMade();
@@ -32075,7 +32304,14 @@ function pickOptPanel(){
       <p class="small" style="margin-bottom:8px">이름·신체·성격·능력치·특성·능숙도를 정해 나만의 선수를 미리 만들어 둡니다.
         만든 선수는 <b>브라우저에 보관</b>되고, 게임을 시작하면 <b>📜 선수 생성 목록</b>에 그대로 들어옵니다 — 거기서 원하는 구단에 넣으면 됩니다.
         ${preMade().length?`<br><b style="color:var(--gold)">보관 중 ${preMade().length}명</b>`:""}</p>
-      <button class="mini" style="border-color:var(--acc);color:var(--acc)" onclick="openPreGen()">🧬 선수 만들기 열기</button>
+      <button class="mini" style="border-color:var(--acc);color:var(--acc)" onclick="openPreGen('player')">🧬 선수 만들기 열기</button>
+    </div>
+    <div class="card">
+      <h3>🎩 스태프 만들기 <span class="small">— 게임 시작 전에</span></h3>
+      <p class="small" style="margin-bottom:8px">직책·성향·국적·신상·능력치를 정해 코치진을 미리 만들어 둡니다.
+        게임을 시작하면 <b>🕊️ 무직 코치 시장</b>에 들어가 있습니다 — 부임 후 영입하면 됩니다.
+        ${preStaff().length?`<br><b style="color:var(--gold)">보관 중 ${preStaff().length}명</b>`:""}</p>
+      <button class="mini" style="border-color:var(--gold);color:var(--gold)" onclick="openPreGen('staff')">🎩 스태프 만들기 열기</button>
     </div>
     <p class="small" style="margin:2px 2px 0;color:var(--sub);line-height:1.55">여기서 정한 값은 브라우저에 남아, <b>새로 시작하는 게임에 자동으로 적용</b>됩니다.
       게임 안에서는 좌측 <b>⚙️ 설정</b>에서 언제든 다시 바꿀 수 있습니다.</p>
@@ -32119,7 +32355,12 @@ function renderTeamPick(){
     ${hasSave?`<button class="pkGo pkMain" onclick="resumeGame()">💾 이어하기<span class="pkSub">저장된 게임</span></button>`:""}
     <label class="pkGo pkLoad" title="내보낸 세이브파일(.json)을 불러옵니다">📂 불러오기
       <input type="file" accept="application/json,.json" style="display:none" onchange="importSave(this)"></label>
+    ${hasSave?`<button class="pkGo pkWipe" onclick="askSaveWipe()" title="자동 저장 세이브를 지웁니다 (되돌릴 수 없습니다)" aria-label="세이브 삭제">🗑️</button>`:""}
     <button class="pkGo pkCog" onclick="togglePickOpt()" title="설정 — 폰트·전체화면·게임 옵션" aria-label="설정">⚙</button>
+  </div>
+  <div class="pkResume pkMake">
+    <button class="pkGo pkMk" onclick="openPreGen('player')" title="게임을 시작하지 않고 선수를 미리 만들어 둡니다">🧬 선수 만들기${preMade().length?`<span class="pkSub">보관 중 ${preMade().length}명</span>`:""}</button>
+    <button class="pkGo pkMk" onclick="openPreGen('staff')" title="게임을 시작하지 않고 코치진을 미리 만들어 둡니다">🎩 스태프 만들기${preStaff().length?`<span class="pkSub">보관 중 ${preStaff().length}명</span>`:""}</button>
   </div>`;
   const sel = pickSel ? [...D1.map(d=>[d,1]),...D2.map(d=>[d,2])].find(x=>x[0].id===pickSel) : null;
   el.innerHTML=`<div class="pkSeason">SEASON 2026 · K LEAGUE</div>
@@ -32242,6 +32483,7 @@ function exitToTitle(){
     doExit, {okLabel:"저장하고 나간다", cancelLabel:"계속한다"});
 }
 function enterGame(){
+  SAVE_OFF=false;                      // 게임에 들어왔다 — 저장을 다시 연다
   /* 🎩 옛 세이브는 이어하기 직전에 프로필을 한 번 받는다 (enterGame 이 모든 진입로의 목구멍이다) */
   if(profNeedLegacy()){ profLegacyOpen(); return; }
   $("#teamPick").classList.add("hidden");
@@ -38976,7 +39218,7 @@ function show(v){
   // 안전망 — 기자회견·라커룸 같은 진행 화면이 하나도 열려 있지 않다면 버튼은 눌려야 한다.
   // 어느 흐름에서든 잠금 해제를 빠뜨리면 게임이 통째로 멈춘 것처럼 보이므로 여기서 되돌린다.
   if(typeof progBusy==="function" && !progBusy()) $("#advBtn").disabled=false;
-  const V={home,squad,tactics,table:tableView,fixtures,transfer,nego:negoView,offers:offersView,hier:hierView,finance,mylife:mylifeView,youth,stats,player:playerView,match:matchTabIdleView,settings:settingsView, editor:editorView, engineEd:engineEditorView, playerGen:playerGenView, simwatch:simWatchView, staff:staffView, media:mediaView, renew:renewView, loan:loanView, contract:contractView, osquad:otherSquadView, loanin:loanInView, loancenter:loanCenterView, pvp:pvpView, comm:cmView};
+  const V={home,squad,tactics,table:tableView,fixtures,transfer,nego:negoView,offers:offersView,hier:hierView,finance,mylife:mylifeView,youth,stats,player:playerView,match:matchTabIdleView,settings:settingsView, editor:editorView, engineEd:engineEditorView, playerGen:playerGenView, staffGen:staffGenView, simwatch:simWatchView, staff:staffView, media:mediaView, renew:renewView, loan:loanView, contract:contractView, osquad:otherSquadView, loanin:loanInView, loancenter:loanCenterView, pvp:pvpView, comm:cmView};
   const fx=flashHtml();
   if(typeof closeRoleMenu==="function") closeRoleMenu();   // 화면을 옮기면 열려 있던 역할 패널을 닫는다
   const freshTactics = (v==="tactics" && VIEWPREV!=="tactics");
@@ -91640,7 +91882,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5151";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5153";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
