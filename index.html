@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5148-->
+<!--B:20260913-5151-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -21323,6 +21323,10 @@ function endSeason(){
      ⚠ 제보 — "마지막 라운드 순위표에 K리그1 한 팀 대신 K리그2 우승팀이 끼어 있다".
         승격팀이 이미 K1 목록에 들어가고 강등팀은 빠진 상태로 그 시즌 표를 그려서 생긴 일이다. */
   G.finalTbl={s:G.season, k1:t1.map(t=>t.id), k2:t2.map(t=>t.id)};
+  /* 🗓️ 겨울에도 읽을 수 있게 «지난 시즌 최종 순위»를 구단에 남긴다.
+     G.finalTbl 은 해를 넘기면 버려지는데, 겨울 이적시장은 그 뒤에 열린다. */
+  try{ t1.forEach((x,i)=>{ x.lastPos=i+1; x.lastDiv=1; x.lastS=G.season; });
+       t2.forEach((x,i)=>{ x.lastPos=i+1; x.lastDiv=2; x.lastS=G.season; }); }catch(e){}
   // 승강 적용 — 시즌 규정에 따라 갈린다
   applyPromotionRelegation(t1, t2, champ2, uid);
   seasonCeremony(t1, t2, champ, champ2, G._relIds||[], G._proIds||[]);
@@ -21826,6 +21830,21 @@ function tryPreExpirySale(from, p){
   }catch(e){ return false; }
 }
 function startNewSeason(){
+  /* 🕐 진행 중이던 이적은 시즌을 넘기지 않는다 — 마감과 함께 이미 무산됐어야 한다.
+     📅 다만 «이월 계약»은 다음 시즌 겨울 창 첫날까지 살아 있다 (요청). */
+  try{
+    const carry=[];
+    for(const d of tfDeals().slice()){
+      if(d.carry && d.carry.s===G.season+1){ carry.push(d); continue; }
+      tfCollapse(d, "시즌 종료", true);
+    }
+    G.tfDeals=carry; G.tfArrive=null; G.tfRivalPing=null; G.tfDlSeen=null; G.tfFire=[]; G.tfFireKey=null;
+    for(const id in G.teams) for(const q of G.teams[id].players) if(q.tfLock) delete q.tfLock;
+    for(const d of carry){ d.carry={s:G.season+1, day:0}; d.due=0; d.day=0; tfLockSet(d); }
+    /* 💔 지난 시즌에 틀어진 관계·마음은 한 해가 지나면 옅어진다 */
+    try{ const sour={}; for(const k in (G.tfSour||{})) if(G.tfSour[k]>1) sour[k]=G.tfSour[k]-1; G.tfSour=sour; }catch(e){}
+    try{ G.tfSpurn={}; }catch(e){}
+  }catch(e){}
   /* 🏗️ 겨울 증설 공사 완공 — 수용 인원이 늘어난 뒤에 기준 관중을 다시 잡아야 한다 */
   try{ donSeasonTick(); }catch(e){}
   /* 🎟️ 기준 관중 갱신 — 지난 시즌 실제 관중과 성적을 본다. 순위표·회계가 지워지기 전에 먼저. */
@@ -22549,6 +22568,7 @@ function loanOut(pid, clubId, share, buyOpt, halfSeason){
   if(!p||!club) return;
   if(p.armyCall){ flash(`🎖️ ${p.name} 선수는 입영 통지를 받았습니다 — 입소(D-${armyCallLeft(p)})까지는 임대 보낼 수 없습니다.`,"warn"); return; }
   if(p.army){ flash(`🎖️ ${p.name} 선수는 복무 중입니다 — 우리 소유가 아니라 임대를 보낼 수 없습니다.`,"warn"); return; }
+  if(p.tfLock){ flash(`🕐 ${p.name} 선수는 이적이 진행 중입니다 — 임대를 보낼 수 없습니다.`,"warn"); return; }
   /* ⚠ 제보 — 「난색·거절 유력 구단도 더블 클릭·광클하면 임대를 보낼 수 있다」.
      제안 버튼을 누를 때마다 수락 주사위를 새로 굴렸다 — 5% 확률도 광클이면 뚫린다.
      거절당하면 그 구단에는 「조건을 올리거나」 7일이 지나야 다시 제안할 수 있다.
@@ -23346,6 +23366,11 @@ function acceptLoanAsk(i){
   const t=userTeam(); const a=(G.loanAsks||[])[i]; if(!a) return;
   const p=t.players.find(x=>x.id===a.pid), c=G.teams[a.tid];
   if(!p||!c){ G.loanAsks.splice(i,1); show("nego"); return; }
+  if(p.tfLock){
+    G.loanAsks.splice(i,1);
+    flash(`🕐 ${p.name} 선수는 이적이 진행 중입니다 — 임대를 보낼 수 없습니다.`,"warn");
+    saveGame(); return show("nego");
+  }
   /* 🎖️ 이 경로는 loanOut 을 거치지 않아 병역 관문이 통째로 비어 있었다 */
   if(p.army || p.armyCall){
     G.loanAsks.splice(i,1);
@@ -23437,12 +23462,464 @@ function windowInfo(){
   return {open:false, label:"이적시장 종료 (내년 겨울에 열림)"};
 }
 function transferOpen(){ return windowInfo().open; }
+
+/* ═══ ⏰ 마감 — 조여 오는 압박 ═══════════════════════════════════════════════
+   ⚠ 요청 — 「이적시장 마감 로직을 개선하자」.
+   예전에는 마감이 «어느 날 갑자기 닫히는 문»이었다. D-40 과 D-1 이 완전히 같았다.
+   ─ ⏳ 마감에 몰린 딜은 등록 시간을 못 맞출 수 있다 (미리 움직일 이유)
+     ⚖️ 마감이 가까울수록 파는 쪽이 급해진다 (값이 흔들린다)
+     🔥 AI 도 마감을 안다 (막판에 몰린다)
+     📣 D-14 · 7 · 3 · 1 · 당일에 알린다
+     💔 마감으로 깨진 딜은 흔적을 남긴다
+     📅 이월 계약 — 무산 대신 다음 창 첫날로 묶는다 */
+function tfWinLeft(){ const wi=windowInfo(); return wi.open ? Math.max(0, (wi.end||0)-(G.day||0)) : -1; }
+function tfIsDeadlineDay(){ const wi=windowInfo(); return !!wi.open && (G.day||0)>=(wi.end||0); }
+/* 0(여유) ~ 1(마감 당일) — 마지막 14일 동안 선형으로 조인다 */
+function tfPressure(){
+  const l=tfWinLeft(); if(l<0) return 0;
+  return clamp((14-l)/14, 0, 1);
+}
+/* 다음 창이 언제 열리는가 — 이월 계약의 만기 */
+function tfNextWindow(){
+  try{
+    const dayOfDate=(m,dd)=>Math.round((new Date(G.cal.y, m, dd) - new Date(G.cal.y, CAL_START[0], CAL_START[1]))/86400000);
+    const sStart=dayOfDate(WIN_SUMMER_START[0], WIN_SUMMER_START[1]);
+    if((G.day||0) < sStart) return {s:G.season, day:sStart, label:"여름 이적시장 첫날"};
+  }catch(e){}
+  return {s:G.season+1, day:0, label:`${G.season+1}년 겨울 이적시장 첫날`};
+}
+/* ⏳ 서류가 어긋날 확률 — 마감에 몰릴수록, 이야기가 새어 나갔을수록 */
+function tfPaperFail(d){
+  let f=(d.leak||0)*0.09 + (d.heat||0)*0.05;
+  const wi=windowInfo();
+  if(wi.open && (d.due||0) >= (wi.end||0)){
+    const lead=(d.due||0)-(d.day||0);
+    f += lead<=0 ? 0.25 : lead<=1 ? 0.18 : lead<=2 ? 0.10 : 0.04;   // 마감일에 몰린 딜
+  }
+  if(d.matched) f-=0.03;                    // 돈을 더 얹은 딜은 상대도 서두른다
+  if(d.carry) f=Math.min(f, 0.06);          // 이월 계약은 시간이 넉넉하다
+  return clamp(f, 0, 0.55);
+}
+/* ⚖️ 파는 쪽이 얼마나 급한가 — 내놓은 선수일수록, 계약이 짧을수록, 마감이 가까울수록 */
+function tfSellerDesperation(p, from){
+  const P=tfPressure(); if(P<=0) return 0;
+  let w=0.35;
+  try{
+    if((p.ct||3)<=1) w+=0.35;
+    if((p.unhappy||0)>0) w+=0.20;
+    if(from && (from.budget||0)<10) w+=0.20;
+    if(typeof aiKeepTalent==="function" && aiKeepTalent(p)) w-=0.45;   // 지킬 자원은 급하지 않다
+  }catch(e){}
+  return clamp(P*clamp(w,0,1), 0, 0.25);
+}
+/* 💔 마감으로 깨진 딜의 흔적 — 다음 창까지 따라온다 */
+function tfSourAdd(tid, n){ if(!tid) return; G.tfSour=G.tfSour||{}; G.tfSour[tid]=Math.min(3,(G.tfSour[tid]||0)+(n||1)); }
+function tfSourOf(tid){ try{ return (G.tfSour||{})[tid]||0; }catch(e){ return 0; } }
+function tfSpurnAdd(pid){ if(pid==null) return; G.tfSpurn=G.tfSpurn||{}; G.tfSpurn[pid]=(G.tfSpurn[pid]||0)+1; }
+function tfSpurnOf(pid){ try{ return (G.tfSpurn||{})[pid]||0; }catch(e){ return 0; } }
+
+/* ═══ 🕐 이적 진행 · 🥷 하이재킹 · 📰 언론 흘리기 ════════════════════════════
+   ⚠ 요청 원문 — 「지금은 바로 선수가 이적하잖아? FM처럼 며칠이나 몇 주 있다가 이적하면
+     좋을거같아. 그리고 이적시장이 마감되면 이적 못하는것도 구현하고. 동시에 하이재킹
+     시스템도 구현하자. 상대 구단도 하이재킹 할 수 있으면 좋을거같아.」
+   ─ 합의는 «가계약»이다. 선수는 며칠 동안 원소속에 그대로 남고, 그 사이가 판이 열려 있는 시간이다.
+       · 다른 구단이 더 얹어 끼어들 수 있다 (AI ↔ 유저 양방향)
+       · 기자에게 흘려 남의 딜을 흔들 수 있다 — 대신 꼬리가 잡히면 대가를 치른다
+       · 마감일까지 마무리하지 못한 딜은 «무산»된다. 마감 뒤에는 아무도 못 움직인다
+   ─ 돈은 합의 시점에 사는 쪽에서 빠지고(이중 지출 방지), 완료 시점에 파는 쪽으로 들어간다.
+     딜이 깨지면 그대로 돌려받는다. */
+const TF_LEAD_MIN=3, TF_LEAD_MAX=14;
+function tfDeals(){ if(!Array.isArray(G.tfDeals)) G.tfDeals=[]; return G.tfDeals; }
+/* 합의 → 완료까지 걸리는 날수 — 금액이 클수록, 해외일수록 서류가 길다 */
+function tfLead(fee, os){
+  let d=TF_LEAD_MIN + R(4);
+  if(os) d+=3+R(3);
+  if((fee||0)>=30) d+=2; else if((fee||0)>=12) d+=1;
+  return clamp(d, TF_LEAD_MIN, TF_LEAD_MAX);
+}
+/* 마감을 넘길 수는 없다 — 마감일이 마지막 기회다 */
+function tfDueOf(fee, os){
+  const wi=windowInfo(); if(!wi.open) return null;
+  return Math.min((G.day||0)+tfLead(fee, os), wi.end);
+}
+function tfDealOfPid(pid){ return tfDeals().find(d=>String(d.pid)===String(pid)) || null; }
+function tfLocked(pid){ return !!tfDealOfPid(pid); }
+/* 딜에 걸린 선수는 지금 어디에 있는가 (아직 원소속·FA·해외 목록에 그대로 있다) */
+function tfPlayerOf(d){
+  try{
+    if(d.fromId && G.teams[d.fromId]){ const p=G.teams[d.fromId].players.find(x=>x.id===d.pid); if(p) return p; }
+    if(d.os){ const p=(G.overseas||[]).find(x=>x.id===d.pid); if(p) return p; }
+    const f=(G.freeAgents||[]).find(x=>x.id===d.pid); if(f) return f;
+    for(const id in G.teams){ const q=G.teams[id].players.find(x=>x.id===d.pid); if(q) return q; }
+  }catch(e){}
+  return null;
+}
+function tfIsMine(d){ try{ return d.toId===G.userTeamId || d.fromId===G.userTeamId; }catch(e){ return false; } }
+function tfDaysLeft(d){ return Math.max(0, (d.due||0)-(G.day||0)); }
+/* 가계약 등록 — 사는 쪽 예산은 여기서 빠진다 */
+function tfDealAdd(o){
+  const d=Object.assign({
+    id:"tf"+(G.tfSeq=(G.tfSeq||0)+1), day:(G.day||0), leak:0, heat:0, hij:[], swapPid:null, os:false, agFee:0
+  }, o);
+  if(d.due==null) d.due=tfDueOf(d.fee, d.os);
+  if(d.due==null) return null;                       // 시장이 닫혀 있으면 계약 자체가 성립하지 않는다
+  d.due=Math.max(d.due, (G.day||0));
+  tfLockSet(d);
+  tfDeals().push(d);
+  return d;
+}
+/* 딜에 묶인 사람들 — 대상 선수와 «맞교환으로 넘어갈 선수»까지 함께 잠근다.
+   ⚠ 배선 점검 — 스왑 선수는 잠기지 않아, 서류가 도는 동안 그를 또 팔거나 임대 보낼 수 있었다. */
+function tfLockSet(d){
+  try{ const p=tfPlayerOf(d); if(p) p.tfLock=d.id; }catch(e){}
+  try{ if(d.swapPid){ const to=G.teams[d.toId];
+        const q=to&&to.players.find(x=>x.id===d.swapPid); if(q) q.tfLock=d.id; } }catch(e){}
+}
+function tfUnlock(d){
+  try{ for(const id in G.teams) for(const q of G.teams[id].players) if(q.tfLock===d.id) delete q.tfLock; }catch(e){}
+  try{ for(const q of (G.freeAgents||[])) if(q.tfLock===d.id) delete q.tfLock; }catch(e){}
+  try{ for(const q of (G.overseas||[])) if(q.tfLock===d.id) delete q.tfLock; }catch(e){}
+}
+/* 딜이 깨진다 — 사는 쪽이 낸 돈을 돌려준다 */
+function tfCollapse(d, why, quiet){
+  if(!d || d._dead) return false;
+  d._dead=1;                                   // 🔒 환불은 한 번만 — 두 경로에서 겹쳐 불려도 안전하다
+  const i=tfDeals().indexOf(d); if(i>=0) G.tfDeals.splice(i,1);
+  tfUnlock(d);
+  const to=G.teams[d.toId];
+  if(to) to.budget=Math.round((to.budget+(d.fee||0)+(d.agFee||0))*10)/10;
+  /* 💔 마감·서류로 깨진 딜은 흔적을 남긴다 — 환불하고 끝이 아니다 (요청) */
+  if(!quiet && !d.byUser){
+    try{
+      const pl=tfPlayerOf(d);
+      if(pl){
+        if(d.fromId===G.userTeamId){
+          /* 나가려던 선수 — 마음은 이미 떠나 있었다 */
+          pl.unhappy=Math.min(3,(pl.unhappy||0)+1);
+          if(!pl.uWhy) pl.uWhy="이적 무산";
+          try{ affAdd(pl, -8, "이적 무산"); }catch(e){}
+          try{ addMood(`😮‍💨 ${pl.name}: "다 정리된 줄 알았는데... 이렇게 되는군요."`); }catch(e){}
+        } else if(d.toId===G.userTeamId){
+          /* 우리가 놓친 선수 — 다음 창에서 우리 제안을 덜 받아 준다 */
+          tfSpurnAdd(pl.id);
+          try{ blockNego(pl.id, `${pl.name} 이적 무산`); }catch(e){}
+        }
+      }
+      /* 상대 구단과의 관계 — 다음 협상에서 값을 올려 부른다 */
+      tfSourAdd(d.fromId===G.userTeamId ? d.toId : d.fromId, 1);
+      if(tfIsMine(d) && (d.fee||0)>=18) adjustTrust("fans", -2, `${d.name} 이적 무산`);
+    }catch(e){}
+  }
+  if(!quiet){
+    const nm=d.name||(p&&p.name)||"선수";
+    if(tfIsMine(d)) notify(`❌ <b>${nm}</b> 이적 무산 — ${why}`,"warn");
+    addNews(`❌ ${nm}의 ${to?to.short:"이적"}행이 무산됐습니다 — ${why}.`, tfIsMine(d)?"warn":null);
+  }
+  return false;
+}
+/* 완료 — 실제로 사람이 옮겨 간다 */
+function tfComplete(d){
+  const p=tfPlayerOf(d), to=G.teams[d.toId], from=d.fromId?G.teams[d.fromId]:null;
+  if(!p || !to) return tfCollapse(d, "대상을 찾을 수 없습니다", true);
+  if(p.army || p.armyCall) return tfCollapse(d, "병역 사유");
+  /* 🧷 그 사이 상황이 바뀌었을 수 있다 — 있어야 할 자리에 없으면 딜은 성립하지 않는다.
+     (이 확인이 없으면 이미 남의 팀에 간 선수를 한 번 더 밀어 넣어 두 팀에 동시에 존재하게 된다) */
+  if(from){ if(from.players.indexOf(p)<0) return tfCollapse(d, "원소속이 바뀌었습니다"); }
+  else if(d.os){ if(!(G.overseas||[]).some(x=>x.id===p.id)) return tfCollapse(d, "해외 구단 사정 변경"); }
+  else { if(!(G.freeAgents||[]).some(x=>x.id===p.id)) return tfCollapse(d, "다른 구단과 계약했습니다"); }
+  if(from && !d.swapPid && from.players.length<=18) return tfCollapse(d, `${from.short} 스쿼드 부족`);
+  const mine=tfIsMine(d), buying=(d.toId===G.userTeamId);
+  const i=tfDeals().indexOf(d); if(i>=0) G.tfDeals.splice(i,1);
+  d._dead=1; tfUnlock(d);
+  const mv=(function(){ try{ return marketValue(p); }catch(e){ return d.fee||0; } })();
+  if(from){
+    if(from.isUser) try{ socialOnSale(p); }catch(e){}
+    from.players.splice(from.players.indexOf(p),1);
+    from.budget=Math.round((from.budget+(d.fee||0))*10)/10;
+  } else if(d.os){
+    G.overseas=(G.overseas||[]).filter(x=>x.id!==p.id);
+    (G.osGone=G.osGone||[]).push(p.osKey||p.name);
+    try{ if(G.scout){ G.scout.list=(G.scout.list||[]).filter(x=>x.id!==p.id); delete p.scErr; delete p._scShow; delete p.mvFix; } }catch(e){}
+  } else {
+    G.freeAgents=(G.freeAgents||[]).filter(x=>x.id!==p.id);
+  }
+  to.players.push(p); joinClub(to, p);
+  clearClubBaggage(p, from?80:82);
+  if(d.wage!=null) p.wage=d.wage;
+  p.ct=clamp(d.ct||(typeof aiCtYears==="function"?aiCtYears(p):2),1,5);
+  /* 🔀 선수 포함 딜 — 넘기기 직전에 다시 확인한다 */
+  let swapOut=null;
+  if(from && d.swapPid){
+    swapOut=to.players.find(x=>x.id===d.swapPid);
+    if(swapOut && (swapOut.army||swapOut.armyCall||swapOut.loan||swapOut.emg)) swapOut=null;
+    if(swapOut){
+      to.players.splice(to.players.indexOf(swapOut),1);
+      from.players.push(swapOut); joinClub(from, swapOut);
+      clearClubBaggage(swapOut, 75); swapOut.ct=Math.max(swapOut.ct||1,1);
+    }
+  }
+  if(buying){
+    try{ affSet(p, 62+R(12)); }catch(e){}
+    try{ tfLogAdd("in", p, from?from.short:(d.os?(p.osClub||"해외"):"FA"), d.fee||0, p.wage, p.ct); }catch(e){}
+    if(swapOut) try{ tfLogAdd("out", swapOut, from.short+" (선수 교환)", 0, null, null); }catch(e){}
+    if(p.ovr>=75){ adjustTrust("owner",5,`${p.name} 영입`); adjustTrust("fans",7,`${p.name} 영입`); }
+    try{ bumpHype(to, hypeFromSigning(to, p, d.fee||0), `${p.name} 영입`); }catch(e){}
+    try{ scheduleSignPresser(p, {fee:d.fee||0, wage:p.wage, swap:!!swapOut, swapName:swapOut?swapOut.name:""}); }catch(e){}
+    try{ socialOnSigning(p, d.fee||0); }catch(e){}
+    notify(`✍️ <b>오피셜:</b> ${p.name}, ${to.name} 합류! (이적료 ${d.fee||0}억 · 연봉 ${p.wage}억)`,"good");
+    (G.tfArrive=Array.isArray(G.tfArrive)?G.tfArrive:[]).push(p.id);   // 진행 화면이 멈추고 등번호를 물어본다
+  } else if(from && from.isUser){
+    try{ tfLogAdd("out", p, to.short+" (판매)", d.fee||0, null, null); }catch(e){}
+    if(swapOut) try{ tfLogAdd("in", swapOut, to.short+" (선수 교환)", 0, swapOut.wage, swapOut.ct); }catch(e){}
+    notify(`💰 <b>이적 완료!</b> ${p.name} → ${to.short} (이적료 ${d.fee||0}억)`,"good");
+    try{ queueFarewell(p, to.name); }catch(e){}
+    const wasStar=p.ovr>=75, wantedOut=(d.wantedOut||false);
+    if(wasStar && !wantedOut){
+      from.morale=clamp(from.morale-3,40,99);
+      G.starGone=3; adjustTrust("owner",-5,`${p.name} 이적`); adjustTrust("fans",-7,`${p.name} 이적`);
+      if(!swapOut){ if((d.fee||0)<mv*0.85) adjustTrust("owner",-4,`${p.name} 헐값 이적`);
+                    else if((d.fee||0)>mv*1.3) adjustTrust("owner",4,`${p.name} 고가 이적`); }
+    }
+    try{ bumpHype(from, -clamp((playerLevel(p)-starRefLevel())*0.008, 0, 0.09)*(wantedOut?0.5:1), `${p.name} 이적`); }catch(e){}
+  }
+  addNews(`✍️ <b>오피셜</b> — ${p.name}, ${from?from.short:(d.os?(p.osClub||"해외"):"FA")} → <b>${to.short}</b>${(d.fee||0)>0?` (이적료 ${d.fee}억)`:""}`,
+    mine?"good":null, "club",
+    {cat:"transfer", ic:"✍️", tid:to.id, head:`${to.name}, ${p.name} 영입 완료`,
+     sub:`${G.season-p.by}세 ${POS_KO[p.pos]||p.pos} · ${(d.fee||0)>0?`이적료 ${d.fee}억`:"이적료 없음"} · 계약 ${p.ct}년`});
+  return true;
+}
+/* ── 📰 언론 흘리기 — 남의 딜을 흔든다 ─────────────────────────────
+   흘릴수록 선수의 마음이 흔들리고, 파는 구단은 값을 올리며, 마무리가 어긋날 확률이 올라간다.
+   대신 흘린 쪽에도 꼬리가 남는다. */
+function tfLeakP(d){ return clamp(0.10 + (d.leak||0)*0.16, 0, 0.62); }
+function tfLeak(id){
+  const d=tfDeals().find(x=>x.id===id); if(!d) return;
+  if(d.fromId===G.userTeamId){ flash("우리가 파는 딜입니다 — 흘릴 이유가 없습니다.","warn"); return; }
+  if(d.toId===G.userTeamId){ flash("우리 딜입니다.","warn"); return; }
+  if(d.leakBy===G.userTeamId && (d.leak||0)>=3){ flash("📰 더 흘릴 게 없습니다.","warn"); return; }
+  const risk=Math.round(tfLeakP(d)*100);
+  showConfirm(`<b>📰 ${d.name} 이적설을 기자에게 흘립니다</b>\n\n`+
+    `${(G.teams[d.fromId]||{}).short||"원소속"} → <b>${(G.teams[d.toId]||{}).short||""}</b> 딜이 시끄러워집니다.\n`+
+    `· 선수는 마음이 흔들리고, 파는 구단은 값을 올립니다\n`+
+    `· 마무리가 어긋날 확률이 올라갑니다\n\n`+
+    `<span style="color:#ff9d5c">꼬리가 잡힐 확률 <b>${risk}%</b></span> — 들키면 팬 지지도와 언론 관계가 상합니다.`,
+    ()=>{
+      d.leak=(d.leak||0)+1; d.leakBy=G.userTeamId;
+      const to=G.teams[d.toId], from=G.teams[d.fromId];
+      addNews(`📰 <b>단독</b> — ${from?from.short:""}의 ${d.name}, ${to?to.short:""}행 임박… 이적료 ${d.fee}억 규모`, null, "club");
+      try{ pushFeed({cat:"rumor", ic:"📰", tone:0, tid:d.toId, src:pick(MEDIA),
+        head:`${d.name} ${to?to.short:""}행 임박… 협상 막바지`,
+        sub:`이적료 ${d.fee}억 선. 양 구단은 함구했지만 세부 조건까지 흘러나왔다.`}); }catch(e){}
+      if(Math.random()<tfLeakP(d)){
+        d.caught=true;
+        adjustTrust("fans", -6, "이적설 흘리기 발각");
+        try{ G.press.rel=clamp((G.press.rel||50)-8, 0, 100); }catch(e){}   // 📰 언론 관계
+        addNews(`🕵️ <b>${userTeam().short} 구단이 ${d.name} 이적설의 진원지였다</b> — 취재 결과 정보가 흘러나온 경로가 드러났습니다.`, "warn", "club");
+        notify(`🕵️ <b>꼬리가 잡혔습니다</b> — ${d.name} 이적설의 진원지가 우리로 드러났습니다. (팬 지지 −6 · 언론 관계 −8)`,"warn");
+      } else {
+        notify(`📰 <b>흘렸습니다</b> — ${d.name} 이적설이 기사로 나갔습니다. 딜이 흔들립니다.`,"good");
+      }
+      saveGame(); show("transfer");
+    }, {okLabel:"흘린다", cancelLabel:"그만둔다"});
+}
+/* ── 🥷 하이재킹 ────────────────────────────────────────────────
+   더 얹어서 끼어든다. 돈만으로는 안 된다 — 선수 마음이 우리 쪽으로 와야 한다. */
+function tfHijackMinFee(d){ return Math.round((d.fee||0)*1.15*10)/10 + 0.1; }
+function tfHijack(id){
+  const d=tfDeals().find(x=>x.id===id); if(!d) return;
+  const ut=userTeam(); const p=tfPlayerOf(d);
+  if(!p) return flash("그 선수를 찾을 수 없습니다.","warn");
+  if(!transferOpen()) return flash("이적시장이 닫혀 있습니다.","warn");
+  if(d.toId===ut.id) return flash("우리 딜입니다.","warn");
+  if(d.fromId===ut.id) return flash("우리가 파는 선수입니다 — 딜을 깨려면 원래 제의를 취소하세요.","warn");
+  if(armyGate("선수 영입")) return;
+  const need=tfHijackMinFee(d), wage=Math.round(Math.max(p.wage||1, (d.wage||0)*1.08)*10)/10;
+  const ag=Math.round(need*0.06*10)/10;
+  const to=G.teams[d.toId], from=d.fromId?G.teams[d.fromId]:null;
+  if(ut.budget < need+ag) return gameAlert(`가로채려면 이적료 ${need}억 + 에이전트비 ${ag}억이 필요합니다. (보유 ${ut.budget}억)`);
+  if(totalWage(ut)+wage > (ut.wageCap||1e9)) return gameAlert(`연봉 총액 상한을 넘습니다. (여유 ${wageRoom(ut)}억 / 필요 ${wage}억)`);
+  const mind=playerMoveMind(p, from, ut);
+  const pull=clamp(mind.v + ((need-(d.fee||0))/Math.max(1,(d.fee||1)))*0.25 + (d.leak||0)*0.05 - 0.10, 0.05, 0.92);
+  showConfirm(`<b>🥷 ${p.name} 가로채기</b>\n\n`+
+    `${from?from.short:"원소속"} → ${to?to.short:""} 딜에 끼어듭니다.\n`+
+    `· 이적료 <b>${need}억</b> (기존 ${d.fee}억) · 연봉 <b>${wage}억</b> · 에이전트비 ${ag}억\n`+
+    `· 선수가 우리를 고를 확률 <b>${Math.round(pull*100)}%</b>\n\n`+
+    `<span class="small">실패하면 이적료는 돌려받지만, 그 선수는 예정대로 ${to?to.short:"상대"}로 갑니다.</span>`,
+    ()=>{
+      if(Math.random()<pull){
+        tfCollapse(d, `${ut.short}의 역제안`, true);
+        ut.budget=Math.round((ut.budget-need-ag)*10)/10;
+        const nd=tfDealAdd({pid:p.id, name:p.name, fromId:d.fromId, toId:ut.id, fee:need, wage, ct:clamp(d.ct||3,1,5),
+                            agFee:ag, os:d.os, hijacked:1});
+        if(!nd){ ut.budget=Math.round((ut.budget+need+ag)*10)/10; return gameAlert("이적시장이 닫혀 성사되지 않았습니다."); }
+        notify(`🥷 <b>가로챘습니다!</b> ${p.name} — ${to?to.short:"상대"}를 제치고 우리와 가계약. <b>${tfDaysLeft(nd)}일</b> 뒤 합류합니다.`,"good");
+        addNews(`🥷 <b>반전</b> — ${to?to.short:""}행이 유력하던 ${p.name}, <b>${ut.short}</b>와 전격 합의 (이적료 ${need}억)`, "good", "club");
+        try{ socialFill(SOC.rivalRenew, 2+R(2), 1, {p:p.name, t:ut.short, o:to?to.short:""}); }catch(e){}
+      } else {
+        addNews(`🥷 ${ut.short}이(가) ${p.name} 영입에 끼어들었지만 선수가 ${to?to.short:"상대"}를 택했습니다.`, "warn", "club");
+        notify(`❌ <b>가로채기 실패</b> — ${p.name}: "${(mind&&mind.no)||'죄송합니다.'}"`,"warn");
+        d.heat=(d.heat||0)+1;
+      }
+      saveGame(); show("transfer");
+    }, {okLabel:"가로챈다", cancelLabel:"그만둔다"});
+}
+/* ── AI 가 우리 딜에 끼어든다 ─────────────────────────────────── */
+function tfAiHijackTry(d){
+  const p=tfPlayerOf(d); if(!p) return false;
+  const ut=userTeam();
+  /* ⚠ 검증에서 걸림 — 후보를 「스쿼드 32명 미만 + 우리보다 전력 4 이내」로 잡았더니
+     리그 29팀 중 2팀만 남았고, 그 둘도 제시액을 감당 못 해 난입이 한 번도 일어나지 않았다.
+     ─ 스쿼드 조건을 빼고(자리 없어도 좋은 선수는 잡는다), 전력 문턱을 넓히고,
+       제시액을 «그 구단이 낼 수 있는 만큼»으로 깎아 맞춘다. */
+  const cands=Object.values(G.teams).filter(t=>!t.isUser && t.id!==d.fromId && t.id!==d.toId
+     && !isArmyTeam(t) && !(typeof ceAusterity==="function" && ceAusterity(t.id))
+     && teamOVR(t)>=teamOVR(ut)-7
+     && t.budget>=(d.fee||0)*1.12+0.5);
+  if(!cands.length) return false;
+  const c=pick(cands);
+  const cap=Math.min(c.budget-0.5, (d.fee||0)*1.45);
+  const bid=Math.round(Math.max((d.fee||0)*1.12+0.1, Math.min(cap, (d.fee||0)*(1.12+Math.random()*0.30)))*10)/10;
+  if(bid<=(d.fee||0)) return false;
+  d.rival={tid:c.id, fee:bid, day:(G.day||0)};
+  return true;
+}
+/* 우리가 사는 딜에 경쟁자가 붙는가 — 값나가는 선수일수록, 흘린 이야기가 많을수록 */
+function tfHijackP(d){
+  const p=tfPlayerOf(d); if(!p) return 0;
+  let q=0.020;
+  if(p.ovr>=74) q+=0.030; else if(p.ovr>=70) q+=0.016;
+  if((G.season-p.by)<=23) q+=0.012;
+  q += (d.leak||0)*0.030;
+  if(d.hijacked) q+=0.015;
+  try{ q += tfPressure()*0.05; }catch(e){}      // 🔥 마감이 가까울수록 몰린다
+  return clamp(q, 0, 0.20);
+}
+/* ── 하루치 처리 ───────────────────────────────────────────────── */
+function tfDealTick(){
+  const L=tfDeals(); if(!L.length) return;
+  const open=(function(){ try{ return transferOpen(); }catch(e){ return false; } })();
+  for(const d of L.slice()){
+    if(!open){
+      /* 📅 이월 계약 — 다음 창 첫날까지 묶여 있다. 그동안 선수는 원소속에 그대로 있다. */
+      if(d.carry && (d.carry.s>G.season || (G.day||0)<d.carry.day)) continue;
+      tfCollapse(d, "이적시장 마감"); continue;
+    }
+    const p=tfPlayerOf(d);
+    if(!p){ tfCollapse(d, "선수를 찾을 수 없습니다", true); continue; }
+    tfLockSet(d);
+    /* 🥷 경쟁자가 붙는가 — 우리가 사는 딜에만 멈춰 세워 묻는다 */
+    if(!d.rival && d.toId===G.userTeamId && tfDaysLeft(d)>0 && Math.random()<tfHijackP(d)){
+      if(tfAiHijackTry(d)){
+        const c=G.teams[d.rival.tid];
+        addNews(`🥷 <b>${c.short}</b>, ${p.name} 영입전에 뒤늦게 뛰어들었습니다 — ${d.rival.fee}억 제시`, "warn", "club");
+        G.tfRivalPing=d.id;
+        continue;
+      }
+    }
+    /* AI ↔ AI 딜에도 가끔 다른 구단이 끼어든다 (리그가 살아 있게) */
+    if(!tfIsMine(d) && tfDaysLeft(d)>0 && Math.random()<0.02+(d.leak||0)*0.05){
+      const to=G.teams[d.toId];
+      const rivals=Object.values(G.teams).filter(t=>!t.isUser && t.id!==d.fromId && t.id!==d.toId
+        && !isArmyTeam(t) && t.budget>=(d.fee||0)*1.2+0.5);
+      if(rivals.length && Math.random()<0.55){
+        const c=pick(rivals), nf=Math.round((d.fee||0)*(1.15+Math.random()*0.25)*10)/10;
+        tfCollapse(d, `${c.short}의 역제안`, true);
+        c.budget=Math.round((c.budget-nf)*10)/10;
+        const _nd=tfDealAdd({pid:p.id, name:p.name, fromId:d.fromId, toId:c.id, fee:nf,
+                   wage:Math.round((d.wage||p.wage||1)*1.05*10)/10, ct:d.ct||aiCtYears(p), os:d.os, hijacked:1});
+        if(!_nd){ c.budget=Math.round((c.budget+nf)*10)/10; continue; }   // 창이 닫혔다 — 돈을 돌려준다
+        addNews(`🥷 <b>${c.short}</b>, ${to?to.short:""}가 잡아 놓은 ${p.name}을(를) 가로챘습니다 (이적료 ${nf}억)`, null, "club");
+        continue;
+      }
+    }
+    if(tfDaysLeft(d)>0) continue;
+    /* 🥷 끝까지 붙어 있던 경쟁자 — 선수가 마지막에 고른다 */
+    if(d.rival){
+      const c=G.teams[d.rival.tid], pl=tfPlayerOf(d);
+      const gap=((d.rival.fee||0)-(d.fee||0))/Math.max(1,(d.fee||1));
+      const lose=clamp(0.34 + gap*0.55 + (d.leak||0)*0.05, 0.08, 0.92);
+      if(c && Math.random()<lose && (c.budget||0)>=d.rival.fee){
+        tfCollapse(d, `${c.short}의 역제안`, true);
+        c.budget=Math.round((c.budget-d.rival.fee)*10)/10;
+        const _nd=tfDealAdd({pid:d.pid, name:d.name, fromId:d.fromId, toId:c.id, fee:d.rival.fee,
+                   wage:Math.round(((d.wage||(pl&&pl.wage)||1)*1.06)*10)/10, ct:d.ct||3, os:d.os, hijacked:1});
+        if(!_nd) c.budget=Math.round((c.budget+d.rival.fee)*10)/10;
+        notify(`🥷 <b>빼앗겼습니다</b> — ${d.name}이(가) ${c.short}를 택했습니다 (${d.rival.fee}억). 이적료는 환불됐습니다.`,"warn");
+        addNews(`🥷 <b>${c.short}</b>, 막판에 ${d.name}을(를) 가로챘습니다 — ${userTeam().short}는 빈손`, "warn", "club");
+        continue;
+      }
+      d.rival=null;
+      if(tfIsMine(d)) notify(`🛡️ <b>${d.name}</b> 지켜냈습니다 — 선수가 우리를 택했습니다.`,"good");
+    }
+    /* ⏳ 마무리 — 마감에 몰릴수록, 이야기가 새어 나갔을수록 어긋난다 */
+    const wi2=windowInfo();
+    const tight=wi2.open && (d.due||0)>=(wi2.end||0) && ((d.due||0)-(d.day||0))<=2;
+    if(Math.random()<tfPaperFail(d)){
+      tfCollapse(d, tight ? "등록 마감 시간 초과 — 서류가 접수되지 않았습니다" : "막판 조건 이견");
+      continue;
+    }
+    tfComplete(d);
+  }
+}
+/* 🛡️ 경쟁자가 붙었을 때 — 금액을 맞춘다 / 물러선다 / 두고 본다 */
+function tfRivalPrompt(id){
+  const d=tfDeals().find(x=>x.id===id); if(!d || !d.rival) return show("transfer");
+  const c=G.teams[d.rival.tid], ut=userTeam();
+  const need=Math.round(((d.rival.fee||0)-(d.fee||0)+0.1)*10)/10;
+  showConfirm(`<b>🥷 ${c?c.short:"경쟁 구단"}이(가) ${d.name} 영입전에 끼어들었습니다</b>\n\n`+
+    `우리 제시 <b>${d.fee}억</b> · ${c?c.short:"상대"} 제시 <b>${d.rival.fee}억</b>\n`+
+    `완료까지 <b>${tfDaysLeft(d)}일</b> — 그날 선수가 고릅니다.\n\n`+
+    `<b>${need}억</b>을 더 얹으면 상대를 물러서게 할 수 있습니다. (보유 ${ut.budget}억)\n`+
+    `<span class="small">얹지 않으면 그대로 두고 봅니다 — 선수 마음에 맡기는 겁니다.</span>`,
+    ()=>tfRivalMatch(id), {okLabel:`${need}억 더 얹는다`, cancelLabel:"두고 본다"});
+}
+function tfRivalMatch(id){
+  const d=tfDeals().find(x=>x.id===id); if(!d || !d.rival) return;
+  const ut=userTeam(), c=G.teams[d.rival.tid];
+  const need=Math.round(((d.rival.fee||0)-(d.fee||0)+0.1)*10)/10;
+  if(ut.budget<need){ gameAlert(`이적료를 맞추려면 ${need}억이 더 필요합니다. (보유 ${ut.budget}억)`); return; }
+  ut.budget=Math.round((ut.budget-need)*10)/10;
+  d.fee=Math.round((d.fee+need)*10)/10; d.rival=null; d.matched=1;
+  notify(`🛡️ <b>${d.name}</b> — 이적료를 <b>${d.fee}억</b>으로 올려 ${c?c.short:"경쟁 구단"}을 물러서게 했습니다.`,"good");
+  addNews(`💸 ${ut.short}, ${d.name} 영입에 ${d.fee}억까지 베팅 — ${c?c.short:"경쟁 구단"} 철수`, "good", "club");
+  saveGame(); show("transfer");
+}
+/* 우리 딜을 접는다 — 서류가 오간 뒤라 위약금이 붙는다 */
+function tfCancelMine(id){
+  const d=tfDeals().find(x=>x.id===id); if(!d) return;
+  if(!tfIsMine(d)) return;
+  const ut=userTeam();
+  if(d.toId===ut.id){
+    const back=Math.round(((d.fee||0)+(d.agFee||0))*0.8*10)/10;
+    showConfirm(`<b>${d.name}</b> 영입을 접습니다.\n\n`+
+      `이미 오간 서류가 있어 <b>20%</b>는 돌아오지 않습니다 — <b>${back}억</b>만 환불됩니다.`,
+      ()=>{ const i=tfDeals().indexOf(d); if(i>=0) G.tfDeals.splice(i,1);
+            const pl=tfPlayerOf(d); if(pl && pl.tfLock===d.id) delete pl.tfLock;
+            ut.budget=Math.round((ut.budget+back)*10)/10;
+            addNews(`🚪 ${ut.short}, ${d.name} 영입에서 철수했습니다.`, "warn", "club");
+            notify(`🚪 ${d.name} 영입을 접었습니다 (환불 ${back}억).`,"warn");
+            saveGame(); show("transfer"); }, {okLabel:"접는다", cancelLabel:"계속 간다"});
+  } else {
+    showConfirm(`<b>${d.name}</b> 판매를 취소합니다.\n\n`+
+      `${(G.teams[d.toId]||{}).short||"상대"}와의 신뢰가 깎이고, 선수는 마음이 상합니다.`,
+      ()=>{ d.byUser=1; tfCollapse(d, `${ut.short}의 일방적 철회`);
+            const pl=tfPlayerOf(d); if(pl){ try{ affAdd(pl, -12, "이적 무산"); }catch(e){} pl.unhappy=Math.min(3,(pl.unhappy||0)+1); }
+            adjustTrust("owner", -4, `${d.name} 이적 철회`);
+            saveGame(); show("transfer"); }, {okLabel:"취소한다", cancelLabel:"그대로 둔다"});
+  }
+}
+/* 진행 중인 딜 목록 — 화면에서 쓴다 */
+function tfDealList(){
+  return tfDeals().slice().sort((a,b)=>(a.due-b.due)||((a.fee||0)-(b.fee||0)));
+}
+
 function listForSale(pid, quiet){
   if(armyGate("선수 판매")) return;
   const ut=userTeam(); const p=ut.players.find(x=>x.id===pid); if(!p) return;
   if(p.emg){ flash("🚨 긴급 등록 선수는 임시 소집 신분입니다 — 이적·판매할 수 없습니다.","warn"); return; }
   if(p.loan){ flash("🔁 임대 선수는 우리 소유가 아닙니다 — 판매할 수 없습니다.","warn"); return; }
   if(p.armyCall){ flash(`🎖️ ${p.name} 선수는 입영 통지를 받았습니다 — 입소(D-${armyCallLeft(p)})까지는 이적명단에 올릴 수 없습니다.`,"warn"); return; }
+  if(p.tfLock){ flash(`🕐 ${p.name} 선수는 이미 이적이 진행 중입니다.`,"warn"); return; }
   if(p.army){ flash(`🎖️ ${p.name} 선수는 복무 중입니다 — 우리 소유가 아니라 이적명단에 올릴 수 없습니다.`,"warn"); return; }
   if(G.transferBids.some(b=>b.pid===pid)) return;
   G.transferBids.push({pid});
@@ -23583,31 +24060,36 @@ function aiToAiTransferCheck(){
     const seller=pick(sellers);
     const avg=teamOVR(seller);
     // 판매 후보: 대체로 주전급 아래 선수 위주 (에이스 급 판매는 드묾)
-    const cands=seller.players.filter(p=>p.ovr<avg+5 && (G.season-p.by)<35);
+    const cands=seller.players.filter(p=>p.ovr<avg+5 && (G.season-p.by)<35 && !p.tfLock && !p.army && !p.armyCall && !p.loan && !p.emg);
     if(!cands.length) continue;
     const p=pick(cands);
     const mv=marketValue(p);
     /* 🏢 요청 — 긴축재정에 들어간 구단은 이적시장에서 조용해진다. 그 틈이 유저에게 기회가 된다 */
-    const buyers=clubs.filter(t2=>t2.id!==seller.id && t2.players.length<32 && !ceAusterity(t2.id));
+    /* ⚠ 실측에서 걸림 — 「스쿼드 32명 미만」을 사는 쪽 조건으로 두었는데, 리그 29팀 중
+       27팀이 32명 이상이다. 겨울 창 87일을 돌려 보니 AI끼리의 이적이 «120일에 1건»이었다.
+       실제 K리그 등록 인원이 30~40명대라 이 문턱이 사실상 시장을 닫아 놓고 있었다.
+       ─ 정말 자리가 없는 수준(38명)으로 올린다. 파는 쪽이 한 명 줄고 사는 쪽이 한 명 느니
+         리그 전체 인원은 그대로다. */
+    const buyers=clubs.filter(t2=>t2.id!==seller.id && t2.players.length<38 && !ceAusterity(t2.id));
     if(!buyers.length) continue;
     const buyer=pick(buyers);
     const dealType=Math.random();
     if(dealType<0.5 || buyer.players.length<16){
-      // 현금 이적
+      /* 💵 현금 이적 — 🕐 남의 구단 딜도 «며칠 걸린다». 그 며칠이 유저가 가로챌 수 있는 시간이다 (요청) */
       const fee=Math.round(mv*(0.75+Math.random()*0.5)*10)/10;
       if(buyer.budget<fee) continue;
-      seller.players.splice(seller.players.indexOf(p),1);
-      buyer.players.push(p); joinClub(buyer, p);
-      seller.budget=Math.round((seller.budget+fee)*10)/10;
       buyer.budget=Math.round((buyer.budget-fee)*10)/10;
-      clearClubBaggage(p, 75); p.ct=aiCtYears(p);
-      addNews(`🔄 <b>${buyer.short}</b>, <b>${seller.short}</b>의 ${p.name}(${p.pos}) 영입! (이적료 ${fee}억)`, null, "club",
-        {cat:"transfer", ic:"💸", tid:buyer.id,
-         head:`${buyer.name}, ${seller.short} ${p.name} 영입 완료`,
-         sub:`이적료 ${fee}억 · ${G.season-p.by}세 ${POS_KO[p.pos]||p.pos} · 계약 ${p.ct}년`});
+      const _d=tfDealAdd({pid:p.id, name:p.name, fromId:seller.id, toId:buyer.id, fee,
+                          wage:Math.round(wageExpect(p.ovr,p.frn,buyer.div)*10)/10, ct:aiCtYears(p)});
+      if(!_d){ buyer.budget=Math.round((buyer.budget+fee)*10)/10; continue; }
+      addNews(`🤝 <b>${buyer.short}</b>, <b>${seller.short}</b>의 ${p.name}(${p.pos})과 합의 — ${dateLabel(_d.due)} 완료 예정 (이적료 ${fee}억)`, null, "club",
+        {cat:"transfer", ic:"🤝", tid:buyer.id,
+         head:`${buyer.name}, ${seller.short} ${p.name} 영입 합의`,
+         sub:`이적료 ${fee}억 · ${G.season-p.by}세 ${POS_KO[p.pos]||p.pos} · 메디컬만 남았다`});
     } else {
       // 선수-선수 스왑(가치 차액은 현금으로 정산 — 순수 스왑이 될 수도 있다)
       const swapCand=buyer.players.filter(q=>{
+        if(q.tfLock||q.army||q.armyCall||q.loan||q.emg) return false;
         const qmv=marketValue(q); return qmv>=mv*0.25 && qmv<=mv*1.5 && (G.season-q.by)<35;
       });
       if(!swapCand.length) continue;
@@ -23661,7 +24143,11 @@ function toggleNoSwap(){
   saveGame(); show("offers");
 }
 function buildDeal(buyer, targetMV, feeRange){
-  let swapPid=null, fee=Math.round(targetMV*(feeRange[0]+Math.random()*(feeRange[1]-feeRange[0]))*10)/10;
+  /* 🔥 마감이 가까우면 사는 쪽이 급해진다 — 막판 패닉 바이 (최대 +18%).
+     단 우리가 이미 이적명단에 올려 둔 선수라면 상대도 그걸 안다 — 오히려 깎는다. */
+  let _pk=1;
+  try{ const P=tfPressure(); if(P>0) _pk = 1 + P*0.18; }catch(e){}
+  let swapPid=null, fee=Math.round(targetMV*(feeRange[0]+Math.random()*(feeRange[1]-feeRange[0]))*_pk*10)/10;
   /* ⚠ 여기서 스왑 자체를 막으면 「선수+적은 현금」이 「전액 현금」으로 바뀌어 오히려 유리해진다.
      제안은 그대로 오게 두고, 아래 호출부에서 프런트가 반려한다 — 그래야 「거절」이 거절답다. */
   if(Math.random()<0.32){
@@ -23718,7 +24204,7 @@ function genOffers(){
     }
   }
   if(Math.random()<0.14){ // 핵심 선수 노리는 기습 오퍼
-    const stars=ut.players.filter(p=>p.ovr>=75&&!p.army&&!p.armyCall&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
+    const stars=ut.players.filter(p=>p.ovr>=75&&!p.army&&!p.armyCall&&!p.tfLock&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
     if(stars.length){
       const p=pick(stars);
       const rich=Object.values(G.teams).filter(t2=>!t2.isUser && !isArmyTeam(t2) && t2.budget>marketValue(p)*0.5);
@@ -23758,7 +24244,7 @@ function genOffers(){
       let fa=null, bs=-1e9;
       const sample=Math.min(G.freeAgents.length, 24);   // ⚠ 14 → 24 (좋은 자원이 묻히지 않게)
       for(let i=0;i<sample;i++){
-        const c=pick(G.freeAgents); if(!c || c.army) continue;
+        const c=pick(G.freeAgents); if(!c || c.army || c.tfLock) continue;   // 🕐 우리와 가계약된 FA 는 건드리지 않는다
         const _cAge=G.season-(c.by||2000);
         /* 🌱 잠재력도 값이다 — 어리고 재능 있는 FA 는 지금 능력이 낮아도 서로 데려가려 한다 */
         const _potB=Math.max(0, (dispPot(c)-140))*(_cAge<=24?0.10:_cAge<=27?0.05:0);
@@ -23794,13 +24280,15 @@ function genOffers(){
     }
   }
   if(Math.random()<0.18){ // 준주전급에도 협상 요청이 온다
-    const mids=ut.players.filter(p=>p.ovr>=68&&p.ovr<75&&!p.army&&!p.armyCall&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
+    const mids=ut.players.filter(p=>p.ovr>=68&&p.ovr<75&&!p.army&&!p.armyCall&&!p.tfLock&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
     if(mids.length){
       const p=pick(mids);
       const _b2=Object.values(G.teams).filter(t2=>!t2.isUser && !isArmyTeam(t2) && !ceAusterity(t2.id));
       if(!_b2.length) return;                                          // 🏢 긴축재정 — 살 만한 구단이 없다
       const buyer=pick(_b2);
-      const {fee,swapPid}=buildDeal(buyer, marketValue(p), [0.85,1.25]);
+      let {fee,swapPid}=buildDeal(buyer, marketValue(p), [0.85,1.25]);
+      /* 내놓은 선수라는 걸 상대도 안다 — 마감이 가까울수록 깎아 부른다 */
+      try{ const P=tfPressure(); if(P>0) fee=Math.round(fee*(1-P*0.22)*10)/10; }catch(e){}
       if(swapPid && swapBlocked()) G.swapNo=(G.swapNo||0)+1;    // 프런트 선에서 반려
       else {
         if(!p.emg) G.offers.push({pid:p.id,tid:buyer.id,fee,exp:3,swapPid});
@@ -23885,6 +24373,33 @@ function completeSale(pid, tid, fee, swapPid){
     }
   }
   delete p._persuaded;
+  /* 🕐 합의는 끝났지만 사람이 바로 옮겨 가지는 않는다 — 서류·메디컬에 며칠이 걸리고,
+     그 사이 다른 구단이 끼어들 수 있다 (요청). 마감을 넘기면 딜은 무산된다. */
+  if(!transferOpen()){ notify("이적시장이 닫혀 있어 이적을 확정할 수 없습니다.","warn"); return false; }
+  if(p.tfLock){ notify(`🕐 <b>${p.name}</b> 선수는 이미 다른 이적이 진행 중입니다.`,"warn"); return false; }
+  {
+    /* 💰 ⚠ 배선 점검에서 걸림 — 유저가 파는 딜만 사는 쪽 예산을 «한 푼도» 빼지 않았다.
+       완료 때 우리에게 이적료가 들어오고(돈이 생기고), 딜이 깨지면 tfCollapse 가
+       사는 쪽에 «내지도 않은 돈»을 환불했다 — 무산시킬수록 AI 구단이 부자가 된다.
+       사는 쪽 예산은 합의 시점에 잠근다. 모든 경로가 같은 규칙을 쓴다. */
+    if((buyer.budget||0) < (fee||0)){
+      notify(`💰 ${buyer.short}의 이적 예산이 모자랍니다 (보유 ${buyer.budget}억 / 필요 ${fee||0}억).`,"warn");
+      G.offers=(G.offers||[]).filter(x=>x.pid!==pid);
+      return false;
+    }
+    const _d=tfDealAdd({pid:p.id, name:p.name, fromId:ut.id, toId:buyer.id, fee:fee||0,
+                        wage:null, ct:null, swapPid:swapPid||null, wantedOut:p.unhappy>0});
+    if(!_d){ notify("이적시장이 닫혀 있어 이적을 확정할 수 없습니다.","warn"); return false; }
+    buyer.budget=Math.round((buyer.budget-(fee||0))*10)/10;
+    G.offers=(G.offers||[]).filter(x=>x.pid!==pid);
+    G.transferBids=(G.transferBids||[]).filter(b=>b.pid!==pid);
+    if(G.snego&&G.snego.pid===pid) G.snego=null;
+    notify(`🤝 <b>이적 합의!</b> ${p.name} → ${buyer.short} (이적료 ${fee||0}억)<br>`
+      +`<span class="small">서류 절차에 <b>${tfDaysLeft(_d)}일</b>이 걸립니다 — 그때까지는 우리 선수이고, 다른 구단이 끼어들 수도 있습니다.</span>`,"good");
+    addNews(`🤝 ${ut.short}과 ${buyer.short}, ${p.name} 이적에 합의 — ${dateLabel(_d.due)} 완료 예정 (이적료 ${fee||0}억)`, "good", "club");
+    saveGame(); return true;
+  }
+  /* eslint-disable no-unreachable */
   const wantedOut=p.unhappy>0, wasStar=p.ovr>=75;
   const mv=marketValue(p);
   socialOnSale(p);
@@ -23997,6 +24512,11 @@ function startSellNego(pid, tid){
   const o=findOffer(pid, tid); if(!o) return offerGone();
   if(armyGate("선수 판매")){ G.offers=(G.offers||[]).filter(x=>x.pid!==o.pid); return; }
   if(armySoldGuard(o.pid)) return;
+  {
+    const _p=(userTeam().players||[]).find(x=>x.id===o.pid);
+    if(_p && _p.tfLock){ notify(`🕐 <b>${_p.name}</b> 선수는 이미 이적이 진행 중입니다.`,"warn");
+      G.offers=(G.offers||[]).filter(x=>x!==o); show(negoStay()); return; }
+  }
   if(G.snego){ notify("🤝 이미 진행 중인 판매 협상이 있습니다. 그 협상을 먼저 끝내세요.","warn"); show(negoStay()); return; }
   const buyer=G.teams[o.tid]; const p=userTeam().players.find(x=>x.id===o.pid);
   if(!p || !buyer){ G.offers=(G.offers||[]).filter(x=>x!==o); return offerGone(); }
@@ -24142,6 +24662,15 @@ function startNego(pid, fromId){
   if(left>0){ gameAlert(`협상이 결렬된 지 얼마 되지 않았습니다.\n\n${left}일 뒤에 다시 접촉할 수 있습니다.`); return; }
   if(G.nego){ gameAlert("이미 진행 중인 협상이 있습니다. 먼저 마무리하거나 중단하세요."); return; }
   const from=G.teams[fromId]; const p=from.players.find(x=>x.id===pid); if(!p) return;
+  /* 🕐 이미 다른 구단과 가계약이 잡혀 있다 — 협상 테이블이 아니라 «가로채기»로 가야 한다 */
+  if(p.tfLock){
+    const _d=tfDealOfPid(p.id), _to=_d&&G.teams[_d.toId];
+    showConfirm(`<b>🕐 ${p.name} — 이미 이적이 진행 중입니다</b>\n\n`+
+      `<b>${_to?_to.name:"다른 구단"}</b>과 합의가 끝나 서류 절차만 남았습니다 (완료까지 ${_d?tfDaysLeft(_d):0}일).\n\n`+
+      `정상적인 협상으로는 데려올 수 없습니다 — <b>💸 이적시장 → 🕐 진행 중인 이적</b> 탭에서 <b>가로채기</b>를 시도하세요.`,
+      ()=>{ try{ tfTab="deal"; }catch(e){} show("transfer"); }, {okLabel:"🕐 진행 중인 이적 보기", cancelLabel:"닫기"});
+    return;
+  }
   if(p.army && p.army.out){
     const own=p.army.own&&G.teams[p.army.own];
     showConfirm(`<b>🎖️ ${p.name} — 군 복무 중</b>\n\n현역 군인 신분이라 어떤 구단도 영입할 수 없습니다.\n\n· 전역일: <b>${p.army.out}</b> (D-${Math.max(0,armyDaysLeft(p))})\n· 전역 후 복귀: <b>${own?own.name:"무소속 — 자유계약(FA)"}</b>`,
@@ -24162,8 +24691,13 @@ function startNego(pid, fromId){
   const at=AGENT_T[p.id%3];
   /* 이적이 너무 쉽다는 피드백 — 요구액과 하한선을 함께 올린다.
      특히 "그 팀에서 중요한 선수"일수록 웃돈이 크게 붙는다(K리그도 핵심 자원은 값을 세게 부른다). */
-  const feeAsk=Math.round(mv*(key?1.85:1.35)*at.feeK*10)/10;
-  const feeMin=Math.round(mv*(key?1.45:1.05)*10)/10;
+  /* ⚖️ 마감이 가까울수록 «내놓은 선수»는 값이 내려간다 — 안 팔면 0원이니까.
+     💔 지난번에 우리 때문에 딜이 깨진 구단은 그만큼 세게 부른다. */
+  const _desp=(typeof tfSellerDesperation==="function") ? tfSellerDesperation(p, from) : 0;
+  const _sour=(typeof tfSourOf==="function") ? tfSourOf(from.id)*0.06 : 0;
+  const _k=(1-_desp)*(1+_sour);
+  const feeAsk=Math.round(mv*(key?1.85:1.35)*at.feeK*_k*10)/10;
+  const feeMin=Math.round(mv*(key?1.45:1.05)*_k*10)/10;
   const wBase=wageExpect(p.ovr,p.frn,(teamOfPlayer(p)||{}).div);
   const bigger=teamOVR(userTeam())>=teamOVR(from);
   const wageAsk=Math.round(Math.max(p.wage*1.35, wBase*(bigger?1.22:1.5))*at.wageK*10)/10;
@@ -24172,7 +24706,9 @@ function startNego(pid, fromId){
   G.nego={pid, fromId, stage:"fee", tries:0, feeAsk, feeMin, wageAsk, wageMin,
     offerSwapPid:null, agreedSwapPid:null, // 현금 대신(혹은 현금과 함께) 내 선수를 끼워 넣는 "선수 포함 제안" — fee 단계에서만 선택 가능
     agent:{name:pick(AGENT_NAMES), ...at},
-    log:[{w:"sys", t:`${from.short}와 ${p.name} 협상 개시. 구단 요구 이적료: ${feeAsk}억 (시장가치 ${mv}억) · 에이전트: ${at.n}`}]};
+    log:[{w:"sys", t:`${from.short}와 ${p.name} 협상 개시. 구단 요구 이적료: ${feeAsk}억 (시장가치 ${mv}억) · 에이전트: ${at.n}`}
+      ].concat(_desp>=0.05?[{w:"club", t:`${from.short}: "솔직히 말씀드리면 마감이 코앞입니다. 오늘 정리할 수 있으면 조건을 맞춰 보겠습니다." <span class="small">(마감 압박 — 요구액 ${Math.round(_desp*100)}% 인하)</span>`}]:[]
+      ).concat(_sour>0?[{w:"club", t:`${from.short}: "지난번 일은 아직 기억하고 있습니다." <span class="small">(관계 악화 — 요구액 ${Math.round(_sour*100)}% 인상)</span>`}]:[])};
   show("nego");
 }
 /* ═══ 🔀 트레이드 자원으로 내줄 수 있는 선수인가 ══════════════════════
@@ -24285,6 +24821,8 @@ function playerMoveMind(p, from, to){
   const age=G.season-p.by;
   const F=[]; const add=(v,l)=>{ if(Math.abs(v)>=0.005) F.push({v,l}); };
   add(prestigePull(), "감독의 위신");   // 좋은 집에 사는 감독의 말은 다르게 들린다
+  /* 💔 예전에 우리 쪽 사정으로 이적이 무산됐던 선수 — 두 번 속지 않는다 */
+  try{ const sp=tfSpurnOf(p.id); if(sp) add(-Math.min(0.16, sp*0.08), "지난번 이적이 무산됐다"); }catch(e){}
   /* 🌏 아시아 챔피언 프리미엄 — 「대륙대회를 뛰는 팀」은 선수에게 완전히 다른 제안이다 */
   try{
     const pb=eaclPullBonus();
@@ -24299,10 +24837,23 @@ function playerMoveMind(p, from, to){
     // 팀 격 차이
     const gap=teamOVR(to)-teamOVR(from);
     add(clamp(gap*0.035, -0.22, 0.22), gap>=0?"더 좋은 팀으로 간다":"전력이 낮은 팀이다");
-    // 순위 — 우승 경쟁 중인 팀을 떠나기는 싫다
-    const tb=tableOf(from.div), pos=tb.findIndex(x=>x.id===from.id)+1;
-    if(pos>0 && pos<=3) add(-0.14, `지금 팀이 ${pos}위다`);
-    else if(pos>=tb.length-2) add(0.10, "지금 팀이 강등권이다");
+    /* 순위 — 우승 경쟁 중인 팀을 떠나기는 싫다.
+       ⚠ 제보 원문 — 「겨울 비시즌인데도 개인 협상에서 '현재 팀이 몇 위다' 하면서 관심도가 떨어진다」.
+         맞다. 겨울(1~2월)에는 순위표가 «갓 시작한 빈 표»이거나 지난 시즌 것이고,
+         거절 대사까지 「시즌 중에 나갈 수는 없습니다」로 나갔다 — 시즌 중이 아닌데.
+       ─ 리그가 실제로 굴러가는 중(5라운드 이상)에만 현재 순위를 본다.
+         겨울에는 «지난 시즌 성적»을 훨씬 약하게, 그에 맞는 말로 얹는다. */
+    const _rn=(from.div===1?G.r1:G.r2)||0;
+    const _live=(G.phase==="league"||G.phase==="po") && _rn>=5;
+    if(_live){
+      const tb=tableOf(from.div), pos=tb.findIndex(x=>x.id===from.id)+1;
+      if(pos>0 && pos<=3) add(-0.14, `지금 팀이 ${pos}위다`);
+      else if(pos>=tb.length-2) add(0.10, "지금 팀이 강등권이다");
+    } else if(from.lastPos>0 && from.lastDiv===from.div){
+      const lp=from.lastPos;
+      if(lp<=3) add(-0.06, `지난 시즌 ${lp}위 팀이다`);
+      else if(lp>=10) add(0.05, "지난 시즌 성적이 나빴다");
+    }
   }
   // 우리 팀에서 뛸 수 있는가 — 같은 자리 경쟁자가 빽빽하면 안 온다
   const rivals=to.players.filter(q=>q.pos===p.pos && q.ovr>=p.ovr-1).length;
@@ -24335,8 +24886,10 @@ function playerMoveMind(p, from, to){
   };
   const no = (worst && NO[worst.l]) || (worst && worst.l.indexOf("경쟁")>=0
       ? `"그 자리에 이미 좋은 선수가 많더군요. 벤치에 앉으러 가는 건 아닙니다."`
-      : worst && worst.l.indexOf("위다")>=0
+      : worst && worst.l.indexOf("지금 팀이")>=0
       ? `"지금 팀에서 우승을 노리고 있습니다. 시즌 중에 나갈 수는 없습니다."`
+      : worst && worst.l.indexOf("지난 시즌")>=0
+      ? `"지난 시즌 위에서 끝낸 팀입니다. 올해도 여기서 해보고 싶습니다."`
       : pick([`"제안은 감사하지만, 마음이 움직이지 않습니다."`,
               `"조금 더 생각해 봤는데... 이번엔 아닌 것 같습니다."`,
               `"에이전트에게는 미안하지만, 저는 여기 남겠습니다."`]));
@@ -24361,7 +24914,10 @@ function mindRefuseSay(mind, p, to, val, N){
     return pick([`"그 자리에 이미 좋은 선수가 셋입니다. 벤치에 앉으러 가진 않겠습니다."`,
       `"저를 어디에 쓰실 건지부터 말씀해 주셔야 하지 않습니까."`,
       `"아뇨, 저는 이 구단과 계약하는 것에 관심이 없습니다. 뛸 자리가 안 보입니다."`]);
-  if(l.indexOf("위다")>=0 || l.indexOf("우승")>=0)
+  if(l.indexOf("지난 시즌")>=0)
+    return pick([`"지난 시즌 위에서 끝낸 팀입니다. 올해도 여기서 해보고 싶습니다."`,
+      `"작년에 쌓아 놓은 걸 두고 지금 옮길 이유가 없습니다."`]);
+  if(l.indexOf("지금 팀이")>=0 || l.indexOf("우승")>=0)
     return pick([`"지금 팀에서 우승을 노리고 있습니다. 시즌 중에 나갈 수는 없습니다."`,
       `"트로피를 눈앞에 두고 짐을 싸라는 말씀입니까."`]);
   if(l.indexOf("외국인")>=0)
@@ -24416,70 +24972,32 @@ function negoClose(){
     notify(`❌ ${p.name} 영입 무산 — 연봉 총액 상한 초과 (여유 ${wageRoom(ut)}억 / 요구 ${N.agreedWage}억)`,"warn");
     blockNego(N.pid, `${p.name} 영입 무산`); G.nego=null; show("nego"); return;
   }
+  /* 🕐 합의 = 가계약. 사람은 며칠 뒤에 온다 (요청 — FM처럼).
+     돈은 지금 빠진다 — 같은 예산으로 두 명을 잡는 일이 없어야 하고,
+     딜이 깨지면(가로채기·마감·막판 이견) 그대로 돌려받는다. */
+  if(!transferOpen()){ notify("이적시장이 닫혀 있습니다.","warn"); blockNego(N.pid, `${p.name} 영입 무산`); G.nego=null; show("nego"); return; }
+  if(p.tfLock){ notify(`🕐 <b>${p.name}</b> 선수는 이미 다른 이적이 진행 중입니다.`,"warn"); blockNego(N.pid, `${p.name} 영입 무산`); G.nego=null; show("nego"); return; }
+  const _deal=tfDealAdd({pid:p.id, name:p.name, fromId:from?from.id:null, toId:ut.id,
+    fee:N.agreedFee||0, wage:N.agreedWage, ct:clamp(N.years||negoPrefYears(p),1,5),
+    agFee:N.agreedAg||0, swapPid:(from&&N.agreedSwapPid)||null, os:!!N.os,
+    eggNews:N.eggNews||"", osEgg:!!N.osEgg});
+  if(!_deal){ notify("이적시장이 닫혀 있습니다.","warn"); blockNego(N.pid, `${p.name} 영입 무산`); G.nego=null; show("nego"); return; }
   ut.budget=Math.round((ut.budget-total)*10)/10;
-  if(from){ from.budget=Math.round((from.budget+N.agreedFee)*10)/10; from.players.splice(from.players.indexOf(p),1); }
-  else if(N.os){
-    G.overseas=(G.overseas||[]).filter(x=>x.id!==p.id);
-    (G.osGone=G.osGone||[]).push(p.osKey||p.name);     // 한 번 떠난 선수는 해외 시장에 다시 뜨지 않는다 (원본 키 기준)
-    if(G.scout){                              // 스카우트가 찾아온 선수라면 보고서에서 지운다
-      const was=(G.scout.list||[]).length;
-      G.scout.list=(G.scout.list||[]).filter(x=>x.id!==p.id);
-      if(was!==(G.scout.list||[]).length){
-        (G.scout.gone=G.scout.gone||[]).push(p.name);
-        delete p.scErr; delete p._scShow;      // 우리 선수가 됐으니 이제 정확히 보인다
-        /* ⚠ mvFix 는 보고서에 찍힌 이적료를 고정하려고 붙인 값이다. 그대로 두면 이 선수가
-           리그를 씹어 먹어도 시장가치가 3억에 머문다 — '싸게 사서 비싸게 판다'가 성립하지 않는다. */
-        delete p.mvFix;
-      }
-    }
+  if(N.osEgg){
+    /* 구단주가 이 계약만큼은 연봉 상한 밖에서 처리한다 */
+    ut.wageCap=Math.round((totalWage(ut)+N.agreedWage+4)*10)/10;
+    adjustTrust("owner", 10, `${p.name} 영입`);
   }
-  else { G.freeAgents=G.freeAgents.filter(x=>x.id!==p.id); }
-  ut.players.push(p); joinClub(ut, p);   // 일단 빈 번호를 주고, 아래에서 감독이 직접 고를 기회를 준다
-  p.wage=N.agreedWage; clearClubBaggage(p, 82);
-  p.ct=clamp(N.years||negoPrefYears(p),1,5);   // 협상 테이블에서 정한 계약 기간
-  affSet(p, 62+R(12));   // 나를 원해서 데려온 감독 — 시작부터 호의적이다
-  try{ tfLogAdd("in", p, from?from.short:(N.os?(p.osClub||"해외"):"FA"), N.agreedFee||0, N.agreedWage, p.ct); }catch(e){}
-  if(p.ovr>=75){ adjustTrust("owner",5,`${p.name} 영입`); adjustTrust("fans",7,`${p.name} 영입`); }
-  bumpHype(ut, hypeFromSigning(ut, p, N.agreedFee||0), `${p.name} 영입`);
-  // 선수 포함 딜 마무리 — fee 협상 때 합의된 "내 선수"를 실제로 상대 구단에 함께 넘긴다
-  let swapOut=null;
-  if(from && N.agreedSwapPid){
-    swapOut=ut.players.find(x=>x.id===N.agreedSwapPid);
-    /* 🔀 협상 도중에 상황이 바뀌었을 수 있다(임대 복귀·입대 등) — 넘기기 직전에 다시 확인한다 */
-    if(swapOut && !tradeableOwn(swapOut)){
-      try{ notify(`🔀 <b>${swapOut.name}</b>은/는 이제 거래에 넣을 수 없어 <b>선수 포함 없이</b> 마무리했습니다.`,"warn"); }catch(e){}
-      swapOut=null;
-    }
-    if(swapOut){
-      ut.players.splice(ut.players.indexOf(swapOut),1);
-      from.players.push(swapOut); joinClub(from, swapOut);
-      swapOut.unhappy=0; swapOut.uWhy=""; swapOut.promise=null; swapOut.sulk=0; swapOut.noMove=false; swapOut.morale=75; swapOut.ct=Math.max(swapOut.ct||1,1);
-    }
-  }
-  if(!from){
-    notify(N.os
-      ? `🌍 <b>초대형 영입!</b> ${p.name}, ${ut.name} 입단! (이적료 ${N.agreedFee}억 · 연봉 ${N.agreedWage}억 · 에이전트비 ${N.agreedAg}억)`
-      : `✍️ <b>FA 영입:</b> ${p.name}, ${ut.name} 입단! (이적료 없음 · 연봉 ${N.agreedWage}억 · 에이전트비 ${N.agreedAg}억)`,"good");
-    if(N.os) addNews(`🌍 ${p.name}이(가) ${p.osClub||"해외 구단"}을(를) 떠나 ${ut.name}에 입단합니다. K리그가 발칵 뒤집혔습니다.`);
-    if(N.osEgg){
-      /* 구단주가 이 계약만큼은 연봉 상한 밖에서 처리한다 — 그러지 않으면 다음 주부터
-         "상한 초과" 경고가 계속 뜨고 구단주 신뢰가 깎인다. 이건 그런 종류의 계약이 아니다. */
-      ut.wageCap=Math.round((totalWage(ut)+N.agreedWage+4)*10)/10;
-      adjustTrust("owner", 10, `${p.name} 영입`);
-    }
-    if(N.eggNews){ addNews(N.eggNews); adjustTrust("fans", 18, `${p.name} 영입`); }
-    scheduleSignPresser(p, {fee:N.agreedFee||0, wage:N.agreedWage});
-    socialOnSigning(p, N.agreedFee||0);
-    if(N.os) try{ socialOnOverseas(p, N); }catch(e){}
-    G.nego=null; saveGame(); show("nego"); askNumberForNewSigning(p); return;
-  }
-  notify(swapOut
-    ? `✍️ <b>오피셜:</b> ${p.name}, ${ut.name} 이적! (현금 ${N.agreedFee}억 + <b>${swapOut.name}</b> 포함 + 에이전트비 ${N.agreedAg}억 · 연봉 ${N.agreedWage}억)`
-    : `✍️ <b>오피셜:</b> ${p.name}, ${ut.name} 이적! (이적료 ${N.agreedFee}억 + 에이전트비 ${N.agreedAg}억 · 연봉 ${N.agreedWage}억)`,"good");
-  if(swapOut) addNews(`🔀 ${p.name}이(가) ${ut.name}로, ${swapOut.name}이(가) ${from.short}(으)로 — 선수 포함 딜이 성사됐습니다.`);
-  scheduleSignPresser(p, {fee:N.agreedFee, wage:N.agreedWage, swap:!!swapOut, swapName:swapOut?swapOut.name:""});
-  socialOnSigning(p, N.agreedFee);
-  G.nego=null; saveGame(); show("nego"); askNumberForNewSigning(p);
+  if(N.eggNews){ addNews(N.eggNews); adjustTrust("fans", 18, `${p.name} 영입`); }
+  const _lead=tfDaysLeft(_deal);
+  notify(`🤝 <b>${p.name} 영입 합의!</b> ${from?from.short:(N.os?(p.osClub||"해외"):"FA")} → ${ut.short}<br>`
+    +`<span class="small">이적료 ${N.agreedFee||0}억 · 연봉 ${N.agreedWage}억 · 에이전트비 ${N.agreedAg||0}억<br>`
+    +`서류가 마무리되는 <b>${dateLabel(_deal.due)}</b>(${_lead}일 뒤)에 합류합니다 — 그 전에 다른 구단이 끼어들 수 있습니다.</span>`,"good");
+  addNews(`🤝 <b>${ut.short}, ${p.name} 영입 합의</b> — ${dateLabel(_deal.due)} 메디컬·서류 완료 예정${(N.agreedFee||0)>0?` (이적료 ${N.agreedFee}억)`:""}`,
+    "good", "club",
+    {cat:"transfer", ic:"🤝", tid:ut.id, head:`${ut.name}, ${p.name}과 원칙적 합의`,
+     sub:`${G.season-p.by}세 ${POS_KO[p.pos]||p.pos}. 메디컬만 남았다는 것이 양측 설명이다.`});
+  G.nego=null; saveGame(); show("nego");
 }
 function cancelNego(){
   const N=G.nego;
@@ -24495,6 +25013,7 @@ function cancelNego(){
 function releasePlayer(pid){
   if(armyGate("선수 방출")) return;
   const ut=userTeam(); const p=ut.players.find(x=>x.id===pid); if(!p) return;
+  if(p.tfLock){ gameAlert(`🕐 ${p.name} 선수는 이적이 진행 중입니다 — 먼저 이적시장 › 진행 중인 이적에서 정리하세요.`); return; }
   if(ut.players.length<=18){ gameAlert("스쿼드가 18명 이하면 방출할 수 없습니다."); return; }
   const cost=Math.round(p.wage*(p.ct||1)*0.7*10)/10;
   if(ut.budget<cost){ gameAlert(`위약금 ${cost}억을 지급할 예산이 부족합니다. (보유 ${ut.budget}억)`); return; }
@@ -25076,7 +25595,7 @@ function tickDomesticAI(){
       if(!from || from===to || from.isUser || isArmyTeam(from)) continue;
       if((from.players||[]).length<=21) continue;
       for(const q of (from.players||[])){
-        if(!q || q.loan || q.army) continue;
+        if(!q || q.loan || q.army || q.armyCall || q.tfLock) continue;   // 🕐 진행 중인 이적은 건드리지 않는다
         if(q.pos!==need.pos) continue;
         if(q.ovr < curBest+0.5) continue;                   // 주전 라인의 약한 고리보다 나아야 산다
         if(aiKeepTalent(q) && Math.random()<0.72) continue;  // 원소속이 웬만해선 안 판다
@@ -25104,6 +25623,7 @@ function tickOverseasAI(){
   for(const p of overseasList().slice()){
     /* 유저가 협상 중인 선수는 건드리지 않는다 — 대신 마감이 미뤄질 뿐이다 */
     if(G.nego && G.nego.pid===p.id){ if(p.osLink) p.osLink.due=Math.max(p.osLink.due, day+5); continue; }
+    if(p.tfLock){ p.osLink=null; continue; }   // 🕐 이미 가계약이 끝난 선수 — 서류만 남았다
     if(p.osLink){
       const t=G.teams[p.osLink.tid];
       if(!t || !osAiAfford(t, p)){ p.osLink=null; continue; }   // 사정이 바뀌면 접촉이 끊긴다
@@ -26080,6 +26600,19 @@ function migrateLoadedG(){
   /* 🆔 번호부터 맞춘다 — 마이그레이션 도중에 선수가 새로 만들어지는 단계(긴급 등록·스쿼드 보강)가
      있어서, 여기서 PID 를 올려 두지 않으면 그 선수들이 기존 번호를 물고 나온다. */
   step("선수 번호 선점", ()=>{ PID=nextPid(); });
+  /* 🕐 진행 중인 이적 — 유령 잠금 청소.
+     딜은 사라졌는데 선수에게 tfLock 만 남으면 그 선수는 영영 팔 수도 방출할 수도 없다.
+     반대로 대상이 이미 사라진 딜도 지운다(환불은 하지 않는다 — 어느 시점의 돈인지 알 수 없다). */
+  step("진행 중 이적 정리", ()=>{
+    if(!Array.isArray(G.tfDeals)) G.tfDeals=[];
+    G.tfDeals=G.tfDeals.filter(d=>d && d.pid!=null && d.toId && G.teams[d.toId] && (!d.fromId || G.teams[d.fromId]) && !d._dead);
+    const live={}; for(const d of G.tfDeals) live[d.id]=1;
+    const sweep=(arr)=>{ for(const q of (arr||[])) if(q && q.tfLock && !live[q.tfLock]) delete q.tfLock; };
+    for(const id in G.teams) sweep(G.teams[id].players);
+    sweep(G.freeAgents); sweep(G.overseas);
+    for(const d of G.tfDeals) try{ tfLockSet(d); }catch(e){}
+    if(G.tfArrive && !Array.isArray(G.tfArrive)) G.tfArrive=[G.tfArrive];
+  });
   /* 🔀 국면 포메이션 폐지 (요청 — 「너무 극단적이었던 것 같다」). 구세이브에 남은 형태 키를 지운다.
      남겨 두면 아무 일도 하지 않는 값이 전술 서명·프리셋 비교에 섞여 친숙도 계산이 흔들린다. */
   step("국면 형태 정리", ()=>{
@@ -30759,6 +31292,10 @@ function pTags(p){
   })();
   if(p.army && p.army.out){ const d=armyDaysLeft(p);
     if(d!=null && d>0) s+=` <span class="tag" style="background:#3a4a2a;color:#a8e04a" title="${p.army.out} 전역 · 원소속 ${p.army.own&&G.teams[p.army.own]?G.teams[p.army.own].short:"무소속"}">🎖️ 전역 D-${d}</span>`; }
+  /* 🕐 이적 진행 중 — 아직 우리 선수지만 서류가 돌고 있다. 여기 없으면 「왜 못 팔지」가 안 보인다. */
+  if(p.tfLock){ try{ const d=tfDeals().find(x=>x.id===p.tfLock);
+    if(d){ const to=G.teams[d.toId], out=(d.fromId===G.userTeamId);
+      s+=` <span class="tag" style="background:#1f6feb33;color:#79c0ff" title="${out?`${to?to.short:"타 구단"}으로 이적 합의 — ${dateLabel(d.due)} 완료 예정`:`영입 합의 — ${dateLabel(d.due)} 완료 예정`}">🕐 ${out?"이적 D-":"합류 D-"}${tfDaysLeft(d)}</span>`; } }catch(e){} }
   if(p.sulk>0) s+=' <span class="tag inj">태업</span>';
   if(p.noMove) s+=' <span class="tag u22">잔류 선언</span>';
   if(p.emg) s+=' <span class="tag" style="background:#8b3a1a33;color:#ff9d5c" title="스쿼드가 모자라 유스에서 급히 올린 선수">🚨 긴급 등록</span>';
@@ -49789,7 +50326,7 @@ function loanWorth(t, p, xiSet){
      화면에 그릴 때(loanAsksPrune)는 걸러 냈지만 «문의를 만드는 쪽»이 그대로였다 —
      알림과 기사는 이미 나간 뒤라 유저에게는 계속 떼쓰는 것으로 보였다.
      입영 통지를 받은 선수도 마찬가지다(입소까지 이적·임대 불가). */
-  if(p.army || p.armyCall || p.emg) return false;
+  if(p.army || p.armyCall || p.emg || p.tfLock) return false;
   const age=G.season-(p.by||G.season-20);
   if(age<LOAN_MIN_AGE || age>LOAN_MAX_AGE) return false;   // 성장기 밖이면 임대의 의미가 옅다
   const xi=xiSet || new Set((bestXI(t)||[]).map(q=>q.id));
@@ -50392,7 +50929,7 @@ function armyGate(what){
 function armyEligible(p, t){
   const age=G.season-p.by;
   /* 🎖️ ⚠ 제보 — 홈그로운도 국적은 외국이다. 병역 대상이 아니므로 p.frn 으로 거른다 */
-  return !(age<20 || age>26 || p.loan || p.frn || p.armyDone || p.army || p.armyCall) && (t.players||[]).length>22;
+  return !(age<20 || age>26 || p.loan || p.frn || p.armyDone || p.army || p.armyCall || p.tfLock) && (t.players||[]).length>22;
 }
 function armyCandList(){
   const out=[];
@@ -50947,12 +51484,209 @@ function scoutTabHtml(){
        ${rows}`}
   </div>`;
 }
+
+
+/* ═══ ⏰ 데드라인 데이 ══════════════════════════════════════════════════════
+   마감 당일 하루는 다르게 굴러간다 — 오늘만 나오는 급매가 뜨고, 미해결 딜은 오늘 안에
+   끝내거나 이월 계약으로 묶어야 한다. */
+function tfFireList(){
+  if(!Array.isArray(G.tfFire)) G.tfFire=[];
+  const s=G.season, d=G.day||0;
+  G.tfFire=G.tfFire.filter(x=>x && x.s===s && x.d===d);
+  return G.tfFire;
+}
+/* 오늘의 급매 — 마감을 못 넘기면 0원이 되는 자원들이 값을 던진다 */
+function tfFireRoll(){
+  if(!tfIsDeadlineDay()) return;
+  const ut=userTeam(); if(!ut || G.jobless || armyUserClub()) return;
+  if(G.tfFireKey === (G.season*1000+(G.day||0))) return;
+  G.tfFireKey = G.season*1000+(G.day||0);
+  const out=[];
+  const clubs=Object.values(G.teams).filter(t=>!t.isUser && !isArmyTeam(t) && t.players.length>21);
+  for(const t of clubs){
+    for(const q of t.players){
+      if(q.tfLock || q.army || q.armyCall || q.loan || q.emg) continue;
+      const age=G.season-(q.by||2000);
+      if(age>34) continue;
+      /* 던질 이유가 있어야 한다 — 계약 만료 임박 · 불만 · 자리 없음 · 곳간 사정 */
+      let w=0;
+      if((q.ct||3)<=1) w+=3;
+      if((q.unhappy||0)>0) w+=2;
+      if((t.budget||0)<8) w+=2;
+      try{ if(playShare(q)<0.25) w+=2; }catch(e){}
+      try{ if(aiKeepTalent(q)) w-=5; }catch(e){}
+      if(w<3) continue;
+      const mv=marketValue(q);
+      const cut=clamp(0.18+w*0.035+Math.random()*0.12, 0.18, 0.55);
+      out.push({pid:q.id, tid:t.id, fee:Math.max(0.3, Math.round(mv*(1-cut)*10)/10),
+                mv, cut:Math.round(cut*100),
+                wage:Math.round(Math.max(q.wage||1, wageExpect(q.ovr,q.frn,ut.div))*10)/10,
+                s:G.season, d:G.day||0});
+    }
+  }
+  out.sort((a,b)=>b.mv-a.mv);
+  G.tfFire=out.slice(0, 6);
+}
+/* 급매 즉시 성사 — 오늘 안에 끝난다 (서류가 어긋날 위험은 그대로) */
+function tfFireTake(pid){
+  const F=tfFireList().find(x=>String(x.pid)===String(pid)); if(!F) return;
+  if(!tfIsDeadlineDay()) return flash("급매는 마감 당일에만 성사됩니다.","warn");
+  if(armyGate("선수 영입")) return;
+  const ut=userTeam(), from=G.teams[F.tid];
+  const p=from&&from.players.find(x=>x.id===F.pid);
+  if(!p || p.tfLock) { G.tfFire=tfFireList().filter(x=>x!==F); return flash("그 선수는 이미 정리됐습니다.","warn"); }
+  const ag=Math.round(F.fee*0.05*10)/10;
+  if(ut.budget < F.fee+ag) return gameAlert(`급매 영입에 ${F.fee}억 + 에이전트비 ${ag}억이 필요합니다. (보유 ${ut.budget}억)`);
+  if(totalWage(ut)+F.wage > (ut.wageCap||1e9)) return gameAlert(`연봉 총액 상한을 넘습니다. (여유 ${wageRoom(ut)}억 / 요구 ${F.wage}억)`);
+  const mind=playerMoveMind(p, from, ut);
+  showConfirm(`<b>⏰ 마감 급매 — ${p.name}</b>\n\n`+
+    `${from.short}이(가) 시장가치 ${F.mv}억짜리를 <b>${F.fee}억</b>(−${F.cut}%)에 던졌습니다.\n`+
+    `· 연봉 <b>${F.wage}억</b> · 에이전트비 ${ag}억\n`+
+    `· 선수가 응할 확률 <b>${Math.round(mind.v*100)}%</b>\n\n`+
+    `<span class="small">오늘 안에 서류까지 끝내야 합니다 — 마감일 딜은 등록이 어긋날 위험이 있습니다.</span>`,
+    ()=>{
+      if(Math.random()>=mind.v){
+        notify(`❌ <b>${p.name}</b>: "${mind.no}"`,"warn");
+        G.tfFire=tfFireList().filter(x=>x!==F); saveGame(); return show("transfer");
+      }
+      ut.budget=Math.round((ut.budget-F.fee-ag)*10)/10;
+      const d=tfDealAdd({pid:p.id, name:p.name, fromId:from.id, toId:ut.id, fee:F.fee,
+                         wage:F.wage, ct:clamp(negoPrefYears(p),1,4), agFee:ag, fire:1});
+      if(!d){ ut.budget=Math.round((ut.budget+F.fee+ag)*10)/10; return gameAlert("이적시장이 닫혀 성사되지 않았습니다."); }
+      G.tfFire=tfFireList().filter(x=>x!==F);
+      notify(`⏰ <b>마감 급매 체결!</b> ${p.name} — ${F.fee}억. 오늘 안에 서류가 끝나야 합니다.`,"good");
+      addNews(`⏰ <b>마감일 급매</b> — ${ut.short}, ${from.short}의 ${p.name}을(를) ${F.fee}억에 낚아챘습니다`, "good", "club");
+      saveGame(); show("transfer");
+    }, {okLabel:`${F.fee}억에 데려온다`, cancelLabel:"넘긴다"});
+}
+/* 📅 이월 계약 — 무산 대신 다음 창 첫날로 묶는다. 묶어 두는 값은 이적료의 10%. */
+function tfCarryCost(d){ return Math.round(Math.max(0.5, (d.fee||0)*0.10)*10)/10; }
+function tfCarry(id){
+  const d=tfDeals().find(x=>x.id===id); if(!d) return;
+  if(!tfIsMine(d)) return;
+  if(d.carry) return flash("이미 이월 계약입니다.","warn");
+  const ut=userTeam(), nw=tfNextWindow(), cost=tfCarryCost(d);
+  const buying=(d.toId===ut.id);
+  if(buying && ut.budget<cost) return gameAlert(`이월 계약을 묶으려면 ${cost}억이 더 필요합니다. (보유 ${ut.budget}억)`);
+  if(!buying){
+    const _to=G.teams[d.toId];
+    if(!_to || (_to.budget||0)<cost) return gameAlert(`${_to?_to.short:"상대 구단"}이(가) 이월 계약 비용 ${cost}억을 감당하지 못합니다 — 이 딜은 마감과 함께 무산됩니다.`);
+  }
+  showConfirm(`<b>📅 ${d.name} — 이월 계약</b>\n\n`+
+    `마감 안에 끝내지 못한 딜을 무산시키는 대신 <b>${nw.label}</b>로 미룹니다.\n\n`+
+    `· 선수는 그때까지 <b>${(G.teams[d.fromId]||{}).short||"원소속"}</b>에서 계속 뜁니다\n`+
+    `· 그 사이에도 <b>다른 구단이 가로챌 수 있습니다</b>\n`+
+    `· 묶어 두는 값 <b>${cost}억</b>${buying?"":" (상대 구단이 부담)"}\n\n`+
+    `<span class="small">이월 계약은 서류가 어긋날 위험이 거의 없습니다.</span>`,
+    ()=>{
+      if(buying) ut.budget=Math.round((ut.budget-cost)*10)/10;
+      else { const to=G.teams[d.toId]; if(to) to.budget=Math.round((to.budget-cost)*10)/10; }
+      d.carry={s:nw.s, day:nw.day}; d.due=nw.day; d.leak=0; d.heat=0;
+      notify(`📅 <b>${d.name}</b> — 이월 계약으로 묶었습니다. ${nw.label}에 합류합니다.`,"good");
+      addNews(`📅 ${ut.short}, ${d.name} 이적을 <b>${nw.label}</b>로 미뤘습니다 — 이월 계약`, "good", "club");
+      saveGame(); show("transfer");
+    }, {okLabel:`${cost}억 내고 묶는다`, cancelLabel:"그만둔다"});
+}
+/* ⏰ 마감 당일 · 임박 알림 패널 */
+function tfDeadlinePanel(){
+  const wi=windowInfo(); if(!wi.open) return "";
+  const left=tfWinLeft();
+  if(left>14) return "";
+  const ut=userTeam();
+  const mine=tfDeals().filter(tfIsMine);
+  const risky=mine.filter(d=>!d.carry && tfPaperFail(d)>=0.10);
+  const dl=tfIsDeadlineDay();
+  let fire="";
+  if(dl){
+    tfFireRoll();
+    const F=tfFireList();
+    fire=`<h3 style="margin-top:12px">🔥 오늘의 급매 <span class="small">— 마감을 못 넘기면 0원이 되는 자원들입니다. 오늘만 유효합니다.</span></h3>
+    ${!F.length?`<p class="small">오늘은 던져진 선수가 없습니다.</p>`:`<div class="tblScroll"><table>
+      <tr><th>선수</th><th>원소속</th><th>시장가치</th><th>급매가</th><th></th></tr>
+      ${F.map(x=>{ const t=G.teams[x.tid], p=t&&t.players.find(q=>q.id===x.pid); if(!p) return "";
+        return `<tr><td><b>${nmF(p)}</b> <span class="small pos-${p.pos}">${prefSlotOf(p)}</span> <span class="small">${G.season-p.by}세</span><br><span class="small">${abilityStars(p)}</span></td>
+          <td class="small">${t.short}</td><td class="small">${x.mv}억</td>
+          <td><b class="money">${x.fee}억</b> <span class="tag" style="background:#8b3a1a33;color:#ff9d5c">−${x.cut}%</span><br><span class="small">연봉 ${x.wage}억</span></td>
+          <td><button class="mini" style="background:#c9752233;color:#e0a458" onclick="tfFireTake(${x.pid})">⏰ 데려온다</button></td></tr>`;
+      }).join("")}</table></div>`}`;
+  }
+  const col = dl ? "#e05a5a" : left<=3 ? "#c97522" : "#2e3f52";
+  return `<div class="card" style="border-color:${col}">
+    <h3>${dl?`⏰ <b style="color:var(--red)">오늘이 이적시장 마감일입니다</b>`:`⏳ ${wi.name} 이적시장 마감까지 <b>${left}일</b>`}</h3>
+    <p class="small" style="margin:2px 0 8px">${dl
+      ? `오늘 안에 서류까지 끝나지 않은 딜은 <b>전부 무산</b>됩니다. 마감일에 몰린 딜은 등록이 어긋날 위험이 큽니다 — 못 끝낼 것 같으면 <b>📅 이월 계약</b>으로 묶으세요.`
+      : `마감이 가까울수록 파는 구단이 급해집니다 — 요구 이적료가 내려가고, 시장에 나오는 제의가 늘어납니다. 대신 <b>마감일에 몰린 딜은 서류가 어긋날 수 있습니다.</b>`}</p>
+    ${!mine.length?`<p class="small">진행 중인 우리 딜이 없습니다.</p>`:
+      `<div class="tblScroll"><table><tr><th>선수</th><th>구분</th><th>완료</th><th>서류 위험</th><th></th></tr>
+      ${mine.map(d=>{ const f=Math.round(tfPaperFail(d)*100);
+        const fc = f>=20?"var(--red)" : f>=10?"var(--gold)":"var(--green)";
+        return `<tr><td><b>${d.name}</b></td>
+          <td class="small">${d.toId===ut.id?"영입":"판매"}${d.carry?` <span class="tag" style="background:#1f6feb33;color:#79c0ff">📅 이월</span>`:""}</td>
+          <td class="small">${dateLabel(d.due)} (D-${tfDaysLeft(d)})</td>
+          <td><b style="color:${fc}">${f}%</b></td>
+          <td>${d.carry?`<span class="small">${d.carry.s>G.season?`${d.carry.s}년`:""} 대기</span>`
+            :`<button class="mini" onclick="tfCarry('${d.id}')" title="무산 대신 다음 창 첫날로 미룹니다 (이적료의 10%)">📅 이월 계약</button>`}</td></tr>`;
+      }).join("")}</table></div>`}
+    ${risky.length&&!dl?`<div class="msg warn" style="margin-top:8px">⏳ <b>${risky.map(d=>d.name).join(", ")}</b> — 마감일에 몰려 서류가 어긋날 수 있습니다.</div>`:""}
+    ${fire}
+  </div>`;
+}
+/* ═══ 🕐 진행 중인 이적 — 탭 ═══════════════════════════════════════════════
+   리그 전체의 «합의는 끝났고 서류만 남은» 딜을 한 판에 모은다.
+   남의 딜에는 🥷 가로채기와 📰 흘리기가 붙고, 우리 딜에는 남은 날짜와 경쟁자가 보인다. */
+function tfDealTab(){
+  const ut=userTeam(), L=tfDealList(), wi=windowInfo();
+  const dlPanel=(function(){ try{ return tfDeadlinePanel(); }catch(e){ return ""; } })();
+  const row=(d)=>{
+    const p=tfPlayerOf(d);
+    const from=d.fromId?G.teams[d.fromId]:null, to=G.teams[d.toId];
+    const mine=tfIsMine(d), buying=(d.toId===ut.id), selling=(d.fromId===ut.id);
+    const left=tfDaysLeft(d);
+    const leftTxt = left<=0 ? `<b style="color:var(--gold)">오늘 완료</b>` : `<b>D-${left}</b>`;
+    const src = from?from.short : (d.os?(p&&p.osClub||"해외"):"FA");
+    const star = p ? abilityStars(p) : "";
+    const heat = (d.leak||0)>0 ? ` <span class="tag" style="background:#c9752233;color:#e0a458">📰 이적설 ${d.leak}</span>` : "";
+    const riv = d.rival ? ` <span class="tag inj">🥷 ${(G.teams[d.rival.tid]||{}).short||"경쟁"} ${d.rival.fee}억</span>` : "";
+    const hij = d.hijacked ? ` <span class="tag" style="background:#8957e533;color:#b285f5">🥷 가로챈 딜</span>` : "";
+    let btns="";
+    if(mine){
+      if(d.rival) btns+=`<button class="mini" style="background:#8957e5;color:#fff" onclick="tfRivalPrompt('${d.id}')">🛡️ 대응</button> `;
+      btns+=`<button class="mini" onclick="tfCancelMine('${d.id}')">${buying?"🚪 영입 철회":"🚪 판매 취소"}</button>`;
+    } else if(wi.open){
+      const need=tfHijackMinFee(d);
+      btns+=`<button class="mini" style="background:#8957e5;color:#fff" onclick="tfHijack('${d.id}')" title="이적료 ${need}억 이상을 얹어 끼어듭니다">🥷 가로채기</button> `;
+      btns+=`<button class="mini" onclick="tfLeak('${d.id}')" title="기자에게 흘려 딜을 흔듭니다 — 꼬리가 잡힐 수 있습니다">📰 흘리기</button>`;
+    }
+    return `<tr class="${mine?'':''}" style="${mine?'background:#12202c':''}">
+      <td><b>${p?nmF(p):d.name}</b> ${p?`<span class="small pos-${p.pos}">${prefSlotOf(p)}</span> <span class="small">${G.season-p.by}세</span>`:""}<br>
+        <span class="small">${star}</span></td>
+      <td class="small">${src} <b>→</b> <b style="color:${mine?'var(--acc)':'#fff'}">${to?to.short:"?"}</b>${mine?` <span class="tag" style="background:#1f6feb33;color:#79c0ff">${buying?"우리 영입":"우리 판매"}</span>`:""}${hij}${heat}${riv}</td>
+      <td><b class="money">${d.fee||0}억</b>${d.wage?`<br><span class="small">연봉 ${d.wage}억</span>`:""}</td>
+      <td>${leftTxt}<br><span class="small">${dateLabel(d.due)}</span></td>
+      <td style="white-space:nowrap">${btns}</td></tr>`;
+  };
+  const mineL=L.filter(tfIsMine), othL=L.filter(d=>!tfIsMine(d));
+  void dlPanel;
+  const tbl=(list)=>`<div class="tblScroll"><table>
+      <tr><th>선수</th><th>이적</th><th>이적료</th><th>완료</th><th></th></tr>
+      ${list.map(row).join("")}</table></div>`;
+  return `${dlPanel}<div class="card">
+    <h3>🕐 진행 중인 이적 <span class="small">— 합의는 끝났고 서류·메디컬만 남은 딜입니다</span></h3>
+    <p class="small" style="margin:2px 0 10px">
+      합의한 날 바로 옮겨 가지 않습니다. 완료일까지 선수는 <b>원소속에 그대로</b> 있고, 그 사이에
+      <b>🥷 가로채기</b>로 끼어들거나 <b>📰 기자에게 흘려</b> 남의 딜을 흔들 수 있습니다.
+      <b>이적시장이 마감되면 마무리하지 못한 딜은 전부 무산</b>됩니다${wi.open?` — ${(function(){try{const dt=dateOfDay(wi.end);return `<b>${dt.getMonth()+1}월 ${dt.getDate()}일</b> 마감`;}catch(e){return "";}})()}`:""}.</p>
+    ${!L.length?`<p class="small">진행 중인 이적이 없습니다.</p>`:""}
+    ${mineL.length?`<h3 style="margin-top:6px">📋 우리 구단 (${mineL.length})</h3>${tbl(mineL)}`:""}
+    ${othL.length?`<h3 style="margin-top:14px">🌐 리그의 다른 딜 (${othL.length})</h3>${tbl(othL)}`:""}
+  </div>`;
+}
 function transfer(){
   const t=userTeam();
   const wi=windowInfo();
   const tabBtn=(k,l)=>`<button class="mini ${tfTab===k?'sel':''}" style="padding:8px 18px;font-size:14px" onclick="tfTab='${k}';show('transfer')">${l}</button>`;
   let body="";
-  if(armyUserClub() && tfTab!=="rumor" && tfTab!=="staff") tfTab="army";     // 상무는 검색·FA·해외 탭이 없다 (스태프는 상무도 뽑는다)
+  if(armyUserClub() && tfTab!=="rumor" && tfTab!=="staff" && tfTab!=="deal") tfTab="army";     // 상무는 검색·FA·해외 탭이 없다 (스태프는 상무도 뽑는다)
   if(tfTab==="army"){
     body=armyTab();
   } else if(tfTab==="scout"){
@@ -50968,6 +51702,8 @@ function transfer(){
     body=shortlistTab();
   } else if(tfTab==="log"){
     body=tfLogView();
+  } else if(tfTab==="deal"){
+    body=tfDealTab();
   } else if(tfTab==="rumor"){
     body=rumorTab();
   } else if(tfTab==="fa"){
@@ -50987,9 +51723,13 @@ function transfer(){
            :`<div class="msg warn">${wi.label||"이적시장은 겨울(1월 1일~3월 31일)과 여름(7월 1일부터 6주간) 두 번 열립니다."}</div>`}
   ${(G.nego||G.snego||G.acNego)?`<div class="msg good">🤝 진행 중인 협상이 있습니다 — 좌측 <b>협상</b> 탭에서 계속하세요.</div>`:""}
   ${(G.offers||[]).length?`<div class="msg good">📨 처리 대기 중인 타 구단 제의 <b>${G.offers.length}건</b> — <b>타 구단 제의</b> 탭에서 확인하세요.</div>`:""}
+  ${(function(){ const m=tfDeals().filter(tfIsMine), r=m.filter(d=>d.rival);
+     if(r.length) return `<div class="msg warn">🥷 <b>${r.map(d=>d.name).join(", ")}</b> 영입전에 다른 구단이 끼어들었습니다 — <b>🕐 진행 중인 이적</b> 탭에서 대응하세요.</div>`;
+     if(m.length) return `<div class="msg info">🕐 진행 중인 우리 이적 <b>${m.length}건</b> — 가장 빠른 완료 ${dateLabel(Math.min.apply(null,m.map(d=>d.due)))}</div>`;
+     return ""; })()}
   <div style="margin-bottom:12px">${armyUserClub()
-    ? tabBtn("army","🎖️ 입대 지원")+" "+tabBtn("rumor","📰 루머")+" "+tabBtn("staff","🎩 스태프")
-    : tabBtn("search","🔍 선수 검색")+" "+tabBtn("short","⭐ 관심 목록"+tabBadge(slSweep().length, 1))+" "+tabBtn("fa","🆓 FA 시장")+" "+tabBtn("world","🌍 해외 이적시장")+" "+tabBtn("scout","🔎 스카우트"+tabBadge((scoutState().list||[]).length, 1))+" "+tabBtn("rumor","📰 루머"+tabBadge(rumorList().filter(r=>r.fromId===t.id||r.toId===t.id).length))+" "+tabBtn("log","📒 영입·방출 기록")+" "+tabBtn("staff","🎩 스태프"+(acOf()?"":tabBadge(1)))}</div>
+    ? tabBtn("army","🎖️ 입대 지원")+" "+tabBtn("deal","🕐 진행 중인 이적"+tabBadge(tfDeals().length,1))+" "+tabBtn("rumor","📰 루머")+" "+tabBtn("staff","🎩 스태프")
+    : tabBtn("search","🔍 선수 검색")+" "+tabBtn("short","⭐ 관심 목록"+tabBadge(slSweep().length, 1))+" "+tabBtn("fa","🆓 FA 시장")+" "+tabBtn("world","🌍 해외 이적시장")+" "+tabBtn("scout","🔎 스카우트"+tabBadge((scoutState().list||[]).length, 1))+" "+tabBtn("deal","🕐 진행 중인 이적"+tabBadge(tfDeals().filter(d=>tfIsMine(d)).length || (tfDeals().length?1:0), tfDeals().filter(d=>tfIsMine(d)).length?0:1))+" "+tabBtn("rumor","📰 루머"+tabBadge(rumorList().filter(r=>r.fromId===t.id||r.toId===t.id).length))+" "+tabBtn("log","📒 영입·방출 기록")+" "+tabBtn("staff","🎩 스태프"+(acOf()?"":tabBadge(1)))}</div>
   ${body}`;
 }
 /* ═══ 🎩 이적시장 · 스태프 탭 ═══════════════════════════════════
@@ -84462,7 +85202,8 @@ function dailyEvents(d){
   const out=[];
   const before=G.news.length, offersBefore=(G.offers||[]).length;
   // 시장은 매일 조금씩 움직인다 (종전에는 라운드가 끝날 때 한 번에 몰아서 처리했다)
-  if(Math.random()<0.22) genOffers();
+  /* 🔥 마감이 가까울수록 시장이 시끄러워진다 — 마지막 2주에 최대 두 배 (요청) */
+  if(Math.random() < 0.22 + (function(){ try{ return tfPressure()*0.25; }catch(e){ return 0; } })()) genOffers();
   /* ⚠ 제보 — 진행 도중 온 영입 제안이 경기일로 건너뛰며 증발. 감독이 봐야 할 일이면 멈춘다. */
   if(!G.jobless && (G.offers||[]).length>offersBefore){
     const o=(G.offers||[])[(G.offers||[]).length-1];
@@ -84790,6 +85531,56 @@ function stepDay(){
       saveGame(); stopProgress({kind:"injback"}); return;
     }
   }catch(e){}
+  /* 📣 마감 카운트다운 — 문턱마다 한 번씩 멈춰 세운다 (요청) */
+  try{
+    if(!G.jobless && transferOpen()){
+      const _l=tfWinLeft();
+      const _th=[0,1,3,7,14].find(x=>_l<=x);   // ⚠ 작은 쪽부터 — 큰 쪽부터 찾으면 D-14 하나로 다 뭉친다
+      if(_th!=null){
+        const _key=`${G.season}-${windowInfo().name}-${_th}`;
+        if(G.tfDlSeen!==_key){
+          G.tfDlSeen=_key;
+          const _m=tfDeals().filter(tfIsMine);
+          const _risk=_m.filter(d=>!d.carry && tfPaperFail(d)>=0.10);
+          if(_th===0) try{ tfFireRoll(); }catch(e){}
+          const _f=(_th===0)?tfFireList().length:0;
+          prgPush(_th===0
+            ? `⏰ <b>오늘이 ${windowInfo().name} 이적시장 마감일입니다.</b>`
+              + (_m.length?` 진행 중인 우리 딜 <b>${_m.length}건</b>${_risk.length?` — <b style="color:#ff9d5c">${_risk.map(d=>d.name).join(", ")}</b>는 서류가 어긋날 수 있습니다`:""}.`:" 진행 중인 우리 딜은 없습니다.")
+              + (_f?` 🔥 오늘의 급매 <b>${_f}명</b>이 나왔습니다.`:"")
+            : `⏳ <b>${windowInfo().name} 이적시장 마감까지 ${_l}일</b>입니다.`
+              + (_m.length?` 진행 중인 우리 딜 <b>${_m.length}건</b>${_risk.length?` (서류 위험 ${_risk.length}건)`:""}.`:"")
+              + ` <span class="small">마감이 가까울수록 파는 구단이 급해집니다.</span>`, "prgStop");
+          saveGame(); stopProgress({kind:"tfdl"}); return;
+        }
+      }
+    }
+  }catch(e){}
+  /* 🥷 우리 딜에 경쟁자가 붙었다 — 금액을 맞출지 그 자리에서 정한다 */
+  try{
+    if(G.tfRivalPing){
+      const _id=G.tfRivalPing; G.tfRivalPing=null;
+      const _d=tfDeals().find(x=>x.id===_id);
+      if(_d && _d.rival){
+        const _c=G.teams[_d.rival.tid];
+        prgPush(`🥷 <b>${_c?_c.short:"경쟁 구단"}</b>이/가 <b>${_d.name}</b> 영입전에 뛰어들었습니다 — `
+          +`우리 ${_d.fee}억 vs <b>${_d.rival.fee}억</b> (완료까지 ${tfDaysLeft(_d)}일)`, "prgStop");
+        saveGame(); stopProgress({kind:"tfrival", info:{id:_id}}); return;
+      }
+    }
+  }catch(e){}
+  /* ✍️ 서류가 끝나 선수가 실제로 합류했다 — 등번호를 물어본다 */
+  try{
+    if(Array.isArray(G.tfArrive) && G.tfArrive.length){
+      const _pid=G.tfArrive.shift();
+      if(!G.tfArrive.length) G.tfArrive=null;
+      const _p=(userTeam()&&userTeam().players||[]).find(x=>x.id===_pid);
+      if(_p){
+        prgPush(`✍️ <b>${_p.name}</b> 선수가 합류했습니다 — 메디컬·서류가 끝났습니다.`, "prgStop");
+        saveGame(); stopProgress({kind:"tfarrive", info:{pid:_pid}}); return;
+      }
+    }
+  }catch(e){}
   /* 🎖️ 입영 통지 — 내 선수에게 통지가 왔다. 라인업 계획이 바뀌므로 진행을 멈추고 알린다. */
   try{
     if(G.armyCallPing && G.armyCallPing.n){
@@ -84844,6 +85635,7 @@ function stepDay(){
   }catch(e){}
   /* 알림은 여기서 찍지 않는다 — 만료·선수 이동 정리(바로 아래)를 거친 뒤,
      실제로 남아 있는 건만 아래 임대 알림 큐에서 한 번에 알린다 (제보) */
+  try{ tfDealTick(); }catch(e){}     // 🕐 진행 중인 이적 — 완료 · 가로채기 · 마감 무산
   try{ tickLoanAsk(); }catch(e){}
   try{ tickLoanOffer(); }catch(e){}
   try{ if(Array.isArray(G.loanOffers)) G.loanOffers=G.loanOffers.filter(o=>{ o.exp--; return o.exp>0 && G.teams[o.tid] && G.teams[o.tid].players.some(x=>x.id===o.pid); }); }catch(e){}
@@ -85084,6 +85876,15 @@ function stopProgress(s){
   } else if(s.kind==="end"){
     prgPush("시즌 일정이 모두 끝났습니다.", "prgMatch");
     if(go){ go.textContent="계속 ▶"; go.style.display=""; }
+  } else if(s.kind==="tfdl"){
+    if(go){ go.textContent=(function(){ try{ return tfIsDeadlineDay()?"⏰ 마감일 현황 ▶":"⏳ 이적시장 확인 ▶"; }catch(e){ return "⏳ 이적시장 확인 ▶"; } })(); go.style.display=""; }
+    const sk=$("#prgSkip"); if(sk) sk.style.display="";
+  } else if(s.kind==="tfrival"){
+    if(go){ go.textContent="🥷 대응하기 ▶"; go.style.display=""; }
+    const sk=$("#prgSkip"); if(sk) sk.style.display="";
+  } else if(s.kind==="tfarrive"){
+    if(go){ go.textContent="✍️ 등번호 지정 ▶"; go.style.display=""; }
+    const sk=$("#prgSkip"); if(sk) sk.style.display="";
   } else if(s.kind==="newseason"){
     prgPush("🎆 <b>12월 31일</b> — 한 해가 저물었습니다. 1월 1일부터 새 시즌이 시작됩니다.", "prgMatch");
     if(go){ go.textContent="🎉 다음 시즌 시작 ▶▶"; go.style.display=""; }
@@ -85124,6 +85925,12 @@ function resolveStop(s){
   if(s.kind==="match"){ runAdvanceNow(); return; }
   if(s.kind==="end"){ runAdvanceNow(); return; }
   if(s.kind==="newseason"){ runAdvanceNow(); return; }
+  if(s.kind==="tfdl"){ try{ tfTab="deal"; }catch(e){} show("transfer"); window.scrollTo(0,0); return; }
+  if(s.kind==="tfrival"){ try{ tfTab="deal"; }catch(e){} show("transfer"); try{ tfRivalPrompt(s.info&&s.info.id); }catch(e){} return; }
+  if(s.kind==="tfarrive"){
+    show("squad");
+    try{ const q=(userTeam().players||[]).find(x=>x.id===(s.info&&s.info.pid)); if(q) askNumberForNewSigning(q); }catch(e){}
+    return; }
   if(s.kind==="presser"){
     const _info=(s&&s.info)||G.signPend;                /* 팝업 상태가 유실됐어도 붙잡아 둔 회견으로 연다 (제보) */
     if(_info && openSignPresser(_info)) return;
@@ -90833,7 +91640,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5148";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5151";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
