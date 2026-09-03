@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5144-->
+<!--B:20260913-5148-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -13605,7 +13605,11 @@ function findUserFixture(){
 }
 function advance(){
   if(G.phase==="sacked"){ showSackScreen(); return {type:"sacked"}; }
-  if(G.phase==="seasonEnd"){ startNewSeason(); return {type:"newseason"}; }
+  if(G.phase==="seasonEnd"){
+    /* 🏖️ 아직 12월 31일이 아니다 — 달력이 더 돌아야 한다 (진행 상자가 날짜를 흘린다) */
+    if(offseasonOn()) return {type:"round"};
+    startNewSeason(); return {type:"newseason"};
+  }
   /* 새 시즌 주장단이 정해지지 않았으면 경기를 치를 수 없다 — FM처럼 프리시즌에 반드시 거치는 절차다.
      스태프 회의로 보내고, 확정하면 다시 진행할 수 있다. */
   if(!G.jobless && goalNeeded()){ show("staff"); return {type:"needGoal"}; }
@@ -16888,6 +16892,21 @@ function tickOtherDivRounds(){
   return played;
 }
 function matchDayOf(r){ const rd=(G.cal&&G.cal.roundDay)||[]; return rd[r]!==undefined?rd[r]:r*7; }
+/* ═══ 🏖️ 비시즌 — 일정이 끝나도 12월 31일까지 달력은 돈다 ═══════════════════════════
+   ⚠ 요청 원문 — 「1부 리그에 참여하지만 EACL에 참여하지 않는 구단은 11월 27일에 모두 일정이
+     끝나 바로 '다음 시즌 시작' 버튼을 눌러 다음해의 1월 1일로 곧바로 이동합니다. 2부는 그보다
+     더 짧습니다. 훈련을 편성해 조직력을 올릴 기회를 잃고, 주식 등 컨텐츠를 이용할 수도 없습니다.
+     또한 12월분의 연봉이 이적 예산에서 차감되지 않아 유저가 반사이익을 얻습니다」.
+   ─ 실제로 한 달이 통째로 증발했다. 12월 1일에 도는 급여 정산(waTick)·코치진 급여(acMonthTick)
+     ·감독 월급(tickMoney)·증시·부동산·훈련이 전부 건너뛰어졌다.
+   ─ 시즌 정산(endSeason)은 그대로 그 자리에서 하고, 「해가 바뀌는 것」만 12월 31일로 미룬다.
+     12월 31일에 반드시 멈춰 세우고, 그때 눌러야 새 시즌이 열린다. */
+function yearEndDay(){
+  try{ return Math.round((new Date(G.season+1,0,1)-new Date(G.season,0,1))/86400000)-1; }catch(e){ return 364; }
+}
+/* 시즌 일정은 끝났지만 아직 12월 31일이 아니다 — 훈련·시장·재정이 계속 도는 기간 */
+function offseasonOn(){ return G.phase==="seasonEnd" && !!G.cal && (G.day||0) < yearEndDay(); }
+function offseasonLeft(){ return Math.max(0, yearEndDay()-(G.day||0)); }
 /* ⚠ 제보 — 「'다음 경기까지 N일'이 EACL과 연습경기를 무시하고 리그만 세고 있다」.
    실제로 그랬다. matchDayOf(userRoundNow()) 은 리그 라운드일만 보는 함수라,
    사흘 뒤에 EACL 8강이 잡혀 있어도 화면에는 「다음 경기까지 11일」이라고 떴다.
@@ -23201,6 +23220,7 @@ function tickLoanAsk(){
   if(!transferOpen()) return;
   if(Math.random()>LOAN_ASK_P) return;
   const t=userTeam(); if(!t) return;
+  if(typeof isArmyTeam==="function" && isArmyTeam(t)) return;   // 🎖️ 상무에는 빌릴 선수가 없다
   if((G.loanAsks||[]).length>=3) return;
   const cands=loanCandidates(t).filter(p=>!(G.loanAsks||[]).some(a=>a.pid===p.id));
   if(!cands.length) return;
@@ -23326,6 +23346,12 @@ function acceptLoanAsk(i){
   const t=userTeam(); const a=(G.loanAsks||[])[i]; if(!a) return;
   const p=t.players.find(x=>x.id===a.pid), c=G.teams[a.tid];
   if(!p||!c){ G.loanAsks.splice(i,1); show("nego"); return; }
+  /* 🎖️ 이 경로는 loanOut 을 거치지 않아 병역 관문이 통째로 비어 있었다 */
+  if(p.army || p.armyCall){
+    G.loanAsks.splice(i,1);
+    flash(`🎖️ ${p.name} 선수는 ${p.army?"복무 중입니다":"입영 통지를 받았습니다"} — 임대를 보낼 수 없습니다.`,"warn");
+    saveGame(); return show("nego");
+  }
   G.loanAsks.splice(i,1);
   // 구단은 이미 원하고 있다 — 남은 건 선수 본인의 동의뿐
   if(Math.random()<loanPlayerAccept(p, c)){
@@ -23358,7 +23384,7 @@ function loanAsksPrune(){
     if(!t) return false;
     const p=t.players.find(x=>x.id===a.pid);
     if(!p) return false;                                     // 이미 우리 선수가 아니다
-    if(p.loan || p.army || p.emg) return false;              // 이미 임대 중이거나 내보낼 수 없는 선수
+    if(p.loan || p.army || p.armyCall || p.emg) return false; // 이미 임대 중이거나 내보낼 수 없는 선수
     const c=G.teams[a.tid];
     /* 🎖️ 상무발 문의는 애초에 생기지 않지만, 옛 세이브에 남아 있던 것도 여기서 걷어낸다 (제보) */
     if(c && typeof isArmyTeam==="function" && isArmyTeam(c)) return false;
@@ -38343,7 +38369,7 @@ function show(v){
     ${(function(){ try{ const m=ownMine(); return m?`👑 <b>구단주</b> — ${m.short}<br>`:""; }catch(e){ return ""; } })()}🕊️ <b>무직</b> — 야인 생활 ${(G.mgrFree&&G.mgrFree.weeks)||0}주차<br>
     ${((G.mgrFree&&G.mgrFree.off)||[]).length?`📬 감독직 제의 <b>${G.mgrFree.off.length}건</b><br>`:""}사비 <b class="money">${me().cash.toFixed(1)}억</b> · 평판 <b>${(typeof mgrRep==="function")?mgrRep():"-"}</b>`
     : `<b class="dbDate">${calDateText()}</b><br><b>${G.season} 시즌</b> · 라운드 <b>${Math.min(r+1,fix.length)}</b> / ${fix.length}<br>
-    ${G.phase==="po"?(eaclPhaseTag(false)||"⚔️ 승강 PO 진행 중"):G.phase==="seasonEnd"?"🏁 시즌 종료":G.phase==="pre"?((function(){try{return cwcMine()&&cwcUserLeft()?`🌍 ${cwcShort()} 참가 중`:"🌱 프리시즌";}catch(e){return "🌱 프리시즌";}})()):""}${G.phase==="pre"?" · ":""}${transferOpen()?`🟢 ${windowInfo().name} 이적시장`:"🔴 이적시장 닫힘"}<br>
+    ${G.phase==="po"?(eaclPhaseTag(false)||"⚔️ 승강 PO 진행 중"):G.phase==="seasonEnd"?(offseasonOn()?"🏖️ 비시즌":"🏁 시즌 종료"):G.phase==="pre"?((function(){try{return cwcMine()&&cwcUserLeft()?`🌍 ${cwcShort()} 참가 중`:"🌱 프리시즌";}catch(e){return "🌱 프리시즌";}})()):""}${G.phase==="pre"?" · ":""}${transferOpen()?`🟢 ${windowInfo().name} 이적시장`:"🔴 이적시장 닫힘"}<br>
     ${(G.nego||G.snego||G.acNego)?`🤝 협상 진행 중<br>`:""}${(G.offers||[]).length?`📨 타 구단 제의 <b>${G.offers.length}건</b><br>`:""}이적 예산 <b class="money">${t.budget}억</b><br>연봉 ${Math.round(totalWage(t))}/${t.wageCap||0}억`;
   updateTopBar(t, r, fix);
   const badge=$("#clubBadge");
@@ -38367,7 +38393,7 @@ function show(v){
   try{ if(G.phase==="pre" && typeof checkPreseasonEnd==="function") checkPreseasonEnd(); }catch(e){}
   /* 연습경기든 정규 라운드든 버튼은 "경기 시작 ▶" 하나로 통일한다 — 어떤 경기인지는
      경기 화면의 태그(프리시즌 친선경기)와 로딩창이 이미 알려 준다. */
-  $("#advBtn").textContent = G.jobless ? (G.phase==="seasonEnd" ? "다음 시즌 시작 ▶▶"
+  $("#advBtn").textContent = G.jobless ? (G.phase==="seasonEnd" ? (offseasonOn()?`🏖️ 비시즌 진행 ▶ (12/31까지 ${offseasonLeft()}일)`:"다음 시즌 시작 ▶▶")
       : (function(){ try{ if(!ownMine()) return "🕊️ 시간 보내기 ▶";
             const nx=ownNextFix();
             /* ⚠ 여기는 textContent 다 — 태그를 쓰면 글자로 그대로 보인다 */
@@ -38378,7 +38404,7 @@ function show(v){
 
     /* ⚠ 제보 — 「시즌 끝나고 아챔 남은 경기를 치를 때 버튼이 '승강 PO 진행'으로 뜬다」.
        phase 만 보고 이름을 붙였는데, 그 단계에서도 대회 경기가 남아 있을 수 있다. 대회를 먼저 본다. */
-    G.phase==="seasonEnd" ? "다음 시즌 시작 ▶▶"
+    G.phase==="seasonEnd" ? (offseasonOn()?`🏖️ 비시즌 진행 ▶ (12/31까지 ${offseasonLeft()}일)`:"다음 시즌 시작 ▶▶")
     : (function(){
         try{ if(cwcUserDue()) return "🌍 "+cwcShort()+" 경기 시작 ▶"; }catch(e){}
         try{ if(eaclUserDue()) return "🌏 "+eaclShort()+" 경기 시작 ▶"; }catch(e){}
@@ -43449,7 +43475,9 @@ function seasonEndPanel(){
     ${xi.length?`<h3 style="margin-top:12px">⭐ 시즌 베스트 11</h3>
       <p class="small">FW &nbsp;${xiRow("FW")}<br>MF &nbsp;${xiRow("MF")}<br>DF &nbsp;${xiRow("DF")}<br>GK &nbsp;${xiRow("GK")}</p>`:""}
     ${cab?`<h3 style="margin-top:12px">🏅 트로피 캐비닛</h3><p>${cab}</p>`:""}
-    <p class="small" style="margin-top:10px">좌측 <b>"다음 시즌 시작 ▶▶"</b> 버튼으로 새 시즌을 시작하세요.</p>
+    <p class="small" style="margin-top:10px">${offseasonOn()
+      ? `🏖️ <b>비시즌</b> — 12월 31일까지 <b>${offseasonLeft()}일</b> 남았습니다. 좌측 <b>"비시즌 진행 ▶"</b>으로 날짜를 보내며 훈련을 편성하고 재정을 정리하세요. 12월 31일에 새 시즌 시작 버튼이 뜹니다.`
+      : `좌측 <b>"다음 시즌 시작 ▶▶"</b> 버튼으로 새 시즌을 시작하세요.`}</p>
   </div>`;
 }
 /* ---------- 스쿼드 ---------- */
@@ -45396,9 +45424,14 @@ function famSub(t,p,slot){
    「나는 그냥 현재 뛸 수 있는 체력을 말한 것」. 지금 킥오프하면 시작하는 체력
    (matchStartFit — 컨디션 − 잔여 경기 피로)을 게이지로 보여준다. 다리가 무거우면 🦵 표시. */
 function staSub(p){
-  const f=matchStartFit(p);
-  const col = f>=80?"#3fb950" : f>=66?"#56d364" : f>=55?"#d29922" : "#f85149";
-  return `<i class="condBar"><i style="width:${clamp(f,4,100)}%;background:${col}"></i></i><b style="color:${col};font-weight:800">${f}</b>`
+  /* ⚠ 제보 — 「포메이션 카드의 체력 84·81은 초록인데, 선발 정보·교체 대기·그 외 명단에서는
+     같은 84·81이 노랗다」. 맞다 — 여기만 눈금이 달랐다(80/66/55). 표(fitColOf)는 85/76/68/60 이라
+     84 는 표에서 «아직 괜찮다»(💛), 카드에서는 «팔팔하다»(초록)로 읽혔다.
+     ─ 표 쪽 눈금으로 통일한다(요청 — 체력 부담을 더 명시적으로 알리는 쪽). 하트까지 같이 붙여
+       숫자·색·아이콘 셋이 화면마다 어긋날 수 없게 만든다. */
+  const f=Math.round(matchStartFit(p)), col=fitColOf(f);
+  return `<i class="condBar"><i style="width:${clamp(f,4,100)}%;background:${col}"></i></i>`
+       + `<b style="color:${col};font-weight:800">${bodyIconOf(col)}${f}</b>`
        + (((p&&p.mFat)||0)>=0.25?' <span title="지난 경기의 잔여 피로 — 다리가 무겁습니다">🦵</span>':"");
 }
 function fmSubFor(t,p,slot){
@@ -45424,13 +45457,16 @@ function fmSubForLive(t, x, slot){
 }
 function condSub(p){
   /* 🎨 전술판 리마스터 — 「컨디션 100」 텍스트 대신 바 게이지 + 숫자 (칸 높이 고정의 일부) */
+  /* 체력과 같은 원칙 — 표(bodyCell)가 다는 하트를 카드에도 단다 */
   const c=mor(p.cond), col=condCol(c);
-  return `<i class="condBar"><i style="width:${clamp(c,4,100)}%;background:${col}"></i></i><b style="color:${col};font-weight:800">${c}</b>`
+  return `<i class="condBar"><i style="width:${clamp(c,4,100)}%;background:${col}"></i></i>`
+       + `<b style="color:${col};font-weight:800">${bodyIconOf(col)}${c}</b>`
        + (p.inj>0?' <span style="color:#f85149">🚑</span>':"");
 }
 function fitSub(fit, yc){
   const f=Math.round(fit||0), col=fitColOf(f);
-  return `<i class="condBar"><i style="width:${clamp(f,4,100)}%;background:${col}"></i></i><b style="color:${col};font-weight:800">${f}</b>` + (yc?' 🟨':"");
+  return `<i class="condBar"><i style="width:${clamp(f,4,100)}%;background:${col}"></i></i>`
+       + `<b style="color:${col};font-weight:800">${bodyIconOf(col)}${f}</b>` + (yc?' 🟨':"");
 }
 function fmPlayerCard(t, p, slot, opt){
   opt=opt||{};
@@ -49748,6 +49784,12 @@ function armyBackTxt(p){
       이제 컷 없이 선수 한 명 한 명의 사정으로 판정한다. */
 function loanWorth(t, p, xiSet){
   if(!p || p.loan) return false;
+  /* 🎖️ ⚠ 제보 — 「김천 감독인데 자꾸 다른 팀에서 임대해 간다고 떼쓴다」.
+     상무 선수는 «원소속 구단에서 파견된 현역 군인»이라 빌려줄 수 있는 몸이 아니다.
+     화면에 그릴 때(loanAsksPrune)는 걸러 냈지만 «문의를 만드는 쪽»이 그대로였다 —
+     알림과 기사는 이미 나간 뒤라 유저에게는 계속 떼쓰는 것으로 보였다.
+     입영 통지를 받은 선수도 마찬가지다(입소까지 이적·임대 불가). */
+  if(p.army || p.armyCall || p.emg) return false;
   const age=G.season-(p.by||G.season-20);
   if(age<LOAN_MIN_AGE || age>LOAN_MAX_AGE) return false;   // 성장기 밖이면 임대의 의미가 옅다
   const xi=xiSet || new Set((bestXI(t)||[]).map(q=>q.id));
@@ -60987,10 +61029,145 @@ function staffIgnore(pid){
   notify(`🙉 ${p.name}의 불만을 넘겼습니다.${grew?` 표정이 더 굳었습니다. (불만 ${p.unhappy}/3)`:""}`, grew?"warn":"info");
   saveGame(); show("staff");
 }
+/* ═══ ❓ 면담 중 역질문 — 선수가 되묻는다 ══════════════════════════════════
+   ⚠ 요청 — 「선수와의 대화에서 선수가 역질문할 수 있게 하자. 반발하는 텍스트도 추가하고」.
+   ─ 감독이 한 마디 던지고 끝나는 대화는 «통보»지 대화가 아니다. 선수가 되묻고,
+     그 대답에 «근거»가 있어야 먹힌다 — 팀 미팅의 역질문과 같은 규칙이다.
+   ─ 되묻는 조건: 불만이 깊거나 · 성격이 세거나 · 감독이 모진 말을 골랐을 때.
+     늘 되물으면 면담이 지루해진다. */
+const TALK_NEED={
+  ""    : ()=>0,
+  resp  : ()=>{ try{ return profRespect()>=0.06 ? 0.16 : -0.22; }catch(e){ return 0; } },
+  form  : (t)=>{ try{ return meetForm(t)>=1 ? 0.16 : meetForm(t)<=-2 ? -0.24 : -0.08; }catch(e){ return 0; } },
+  rich  : (t)=>{ try{ return (t.budget||0)>=40 ? 0.14 : -0.22; }catch(e){ return 0; } },
+  play  : (t,p)=>{ try{ return playShare(p)>=0.5 ? 0.18 : -0.22; }catch(e){ return 0; } },
+  bench : (t,p)=>{ try{ return playShare(p)<0.35 ? 0.16 : -0.20; }catch(e){ return 0; } },
+  star  : (t,p)=>{ try{ return p.ovr>=teamOVR(t)+1 ? 0.16 : -0.20; }catch(e){ return 0; } }
+};
+const TALK_NEED_N={ resp:"선수단이 나를 믿어야 먹히는 말", form:"성적이 받쳐 줘야 먹히는 말",
+  rich:"곳간이 받쳐 줘야 먹히는 말", play:"이 선수가 실제로 뛰고 있어야 먹히는 말",
+  bench:"이 선수가 못 뛰고 있다는 게 사실이어야 먹히는 말", star:"이 선수가 팀 상위권이어야 먹히는 말" };
+/* 어느 불만에서든 나올 수 있는 되물음 */
+const TALK_Q_ANY=[
+  {q:'"감독님은 저를 어떻게 보고 계십니까?"',
+   o:[{t:"팀에 꼭 필요한 선수라고 본다",            need:"star", mor:+4, aff:+4},
+      {t:"지금은 아니지만, 될 사람이라고 본다",      need:"",     mor:+2, aff:+2},
+      {t:"그건 네가 그라운드에서 증명할 문제다",      need:"resp", mor:-1, aff:-2}]},
+  {q:'"제가 그 말을 어떻게 믿습니까? 말은 지난번에도 들었습니다."',
+   o:[{t:"이번엔 다르다 — 못 지키면 내가 책임진다",  need:"resp", mor:+4, aff:+4},
+      {t:"믿고 안 믿고는 네 몫이다",                need:"",     mor:-2, aff:-3},
+      {t:"당장 눈에 보이게 바꿔 주겠다",            need:"rich", mor:+3, aff:+2}]},
+  {q:'"팀에 제 자리가 정말 있긴 한 겁니까?"',
+   o:[{t:"있다. 그래서 지금 부른 거다",             need:"",     mor:+3, aff:+3},
+      {t:"자리는 주는 게 아니라 뺏는 거다",          need:"resp", mor:0,  aff:-1},
+      {t:"솔직히 지금 계획엔 없다",                 need:"",     mor:-5, aff:-6}]},
+  {q:'"다른 선수한테도 같은 말씀 하시는 겁니까?"',
+   o:[{t:"아니다. 너한테만 하는 얘기다",            need:"star", mor:+4, aff:+3},
+      {t:"모두에게 같은 기준을 적용한다",            need:"resp", mor:+1, aff:0},
+      {t:"그건 네가 알 바 아니다",                  need:"",     mor:-4, aff:-5}]},
+  {q:'"제 얘기를 들으실 생각은 있으신 겁니까?"',
+   o:[{t:"그래서 불렀다. 말해 봐라",                need:"",     mor:+3, aff:+5},
+      {t:"들었으니 이제 내 얘기를 들어라",           need:"resp", mor:0,  aff:-1},
+      {t:"지금은 내가 말할 차례다",                 need:"",     mor:-4, aff:-5}]}
+];
+/* 불만 종류별 전용 되물음 */
+const TALK_Q={
+  playtime:[{q:'"그럼 제가 뭘 더 해야 나갈 수 있습니까?"',
+    o:[{t:"훈련에서 앞서라 — 자리는 거기서 갈린다",  need:"",     mor:+2, aff:+1},
+       {t:"다음 경기 명단에 넣겠다",                need:"bench",mor:+5, aff:+4},
+       {t:"네 앞에 있는 선수가 지금 더 낫다",        need:"resp", mor:-3, aff:-3}]}],
+  wage:[{q:'"제 값어치가 그 정도밖에 안 됩니까?"',
+    o:[{t:"값어치는 인정한다. 시기가 문제다",        need:"",     mor:+3, aff:+3},
+       {t:"성적이 나오면 구단이 먼저 움직인다",      need:"rich", mor:+2, aff:+1},
+       {t:"지금 받는 게 네 시장가다",                need:"resp", mor:-4, aff:-4}]}],
+  star:[{q:'"그 선수 나가고 우리 뭐가 달라집니까?"',
+    o:[{t:"네가 그 자리를 가져가면 된다",            need:"star", mor:+5, aff:+4},
+       {t:"그 돈으로 사람을 데려온다",              need:"rich", mor:+3, aff:+2},
+       {t:"한 명 나갔다고 흔들릴 팀이 아니다",       need:"form", mor:0,  aff:-1}]}],
+  form:[{q:'"이대로 가면 어떻게 되는 겁니까?"',
+    o:[{t:"내가 책임진다. 너희는 경기만 해라",       need:"",     mor:+4, aff:+4},
+       {t:"반등한다. 계획이 있다",                  need:"form", mor:+3, aff:+2},
+       {t:"그건 너희가 뛰기 나름이다",              need:"resp", mor:-2, aff:-3}]}],
+  role:[{q:'"제 자리가 아닌 걸 감독님도 아시잖습니까?"',
+    o:[{t:"안다. 지금은 팀이 그걸 필요로 한다",      need:"resp", mor:+2, aff:+1},
+       {t:"곧 원래 자리로 돌려주겠다",              need:"",     mor:+4, aff:+3},
+       {t:"프로면 어디서든 해야 한다",              need:"",     mor:-3, aff:-4}]}],
+  listed:[{q:'"저를 팔겠다는 겁니까, 아니면 겁을 주시는 겁니까?"',
+    o:[{t:"겁주려는 게 아니다. 네 미래를 위해서다",  need:"resp", mor:+2, aff:+1},
+       {t:"좋은 제안이 오면 보내 주겠다",           need:"",     mor:+1, aff:+2},
+       {t:"팔 생각이다. 그게 구단 판단이다",         need:"",     mor:-5, aff:-5}]}],
+  rumor:[{q:'"밖에서 도는 얘기, 구단에서 흘린 거 아닙니까?"',
+    o:[{t:"아니다. 내가 직접 막겠다",               need:"",     mor:+4, aff:+4},
+       {t:"흘린 적 없다. 신경 쓰지 마라",           need:"resp", mor:+1, aff:0},
+       {t:"소문이 도는 데는 이유가 있다",            need:"",     mor:-4, aff:-4}]}],
+  abroad:[{q:'"제 나이에 지금 아니면 언제 나갑니까?"',
+    o:[{t:"제대로 된 제안이 오면 막지 않겠다",       need:"",     mor:+4, aff:+4},
+       {t:"여기서 더 크고 나가는 게 맞다",           need:"resp", mor:+1, aff:0},
+       {t:"계약이 남아 있다. 그 얘긴 끝이다",        need:"",     mor:-5, aff:-5}]}],
+  transfer:[{q:'"보내 주실 겁니까, 말 겁니까? 확실히 해 주십시오."',
+    o:[{t:"보내 주겠다. 좋은 곳을 찾아 주마",        need:"",     mor:+3, aff:+4},
+       {t:"이번 시즌은 안 된다. 대신 뛰게 해 주겠다", need:"bench",mor:+1, aff:0},
+       {t:"못 보낸다. 그게 끝이다",                 need:"resp", mor:-5, aff:-5}]}],
+  arrears:[{q:'"밀린 급여는 언제 나옵니까? 가족이 있습니다."',
+    o:[{t:"곧 나온다. 내가 구단에 못을 박겠다",      need:"rich", mor:+4, aff:+4},
+       {t:"미안하다. 나도 답을 못 받고 있다",        need:"",     mor:+1, aff:+3},
+       {t:"프로면 돈 얘기는 나중에 해라",            need:"",     mor:-6, aff:-7}]}],
+  general:[{q:'"요즘 이 팀이 재미가 없습니다. 저만 그렇습니까?"',
+    o:[{t:"아니다. 나도 안다. 바꿔 보겠다",          need:"",     mor:+4, aff:+4},
+       {t:"이길 때가 오면 재미도 온다",              need:"form", mor:+2, aff:+1},
+       {t:"재미로 축구하는 자리가 아니다",           need:"resp", mor:-4, aff:-5}]}]
+};
+/* 💢 반발 — 대답이 안 먹혔을 때. 성격이 그대로 드러난다 */
+const TALK_REBUT={
+  0:[ p=>`"...알겠습니다. 더 드릴 말씀은 없습니다."`,
+      p=>`"그렇게 정하셨다면 따르겠습니다. 다만 납득한 건 아닙니다."`,
+      p=>`"프로니까 하겠습니다. 그뿐입니다."` ],
+  1:[ p=>`"그럼 저는 여기서 뭘 기대해야 합니까?"`,
+      p=>`"제 시간을 이렇게 쓰라는 말씀으로 듣겠습니다."`,
+      p=>`"다른 데서는 저를 다르게 볼 겁니다."` ],
+  2:[ p=>`"...네. 알겠습니다." <span class="small" style="opacity:.7">— 말끝을 흐렸습니다.</span>`,
+      p=>`"괜찮습니다. 신경 쓰지 마십시오." <span class="small" style="opacity:.7">— 표정이 굳었습니다.</span>`,
+      p=>`"...그렇군요."` ],
+  3:[ p=>`"그게 지금 저한테 하실 말씀입니까?"`,
+      p=>`"됐습니다. 더 얘기해 봐야 소용없겠네요." <span class="small" style="opacity:.7">— 자리에서 일어섰습니다.</span>`,
+      p=>`"저만 이상한 사람 만드시는군요."` ]
+};
+const TALK_ACCEPT={
+  0:[ p=>`"...말씀 알겠습니다. 그렇게 하겠습니다."`, p=>`"납득했습니다. 준비하겠습니다."` ],
+  1:[ p=>`"좋습니다. 그 말씀 기억하겠습니다."`,     p=>`"제가 증명하면 되는 거군요. 해보죠."` ],
+  2:[ p=>`"감독님이 그렇게까지 말씀하시니... 알겠습니다."`, p=>`"믿어 보겠습니다."` ],
+  3:[ p=>`"...진작 그렇게 말씀하시지 그랬습니까."`, p=>`"알겠습니다. 그럼 됐습니다."` ]
+};
+/* 되묻는가 — 불만이 깊을수록, 성격이 셀수록, 모진 말일수록 */
+function talkAskP(p, o){
+  let q=0.30;
+  q += (p.unhappy||0)*0.13;
+  if(o.k==="blunt"||o.k==="warn") q+=0.22;
+  if(p.pers===1) q+=0.12;                 // 야심가
+  if(p.pers===3) q+=0.15;                 // 다혈질
+  if(p.pers===2) q-=0.08;                 // 온화함
+  if((p.sulk||0)>0) q+=0.20;
+  try{ q -= profRespect()*0.35; }catch(e){}   // 나를 믿는 선수는 덜 따진다
+  return clamp(q, 0.05, 0.90);
+}
+function talkQPool(key){
+  const own=TALK_Q[key]||[];
+  return own.concat(TALK_Q_ANY);
+}
+function talkLand(t, p, o){
+  let a=0.58;
+  try{ a += (TALK_NEED[o.need||""]||(()=>0))(t, p); }catch(e){}
+  try{ a += (aff(p)-50)/100*0.45; }catch(e){}
+  a -= (p.unhappy||0)*0.05;
+  if((p.sulk||0)>0) a-=0.15;
+  try{ a += profRespect()*0.45; }catch(e){}
+  if(o.mor<0) a-=0.10;                    // 모진 대답은 그만큼 어렵다
+  return clamp(a, 0.05, 0.95);
+}
 let STALK=null;
 function staffTalk(pid){
   const t=userTeam(); const p=t.players.find(x=>x.id===pid); if(!p) return;
-  STALK={pid, key:grieveKey(p)};
+  STALK={pid, key:grieveKey(p), q:null, pick:-1};
   renderStaffTalk();
 }
 function renderStaffTalk(){
@@ -61012,6 +61189,64 @@ function renderStaffTalk(){
 function staffTalkPick(i){
   const t=userTeam(); const p=t.players.find(x=>x.id===STALK.pid); if(!p) return;
   const g=GRIEVE[STALK.key], o=g.talk[i]; if(!o) return;
+  STALK.pick=i;
+  /* ❓ 선수가 되묻는가 */
+  if(Math.random()<talkAskP(p, o)){
+    const pool=talkQPool(STALK.key);
+    STALK.q=pool[Math.floor(Math.random()*pool.length)];
+    return renderTalkAsk();
+  }
+  talkResolve(0, "");
+}
+function renderTalkAsk(){
+  const t=userTeam(); const p=t.players.find(x=>x.id===STALK.pid); if(!p){ STALK=null; return show("staff"); }
+  const g=GRIEVE[STALK.key], o=g.talk[STALK.pick], Q=STALK.q;
+  const opts=Q.o.map((x,j)=>{
+    const land=talkLand(t, p, x);
+    const col=land>=0.62?"var(--green)":land>=0.45?"var(--gold)":"var(--red)";
+    const nd=TALK_NEED_N[x.need||""]||"";
+    return `<button class="mini" style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:10px" onclick="staffTalkAnswer(${j})">
+      <b>「${x.t}」</b> <span style="color:${col};font-weight:800;float:right">${Math.round(land*100)}%</span>
+      ${nd?`<br><span class="small" style="opacity:.7">${nd}</span>`:""}</button>`;
+  }).join("");
+  $("#main").innerHTML=`<h2>💬 ${p.name} 선수 면담</h2>
+  <div class="card stCard">
+    <p>🗣️ 감독: "${o.t}"</p>
+  </div>
+  <div class="card" style="border-color:#e05a5a">
+    <h3>❓ ${p.name} 선수가 되묻습니다</h3>
+    <div class="hrAsk" style="margin-bottom:10px">
+      <div class="hrAskWho">${p.name} <span class="small" style="opacity:.6">${PERS_N[p.pers||0]} · 불만 ${p.unhappy}/3</span></div>
+      <div class="hrAskQ">${Q.q}</div>
+    </div>
+    ${opts}
+    <p class="small" style="margin:8px 0 0;opacity:.6">대답이 납득되면 면담이 더 잘 풀리고, 안 되면 그 자리에서 반발합니다.</p>
+  </div>`;
+  window.scrollTo(0,0);
+}
+function staffTalkAnswer(j){
+  const t=userTeam(); const p=t.players.find(x=>x.id===STALK.pid); if(!p) return;
+  const Q=STALK.q; if(!Q) return talkResolve(0,"");
+  const x=Q.o[j]; if(!x) return;
+  const ok=Math.random()<talkLand(t, p, x);
+  const pers=p.pers||0;
+  const pool=ok?TALK_ACCEPT[pers]:TALK_REBUT[pers];
+  const line=pool[Math.floor(Math.random()*pool.length)](p);
+  const bonus=ok ? (x.mor||0) : -Math.abs(x.mor||0)*0.8 - 2;
+  try{ affAdd(p, ok?(x.aff||0):-Math.abs(x.aff||0)*0.8-1, "면담 역질문"); }catch(e){}
+  /* 💢 크게 어긋나면 그 자리에서 불만이 자란다 */
+  let hard="";
+  if(!ok && (x.mor||0)<0){
+    if(Math.random()<0.45){ p.unhappy=Math.min(3,(p.unhappy||0)+1); hard=" 불만이 한 단계 더 깊어졌습니다."; }
+    if(pers===3 && (p.unhappy||0)>=3 && Math.random()<0.25){ p.sulk=Math.max(p.sulk||0, 3); hard+=" 훈련장에서 등을 돌렸습니다."; }
+  }
+  STALK.qLog={q:Q.q, a:x.t, ok, line, hard};
+  talkResolve(bonus, "");
+}
+/* 실제 효과를 적용하고 결과 화면을 그린다 (역질문이 없으면 곧바로 여기로 온다) */
+function talkResolve(bonus, _unused){
+  const t=userTeam(); const p=t.players.find(x=>x.id===STALK.pid); if(!p) return;
+  const g=GRIEVE[STALK.key], o=g.talk[STALK.pick]; if(!o) return;
   const st=staffOpt();
   // 성격에 따라 같은 말도 다르게 받아들인다
   const pers=p.pers||0;
@@ -61019,7 +61254,7 @@ function staffTalkPick(i){
   if(o.k==="blunt"||o.k==="warn"){ if(pers===2) m-=2; if(pers===3) m-=2; if(pers===0) m+=2; }
   if(o.k==="lift"){ if(pers===1) m+=2; if(pers===2) m-=1; }
   if(o.k==="calm"){ if(pers===0) m+=1; if(pers===1) m-=1; }
-  m=Math.round(m);
+  m=Math.round(m + (bonus||0));
   p.morale=Math.round(clamp(p.morale+m,25,99)*100)/100;
   affAdd(p, m*0.8, "면담");            // 면담은 호감도에 가장 직접적으로 남는다
   let extra="";
@@ -61070,14 +61305,22 @@ function staffTalkPick(i){
   if(p.unhappy===0){ p.uWhy=""; }
   st.handled[p.id]={d:(G.day||0), s:G.season};   // ⚠ 제보(스태프회의 안 뜸) — 날짜를 남겨 7일 뒤 재보고
   staffLog(`${p.name} 면담 — ${o.t}`);
+  const QL=STALK.qLog;
   const col = m>=4?"good" : m>=0?"info":"warn";
   $("#main").innerHTML=`<h2>💬 ${p.name} 선수 면담</h2>
   <div class="card stCard">
     <p>🗣️ 감독: "${o.t}"</p>
-    <p style="color:var(--acc)">💬 ${p.name}: ${o.say(p)}</p>
-    <div class="msg ${col}">사기 ${m>0?"+":""}${m} · 불만 ${p.unhappy}/3${extra?` · ${extra}`:""}</div>
+    ${QL?`<div class="hrQLog" style="margin:8px 0">
+      <div class="small" style="opacity:.75">❓ ${p.name} — ${QL.q}</div>
+      <div class="small"><b>내 대답</b> 「${QL.a}」 →
+        <b style="color:${QL.ok?"var(--green)":"var(--red)"}">${QL.ok?"납득했습니다":"납득하지 못했습니다"}</b></div>
+    </div>
+    <p style="color:${QL.ok?"var(--acc)":"#ff9d5c"}">💬 ${p.name}: ${QL.line}</p>`
+     :`<p style="color:var(--acc)">💬 ${p.name}: ${o.say(p)}</p>`}
+    <div class="msg ${col}">사기 ${m>0?"+":""}${m} · 불만 ${p.unhappy}/3${extra?` · ${extra}`:""}${QL&&QL.hard?`<span style="color:var(--red)">${QL.hard}</span>`:""}</div>
   </div>
   <div class="card"><button class="mini" style="width:100%;padding:11px" onclick="STALK=null;show('staff')">회의로 돌아간다 ▶</button></div>`;
+  STALK.q=null; STALK.qLog=null;
   saveGame(); window.scrollTo(0,0);
 }
 /* ---------- 선수단 첫 인사 (부임 첫날) ----------
@@ -84437,7 +84680,13 @@ function stepDay(){
   /* 승강 PO 가 아직 남아 있으면 그쪽이 먼저다 — 대회 대기는 PO 를 다 치른 뒤에 건다 */
   const _aclHold = _aclLeft && _aclDay>=0 && (G.day||0)<_aclDay
                    && !(G.phase==="po" && ((G.poQueue||[]).length>0));
-  if(!_aclHold){
+  /* 🏖️ 비시즌 — 시즌 정산은 끝났지만 12월 31일까지는 하루씩 흘려보낸다 (요청) */
+  if(G.phase==="seasonEnd"){
+    if(!offseasonOn()){
+      prgPush(`<span class="prgD">${dateLabel(G.day)}</span> 🎆 <b>${G.season}년의 마지막 날입니다.</b> 새 시즌을 시작할 때입니다.`, "prgStop");
+      saveGame(); stopProgress({kind:"newseason"}); return;
+    }
+  } else if(!_aclHold){
     if(G.phase!=="pre" && (userRoundNow()>=G.cal.roundDay.length || G.day>=G.cal.last)){
       /* 🗓️ 라운드가 남았는데 달력이 먼저 끝난 세이브 — 종료를 선언하지 말고 달력을 고쳐 계속 간다 (제보) */
       if(calRoundRepair()){ prgPush("📢 남은 라운드에 맞춰 일정을 다시 깔았습니다 — 진행을 계속합니다.", "prgAlert"); }
@@ -84835,6 +85084,9 @@ function stopProgress(s){
   } else if(s.kind==="end"){
     prgPush("시즌 일정이 모두 끝났습니다.", "prgMatch");
     if(go){ go.textContent="계속 ▶"; go.style.display=""; }
+  } else if(s.kind==="newseason"){
+    prgPush("🎆 <b>12월 31일</b> — 한 해가 저물었습니다. 1월 1일부터 새 시즌이 시작됩니다.", "prgMatch");
+    if(go){ go.textContent="🎉 다음 시즌 시작 ▶▶"; go.style.display=""; }
   } else if(s.kind==="presser"){
     if(go){ go.textContent="🎙️ 기자회견장으로 ▶"; go.style.display=""; }
   } else if(s.kind==="suitApology"){
@@ -84871,6 +85123,7 @@ function resolveStop(s){
   if(s.kind==="days"){ show("home"); window.scrollTo(0,0); return; }
   if(s.kind==="match"){ runAdvanceNow(); return; }
   if(s.kind==="end"){ runAdvanceNow(); return; }
+  if(s.kind==="newseason"){ runAdvanceNow(); return; }
   if(s.kind==="presser"){
     const _info=(s&&s.info)||G.signPend;                /* 팝업 상태가 유실됐어도 붙잡아 둔 회견으로 연다 (제보) */
     if(_info && openSignPresser(_info)) return;
@@ -85298,7 +85551,7 @@ function startProgress(){
     _aclWait = G.phase==="po" && !((G.poQueue||[]).length) && !!G.cal && eaclUserLeft();
   }catch(e){ _aclWait=false; }
   // 승강 PO·시즌 종료는 달력 밖의 일정이므로 종전처럼 곧바로 진행한다
-  if(((G.phase!=="league" && G.phase!=="pre") || !G.cal) && !_aclWait){ runAdvanceNow(); return; }
+  if(((G.phase!=="league" && G.phase!=="pre") || !G.cal) && !_aclWait && !offseasonOn()){ runAdvanceNow(); return; }
   /* 줄 서 있던 멈춤부터 — 경기일이어도 같은 날 겹쳐 미뤄진 회견·판결 확인이 먼저다 */
   if(G.stopQ && G.stopQ.length){
     openProgressBox();
@@ -90580,7 +90833,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5144";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5148";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
