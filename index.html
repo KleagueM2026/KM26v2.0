@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5153-->
+<!--B:20260913-5155-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -955,9 +955,24 @@ input,textarea,select,[contenteditable="true"]{-webkit-user-select:text; user-se
 .fmDot{display:inline-block; width:7px; height:7px; border-radius:50%; flex:0 0 auto;
   box-shadow:0 0 5px currentColor;}
 .fmCardSub{font-size:10px; color:var(--sub); height:17px; display:flex; align-items:center; justify-content:center;
-  gap:5px; padding:0 7px; background:rgba(4,9,14,.62);}
+  gap:5px; padding:0 4px; background:rgba(4,9,14,.62); overflow:hidden;}
 .condBar{flex:1 1 auto; max-width:44px; height:4px; border-radius:99px; background:#26303b; overflow:hidden;}
 .condBar i{display:block; height:100%; border-radius:99px;}
+/* 🦵 ⚠ 제보 원문 — 「고된 일정으로 포메이션에 '다리' 표시가 뜰 때 체력 수치 표기 자체가
+     완전 누락되는 경우가 있다. 표시가 뜰 때 충분히 박스가 커져 수치를 볼 수 있으면 좋겠다」.
+   원인 — 칸(.fmCardSub)은 높이 17px 고정에 .fmCard 가 overflow:hidden 이다. 게이지 바가
+     flex:1 1 auto 로 공간을 먼저 가져가서, 아이콘이 하나 붙는 순간 숫자가 칸 밖으로
+     밀려나 그대로 잘렸다. 게이지는 장식이고 숫자가 본체다 — 순서를 뒤집는다.
+   ─ 숫자와 아이콘은 절대 줄어들지 않고, 좁아지면 게이지가 먼저 양보한다(끝내 사라진다). */
+.subFit{display:flex; align-items:center; justify-content:center; gap:5px; min-width:0; max-width:100%;}
+.subFit>b{flex:0 0 auto; white-space:nowrap;}
+.subFit .subIc{flex:0 0 auto; font-size:9.5px; line-height:1;}
+.subFit .condBar{flex:1 1 0; min-width:0;}
+/* 아이콘이 붙은 카드 — 게이지를 접고 자리를 숫자에 넘긴다 */
+.subFit.tired{gap:3px;}
+.subFit.tired .condBar{max-width:18px;}
+@media (max-width:1150px){ .subFit.tired .condBar{display:none;} }
+@media (max-width:900px){ .subFit .condBar{max-width:26px;} .subFit.tired .condBar{display:none;} }
 .fmCardSub .stars{font-size:10.5px; letter-spacing:.4px;}
 /* 열람 전용 카드(선발 라인업 프리뷰) — 손맛 없는 정적 카드 */
 .fmCard.view{cursor:default;}
@@ -10375,7 +10390,16 @@ function buildSeason(keepUser){
   runSeasonTicketSale();
   ensureTrainPlan();
   for(const id in G.teams){ const t=G.teams[id];
-    // 새 시즌 — AI 팀은 프리시즌을 온전히 치렀다고 보고, 새로 부임한 감독의 팀만 조직력이 낮다
+    /* 📋 ⚠ 제보 원문 — 「'새로운 시즌 시작' 버튼을 누르자 특별한 까닭 없이 전술의 친숙도가
+         5칸에서 3칸으로 2칸 하락한다. '전술 1번'만 떨어지고 2번·3번은 그대로다」.
+       원인 — 여기서 «해가 바뀌었다는 이유만으로» 유저 팀의 조직력을 FAM_START(68)로
+         되돌리고 있었다. 이 자리는 원래 «새 게임 = 새로 부임한 감독»을 위한 초기화인데,
+         시즌 롤오버(buildSeason(true))도 같은 길을 지나면서 함께 맞았다.
+         전술 슬롯 2·3번은 t.tactic.presets[i].fam 에 따로 들어 있어 건드려지지 않았고,
+         지금 쓰는 판(=슬롯 1)만 t.fam 이라 그것만 떨어진 것이다. 실측 92 → 68 (−24).
+       ─ 감독도 선수단도 판도 그대로인데 손발이 풀릴 이유가 없다. 이어 가는 시즌은 그대로 둔다.
+         (비시즌 동안 훈련을 안 하면 평소 규칙대로 조금씩 풀린다 — 그건 벌어야 하는 값이다) */
+    if(t.isUser && keepUser) continue;
     t.fam = t.isUser ? FAM_START : 72+R(9);
     t._sig = tacticSig(t);
   }
@@ -11460,6 +11484,53 @@ function eaclSquadPlan(def){
 const OVR_TEAM_F=["name","short","owner","ownKind","stadName","stadCap","stadAvg",
                   "budget","wageCap","fans","morale","fam","youthLv","trainLv","scoutLv"];
 function ovrTeamKey(f){ return f==="stadName"?"stadN" : f==="owner"?"own" : f; }
+/* 표의 저장 키(stadN·own)로 원래 항목명을 되찾는다 — 파일에서 받은 표를 검증하며 다시 넣을 때 쓴다 */
+function ovrTeamField(k){ return k==="stadN"?"stadName" : k==="own"?"owner" : k; }
+/* ═══ 🌏 해외 구단 수정 내보내기/불러오기 ═══════════════════════════════════
+   ⚠ 제보 원문 — 「국내 구단과 해외 구단 명칭·홈구장·관객석 현실화 패치를 수정본 내보내기로
+     만들었는데, 불러오니 EACL 을 참가함에도 «모든 해외 구단»을 건너뛰고 가칭 그대로였다.
+     첫 시즌을 EACL·CWC 미참가로 시작한 구단은 영원히 적용이 안 되는 것 같다」.
+   ─ 참가 여부와는 상관이 없었다. 애초에 «파일에 실리지도 않았다».
+     해외 구단은 G.teams 에 없다. 시즌마다 스쿼드가 새로 만들어지는 껍데기라,
+     에디터에서 고친 값은 G.eaclName / G.cwcName 이라는 «덮어쓰기 표»에 따로 쌓인다.
+     그런데 edSetTeamQ 는 그 표에 넣고 곧바로 return 해서 수정 기록(G.edits)에 남기지 않았고,
+     세 가지 내보내기(수정본·전체·이름) 어디에도 이 표가 담기지 않았다.
+     받는 쪽 edApplyOne 도 G.teams[tid] 만 보므로 eacl_/cwc_ 는 통째로 건너뛰었다.
+   ─ 표 자체를 파일에 싣는다. 표는 «구단이 만들어지는 순간»(eaclClub·cwcClub) 씌워지므로,
+     지금 대회에 나가지 않아도 나중에 그 구단이 만들어질 때 그대로 적용된다. */
+function edOvrTake(){
+  const out={};
+  try{ if(G.eaclName && Object.keys(G.eaclName).length) out.eaclName=JSON.parse(JSON.stringify(G.eaclName)); }catch(e){}
+  try{ if(G.cwcName  && Object.keys(G.cwcName).length)  out.cwcName =JSON.parse(JSON.stringify(G.cwcName)); }catch(e){}
+  return out;
+}
+/* 파일에서 받은 표를 얹는다 — 값은 한 칸씩 정식 검증기(ovrTeamPut)를 태운다 */
+function edOvrPut(obj){
+  let n=0;
+  const one=(bag, setter)=>{
+    if(!bag || typeof bag!=="object") return;
+    for(const key in bag){
+      const row=bag[key]; if(!row || typeof row!=="object") continue;
+      for(const k in row){
+        const f=ovrTeamField(k);
+        if(OVR_TEAM_F.indexOf(f)<0) continue;
+        try{ setter(key, f, row[k]); n++; }catch(e){}
+      }
+    }
+  };
+  one(obj && obj.eaclName, (id,f,v)=>eaclSetName(id,f,v));
+  one(obj && obj.cwcName,  (id,f,v)=>cwcSetName(id,f,v));
+  /* 이미 만들어져 있는 캐시에도 그 자리에서 씌운다 */
+  try{ for(const k in (G.eaclClubs||{})){ const c=G.eaclClubs[k]; if(c && c.t) eaclApplyName(c.t, k); } }catch(e){}
+  try{ for(const k in (G.cwcClubs||{})){ const c=G.cwcClubs[k]; if(c && c.t) cwcApplyName(c.t, k); } }catch(e){}
+  return n;
+}
+function edOvrCount(obj){
+  let n=0;
+  for(const bag of [obj&&obj.eaclName, obj&&obj.cwcName])
+    if(bag && typeof bag==="object") for(const k in bag) if(bag[k] && typeof bag[k]==="object") n++;
+  return n;
+}
 /* 표 한 칸에 값을 넣는다 — 비었거나 말이 안 되는 값이면 그 칸을 지운다(=기본값으로) */
 function ovrTeamPut(o, field, v){
   const k=ovrTeamKey(field);
@@ -28636,8 +28707,8 @@ function edSetTeamQ(t, field, v){
      이름·약칭만 표로 가고 구장·모기업은 캐시에 직접 써서 저장 때 날아갔다 — 같이 보낸다. */
   /* ⚠ 제보 — 여섯 항목만 표로 보냈더니 팬 규모·예산·등급 따위가 다음 시즌에 사라졌다.
      이제 에디터 팀 탭의 전 항목(OVR_TEAM_F)을 표로 보낸다. */
-  if(edIsCwc(t)  && OVR_TEAM_F.indexOf(field)>=0){ cwcSetName(t.id, field, v); return; }
-  if(edIsEacl(t) && OVR_TEAM_F.indexOf(field)>=0){ eaclSetName(t.id, field, v); return; }
+  if(edIsCwc(t)  && OVR_TEAM_F.indexOf(field)>=0){ cwcSetName(t.id, field, v); edLog(t.id, null, "t", field, v); return; }
+  if(edIsEacl(t) && OVR_TEAM_F.indexOf(field)>=0){ eaclSetName(t.id, field, v); edLog(t.id, null, "t", field, v); return; }
   /* 🔒 국내 구단 — 명칭류는 잠금 등록부에 남긴다. AI 가 나중에 덮어써도 여기서 되돌린다. */
   try{ edLockPut(t.id, field, v); }catch(e){}
   if(field==="name"){ const nm=edName(v,20); if(nm){ const old=t.name; t.name=nm; renameEverywhere([[old,nm]]); } }
@@ -29080,6 +29151,9 @@ function edExportPatch(){
   const obj={kind:ED_PATCH_KIND, v:1, from:t?t.short:"", season:G.season,
              made:new Date().toISOString().slice(0,10),
              edits:list.map(e=>({tid:e.tid, pn:e.pn, k:e.k, f:e.f, v:e.v}))};
+  /* 🌏 해외 구단은 G.teams 에 없어 수정 기록만으로는 옮겨지지 않는다 — 표를 통째로 싣는다 */
+  Object.assign(obj, edOvrTake());
+  const _ovN=edOvrCount(obj);
   try{
     const txt=JSON.stringify(obj);
     const name=`klm2026_patch_${obj.made.replace(/-/g,"")}_${list.length}건.json`;
@@ -29089,7 +29163,7 @@ function edExportPatch(){
     a.href=url; a.download=name; a.style.display="none";
     document.body.appendChild(a); a.click();
     setTimeout(()=>{ try{ URL.revokeObjectURL(url); a.remove(); }catch(e){} }, 800);
-    showConfirm(`<b>📤 수정본 패치를 내보냈습니다.</b>\n\n· 수정 ${list.length}건 · ${Math.round(txt.length/102.4)/10}KB\n· 파일명: ${name}\n\n<span class="small">전체 데이터가 아니라 "무엇을 어떻게 바꿨는가"만 담깁니다.\n받은 사람은 자기 게임 위에 이 수정만 얹습니다 — 나머지는 그대로 둔 채로.</span>`,
+    showConfirm(`<b>📤 수정본 패치를 내보냈습니다.</b>\n\n· 수정 ${list.length}건${_ovN?` · 🌏 해외 구단 ${_ovN}곳`:""} · ${Math.round(txt.length/102.4)/10}KB\n· 파일명: ${name}\n\n<span class="small">전체 데이터가 아니라 "무엇을 어떻게 바꿨는가"만 담깁니다.\n받은 사람은 자기 게임 위에 이 수정만 얹습니다 — 나머지는 그대로 둔 채로.${_ovN?"\n🌏 해외 구단은 대회 참가 여부와 상관없이 적용됩니다 — 그 구단이 만들어질 때 씌워집니다.":""}</span>`,
       ()=>{}, {okLabel:"확인", cancelLabel:""});
   }catch(e){ flash("내보내기에 실패했습니다.","warn"); show("editor"); }
 }
@@ -29184,6 +29258,16 @@ function edApplyOne(e){
     } else return false;
     return true;
   }
+  /* 🌏 해외 구단(대회 참가 클럽) — G.teams 에 없다. 덮어쓰기 표로 곧장 보낸다.
+     지금 대회에 나가지 않아도 표는 남고, 그 구단이 만들어지는 순간 씌워진다. */
+  {
+    const tid=String(e.tid||"");
+    if(/^(eacl|cwc)_/.test(tid)){
+      if(e.k!=="t" || OVR_TEAM_F.indexOf(e.f)<0) return false;
+      if(tid.charAt(0)==="e") eaclSetName(tid, e.f, e.v); else cwcSetName(tid, e.f, e.v);
+      return true;
+    }
+  }
   const t=G.teams[e.tid]; if(!t) return false;
   if(e.k==="t"){ edSetTeamQ(t, e.f, e.v); return true; }
   const p=edFindPlayer(t, {name:e.pn}, null);
@@ -29208,8 +29292,9 @@ function edApplyPatch(obj){
   }
   let ok=0, miss=0;
   for(const e of (obj.edits||[])){ try{ if(edApplyOne(e)) ok++; else miss++; }catch(err){ miss++; } }
+  let ovN=0; try{ ovN=edOvrCount(obj); if(ovN) edOvrPut(obj); }catch(err){}
   saveGame();
-  showConfirm(`<b>✅ 수정본 패치를 적용했습니다.</b>\n\n· 적용 ${ok}건${miss?` · <span style="color:var(--gold)">건너뜀 ${miss}건</span>`:""}\n${miss?`<span class="small">건너뛴 항목은 이 세이브에 없는 팀·선수입니다 (이적·개명·시즌 차이 등).</span>\n`:""}\n<span class="small">제작: ${obj.from||"?"} · ${obj.made||""} · 시즌 ${obj.season||"?"} 기준</span>`,
+  showConfirm(`<b>✅ 수정본 패치를 적용했습니다.</b>\n\n· 적용 ${ok}건${miss?` · <span style="color:var(--gold)">건너뜀 ${miss}건</span>`:""}${ovN?`\n· 🌏 해외 구단 ${ovN}곳 — 대회에 나가면 이 이름·구장으로 나옵니다`:""}\n${miss?`<span class="small">건너뛴 항목은 이 세이브에 없는 팀·선수입니다 (이적·개명·시즌 차이 등).</span>\n`:""}\n<span class="small">제작: ${obj.from||"?"} · ${obj.made||""} · 시즌 ${obj.season||"?"} 기준</span>`,
     ()=>show("editor"), {okLabel:"확인", cancelLabel:""});
 }
 function edClearLog(){
@@ -29245,6 +29330,7 @@ function edExport(){
              nicks:customNicks().slice(0,40),
              press:{crew:journalists().map(j=>({n:j.n,o:j.o})), reps:reporters().map(j=>({n:j.n,o:j.o}))},
              mgr:{cash:me().cash, debt:me().debt||0, own:G.trust?G.trust.owner:70, fan:G.trust?G.trust.fans:70, pressRel:G.press?G.press.rel:50}};
+  Object.assign(obj, edOvrTake());       // 🌏 해외 구단 덮어쓰기 표도 함께
   try{
     const txt=JSON.stringify(obj);
     const name=`klm2026_DB_${obj.made.replace(/-/g,"")}.json`;
@@ -29281,6 +29367,7 @@ function edExportNames(){
              teams, coaches, comps, refs,
              fa:(G.freeAgents||[]).map(p=>({u:p.uid, k:p.name, n:p.name})),
              os:overseasList().map(p=>({u:p.uid, k:p.name, n:p.name}))};   // 지연 생성 풀을 먼저 채운다 — 해외 선수 전원 포함
+  Object.assign(obj, edOvrTake());       // 🌏 해외(대회) 구단 이름·구장 덮어쓰기 표
   try{
     const txt=JSON.stringify(obj, null, 1);      // 손으로 고치는 파일이라 줄바꿈을 넣어 준다
     const name=`klm2026_names_${obj.made.replace(/-/g,"")}.json`;
@@ -29307,6 +29394,7 @@ function edMissBox(list, why){
 }
 function edApplyNames(obj){
   let tOk=0, pOk=0, pMiss=0, stOk=0;
+  let ovN=0; try{ ovN=edOvrCount(obj); if(ovN) edOvrPut(obj); }catch(e){}   // 🌏 해외 구단
   const rn=[], missList=[];      // 🔍 건너뛴 항목 — 무엇을 못 찾았는지 그대로 보여 준다
   const setName=(p, nv)=>{ const nn=edName(nv,14); if(!nn||nn===p.name) return false;
     rn.push([p.name, nn]); p.name=nn; return true; };
@@ -29421,7 +29509,7 @@ function edApplyNames(obj){
         <span class="small">이 파일의 선수를 이 세이브에서 찾지 못했습니다. 대개 <b>게임 판이 오래되어</b> 생깁니다 —
         브라우저를 강제 새로고침해 최신 판(현재 빌드 ${(typeof GAME_BUILD!=="undefined")?GAME_BUILD:"?"})으로 올린 뒤 다시 시도해 주세요.
         그래도 같다면 이 파일이 다른 시즌·다른 명단을 기준으로 만들어졌을 수 있습니다.</span></div>` : "";
-  showConfirm(`<b>✅ 이름 패치 적용 완료</b>\n${_none}\n· 팀 ${tOk}개 · 개명 ${pOk}명${cOk?` · 감독 ${cOk}명`:""}${cpOk?` · 대회 ${cpOk}개`:""}${rfOk?` · 심판 ${rfOk}명`:""}${stOk?` · 구장 ${stOk}곳`:""}${pMiss?` · <span style="color:var(--gold)">${pMiss}건 건너뜀</span>`:""}\n${edMissBox(missList, "이 세이브에 없는 이름입니다 — 이적·방출·삭제됐거나 파일이 예전 버전일 수 있습니다.")}<span class="small">옛 소셜·뉴스 기록의 이름까지 소급 적용됐습니다.</span>`,
+  showConfirm(`<b>✅ 이름 패치 적용 완료</b>\n${_none}\n· 팀 ${tOk}개 · 개명 ${pOk}명${ovN?` · 🌏 해외 구단 ${ovN}곳`:""}${cOk?` · 감독 ${cOk}명`:""}${cpOk?` · 대회 ${cpOk}개`:""}${rfOk?` · 심판 ${rfOk}명`:""}${stOk?` · 구장 ${stOk}곳`:""}${pMiss?` · <span style="color:var(--gold)">${pMiss}건 건너뜀</span>`:""}\n${edMissBox(missList, "이 세이브에 없는 이름입니다 — 이적·방출·삭제됐거나 파일이 예전 버전일 수 있습니다.")}<span class="small">옛 소셜·뉴스 기록의 이름까지 소급 적용됐습니다.</span>`,
     ()=>show("editor"), {okLabel:"확인", cancelLabel:""});
 }
 /* 선수 한 명을 파일 값으로 덮어쓴다 */
@@ -29554,12 +29642,13 @@ function edImport(input){
           const _rnN=(Array.isArray(ED_RENAMES)?ED_RENAMES.length:0);
           try{ renameEverywhere(ED_RENAMES); }catch(e){}
           ED_RENAMES=null;
+          let _ovN=0; try{ _ovN=edOvrCount(obj); if(_ovN) edOvrPut(obj); }catch(e){}   // 🌏 해외 구단
           saveGame();
           const _noRn = (pOk>0 && _rnN===0)
             ? `<div class="msg info" style="margin:8px 0">ℹ️ <b>이 파일에는 이름 변경이 없습니다.</b>
                 <span class="small">능력치·소속 같은 값만 담긴 <b>에디터 데이터 파일</b>입니다.
                 선수·구단 이름을 바꾸려면 <b>이름 파일</b>(적용할 때 「📛 이름 패치를 적용합니다」라고 뜨는 파일)이 따로 필요합니다.</span></div>` : "";
-          showConfirm(`<b>✅ 덮어쓰기 완료</b>\n${_noRn}\n· 팀 ${tOk}개 · 선수 ${pOk}명 적용${pMiss?` · <span style="color:var(--gold)">${pMiss}건 건너뜀</span>`:""}\n${edMissBox(dbMiss, "이 세이브에서 찾지 못한 선수입니다 — 이적·방출·시즌 차이거나 파일이 예전 버전일 수 있습니다.")}`,
+          showConfirm(`<b>✅ 덮어쓰기 완료</b>\n${_noRn}\n· 팀 ${tOk}개 · 선수 ${pOk}명 적용${_ovN?` · 🌏 해외 구단 ${_ovN}곳`:""}${pMiss?` · <span style="color:var(--gold)">${pMiss}건 건너뜀</span>`:""}\n${edMissBox(dbMiss, "이 세이브에서 찾지 못한 선수입니다 — 이적·방출·시즌 차이거나 파일이 예전 버전일 수 있습니다.")}`,
             ()=>show("editor"), {okLabel:"확인", cancelLabel:""});
         }, {okLabel:"덮어쓴다", cancelLabel:"취소", danger:true});
     }catch(err){
@@ -46209,9 +46298,12 @@ function staSub(p){
      ─ 표 쪽 눈금으로 통일한다(요청 — 체력 부담을 더 명시적으로 알리는 쪽). 하트까지 같이 붙여
        숫자·색·아이콘 셋이 화면마다 어긋날 수 없게 만든다. */
   const f=Math.round(matchStartFit(p)), col=fitColOf(f);
-  return `<i class="condBar"><i style="width:${clamp(f,4,100)}%;background:${col}"></i></i>`
+  const leg=((p&&p.mFat)||0)>=0.25;
+  return `<span class="subFit${leg?" tired":""}">`
+       + `<i class="condBar"><i style="width:${clamp(f,4,100)}%;background:${col}"></i></i>`
        + `<b style="color:${col};font-weight:800">${bodyIconOf(col)}${f}</b>`
-       + (((p&&p.mFat)||0)>=0.25?' <span title="지난 경기의 잔여 피로 — 다리가 무겁습니다">🦵</span>':"");
+       + (leg?'<span class="subIc" title="지난 경기의 잔여 피로 — 다리가 무겁습니다">🦵</span>':"")
+       + `</span>`;
 }
 function fmSubFor(t,p,slot){
   const m=fmSubMode();
@@ -46237,15 +46329,18 @@ function fmSubForLive(t, x, slot){
 function condSub(p){
   /* 🎨 전술판 리마스터 — 「컨디션 100」 텍스트 대신 바 게이지 + 숫자 (칸 높이 고정의 일부) */
   /* 체력과 같은 원칙 — 표(bodyCell)가 다는 하트를 카드에도 단다 */
-  const c=mor(p.cond), col=condCol(c);
-  return `<i class="condBar"><i style="width:${clamp(c,4,100)}%;background:${col}"></i></i>`
+  const c=mor(p.cond), col=condCol(c), hurt=p.inj>0;
+  return `<span class="subFit${hurt?" tired":""}">`
+       + `<i class="condBar"><i style="width:${clamp(c,4,100)}%;background:${col}"></i></i>`
        + `<b style="color:${col};font-weight:800">${bodyIconOf(col)}${c}</b>`
-       + (p.inj>0?' <span style="color:#f85149">🚑</span>':"");
+       + (hurt?'<span class="subIc" style="color:#f85149">🚑</span>':"") + `</span>`;
 }
 function fitSub(fit, yc){
   const f=Math.round(fit||0), col=fitColOf(f);
-  return `<i class="condBar"><i style="width:${clamp(f,4,100)}%;background:${col}"></i></i>`
-       + `<b style="color:${col};font-weight:800">${bodyIconOf(col)}${f}</b>` + (yc?' 🟨':"");
+  return `<span class="subFit${yc?" tired":""}">`
+       + `<i class="condBar"><i style="width:${clamp(f,4,100)}%;background:${col}"></i></i>`
+       + `<b style="color:${col};font-weight:800">${bodyIconOf(col)}${f}</b>`
+       + (yc?'<span class="subIc">🟨</span>':"") + `</span>`;
 }
 function fmPlayerCard(t, p, slot, opt){
   opt=opt||{};
@@ -91882,7 +91977,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5153";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5155";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
