@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5170-->
+<!--B:20260913-5174-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -1306,6 +1306,10 @@ table.fmTable td{padding:9px 6px;border-bottom:1px solid #1c222b;vertical-align:
 .phTab.on{background:linear-gradient(180deg,#1c5040,#153a2c); border-color:#3fb950; color:#8df0bd;}
 .phTab.on.ip{background:linear-gradient(180deg,#4a2f8f,#33205f); border-color:#7b5cd6; color:#d9c9ff;}
 .phTab.on.oop{background:linear-gradient(180deg,#1c4a5c,#12303c); border-color:#3fa0c9; color:#a9e6ff;}
+.phTab.fold{background:#161b22; border-color:#30363d; color:#9fb0c0; font-weight:800;}
+.phTab.fold:hover{border-color:#58a6ff; color:#e6edf3;}
+.tacFoldBar{background:#0f1620; border:1px dashed #30363d; border-radius:10px; padding:10px 12px;
+  font-size:13px; color:#c9d4e0; display:flex; align-items:center; flex-wrap:wrap; gap:4px;}
 .phBoards{display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;}
 .phBoard{flex:1 1 0; min-width:250px;}
 /* 나란히 놓을 때는 판 안쪽 칸도 함께 좁아져야 한다 — 안 그러면 한 줄에 하나만 들어간다 */
@@ -7215,10 +7219,25 @@ function positionStarRows(p){
   return rows;
 }
 /* ⚔️🛡️ 지금 전술판에서 «어느 판»을 그리고 있는가 — "both" 는 소유 판을 편집한다 */
-let TACPH="both";
+/* ⚠ 제보 — 「지금 선수 포메이션 지정도 안 되네요」.
+   원인 : 국면 탭을 넣으면서 기본값을 «👁 둘 다»(보기 전용)로 두었다. 전술 탭을 열면
+          곧바로 보기 전용 판이 떠서, 드래그도 클릭 배치도 먹지 않았다.
+   수정 : 기본값은 언제나 그릴 수 있는 판(⚔️ 공 소유 시)이다. */
+let TACPH="ip";
 function tacEditPh(){ return TACPH==="oop" ? "oop" : "ip"; }
+/* 📐 제보 — 「벤치와 선발 조율할 때 스크롤 범위가 엄청 늘어났다」.
+   포메이션 판을 통째로 접을 수 있게 한다. 접힘 상태는 세이브에 남는다. */
+function tacFolded(){ try{ return !!(G.opt && G.opt.tacFold); }catch(e){ return false; } }
+function tacToggleFold(){
+  G.opt=G.opt||{};
+  G.opt.tacFold=!G.opt.tacFold;
+  try{ saveGame(); }catch(e){}
+  refreshTactics();
+}
 function setTacPh(v){
   TACPH=(v==="ip"||v==="oop")?v:"both";
+  /* 경기 중 판은 «둘 다»(보기 전용)가 없다 — 언제나 고칠 수 있는 판을 연다 */
+  try{ if(inLiveTactics && TACPH==="both") TACPH="ip"; }catch(e){}
   /* 🛡️ 공 미소유 판을 처음 열면 지금 소유 판을 그대로 베껴 온다 — 백지에서 시작하면 손이 많이 간다 */
   if(TACPH==="oop"){ try{ oopSeedFromIP(userTeam()); }catch(e){} }
   refreshTactics();
@@ -18056,6 +18075,10 @@ function advanceCalendar(){
   const ut=userTeam();
   const log=[];
   for(let d=G.day+1; d<=target; d++){
+    /* 🕐 건너뛰는 날에도 진행 중인 이적은 하루씩 흘러간다 — 이 사이에 이적시장 마감일이
+       끼어 있으면 그날 처리되어야 한다 (제보: 마감 3일 전 합의가 «마감»으로 깨짐).
+       마지막 날(target)은 stepDay 가 곧바로 처리하므로 여기서는 그 전날까지만 돌린다. */
+    if(d<target){ const _dd=G.day; G.day=d; try{ tfDealTick(); }catch(e){} G.day=_dd; }
     if(isMatchDay(d)) continue;
     const pl=dayPlan(d);
     const hurt=applyDayToTeam(ut, pl);
@@ -24112,6 +24135,20 @@ function tfDealTick(){
     if(!open){
       /* 📅 이월 계약 — 다음 창 첫날까지 묶여 있다. 그동안 선수는 원소속에 그대로 있다. */
       if(d.carry && (d.carry.s>G.season || (G.day||0)<d.carry.day)) continue;
+      /* ⚠ 제보 — 「마감 3일 전에 합의했고 서류 위험 4%인데, 4일 지나면 무조건
+           «이적 무산 — 이적시장 마감»으로 깨진다」.
+         원인 : 완료 예정일(due)은 마감일을 넘지 않게 잡히는데, 경기와 경기 사이는
+                advanceCalendar 가 여러 날을 한 번에 건너뛴다. 그 사이에 마감일이 끼면
+                딜을 처리할 하루가 아예 없이 지나가고, 다음 처리 때는 이미 창이 닫혀 있어
+                여기서 통째로 깨졌다. 예산과는 무관하다 — 돈은 합의 때 이미 잡아 뒀다.
+         수정 : ① 건너뛰는 날에도 하루씩 서류가 돌게 한다(advanceCalendar).
+                ② 그래도 완료일이 지난 채 여기까지 온 건은 «마감 전에 합의를 마친 건»이므로
+                   서류 위험만 굴려 마무리한다. 창이 닫혔다는 이유만으로 깨지 않는다. */
+      if((d.due||0) <= (G.day||0)){
+        if(Math.random()<tfPaperFail(d)) tfCollapse(d, "등록 마감 시간 초과 — 서류가 접수되지 않았습니다");
+        else tfComplete(d);
+        continue;
+      }
       tfCollapse(d, "이적시장 마감"); continue;
     }
     const p=tfPlayerOf(d);
@@ -45493,9 +45530,18 @@ const TUTOR_MIN_AGE=29;     // 가르칠 나이
 /* ⚠ 제보 — 「리더십·팀워크가 비슷한 선수인데 목록에 안 뜬다」.
    추천 네 명만 보여 주고 나머지는 아예 감췄다. 누구를 붙일지는 감독이 정할 일이다.
    ─ 자격을 갖춘 베테랑은 전부 보여 주고, 추천 순으로 줄만 세운다. */
+/* ⚠ 제보 — 「같은 19세인데 어떤 선수는 멘토가 붙고 어떤 선수는 아예 후보가 없다.
+     임대를 다녀온 선수가 멘토를 못 붙이는 것 같다」.
+   원인 : 후보 조건에 «베테랑의 종합이 이 어린 선수보다 2 이상 낮으면 제외»가 있었다.
+          임대를 다녀오며 훌쩍 큰 유망주는 팀 안의 서른 넘은 선수 전원을 앞질러 버리고,
+          그 순간 후보가 0명이 되어 「멘토로 붙일 만한 베테랑이 없습니다」만 뜬다.
+          잘 클수록 멘토를 못 붙이는 셈이라 앞뒤가 맞지 않는다.
+   수정 : 나이·태업만 보고 전원 후보로 올린다. «가르칠 자격»은 실력이 아니라
+          리더십·팀워크·나이 차에서 나오고, 자기보다 잘하는 후배를 맡는 부담은
+          수락 가능성(tutorChance)에서 다룬다. */
 function tutorCands(p, all){
   const t=userTeam(); const age=q=>G.season-q.by;
-  const L=t.players.filter(q=>q.id!==p.id && age(q)>=TUTOR_MIN_AGE && !q.sulk && q.ovr>=p.ovr-2)
+  const L=t.players.filter(q=>q.id!==p.id && age(q)>=TUTOR_MIN_AGE && !q.sulk)
     .sort((a,b)=>((b.attr?attr20(b.attr.ldr)+attr20(b.attr.tea):0)-(a.attr?attr20(a.attr.ldr)+attr20(a.attr.tea):0)));
   return all ? L : L.slice(0,4);
 }
@@ -45541,7 +45587,8 @@ function tutorBlock(p){
     const cc=c>=0.7?["높음","var(--green)"]:c>=0.45?["보통","var(--gold)"]:["낮음","var(--red)"];
     return `<button class="mini tutorRow" onclick="askTutor(${p.id},${q.id})">
       <span class="tutorN">${i<3&&!TUTOR_ALL?"⭐":"🎓"} <b>${q.name}</b>
-        <span class="small">${G.season-q.by}세 · <span class="pos-${q.pos}">${q.pos}</span>${q.pos===p.pos?' <span class="stkTag">같은 자리</span>':""}</span></span>
+        <span class="small">${G.season-q.by}세 · <span class="pos-${q.pos}">${q.pos}</span>${q.pos===p.pos?' <span class="stkTag">같은 자리</span>':""}${
+          q.ovr<p.ovr?' <span class="stkTag" style="opacity:.75" title="이미 자기보다 잘하는 후배라 맡기를 꺼립니다">후배가 더 낫다</span>':""}</span></span>
       <span class="tutorV small">리더십 <b>${attr20(q.attr.ldr)}</b> · 팀워크 <b>${attr20(q.attr.tea)}</b>
         · 성장 <b style="color:var(--gold)">+${eff}%</b><br>
         수락 가능성 <b style="color:${cc[1]}">${cc[0]}</b> <span style="opacity:.7">(${Math.round(c*100)}%)</span></span>
@@ -45574,7 +45621,10 @@ function tutorChance(m, p){
   if(m.pos===p.pos) c-=0.14;                          // 자기 자리를 노리는 후배다
   if(m.unhappy>0) c-=0.18;
   if((G.season-m.by)-(G.season-p.by) < 8) c-=0.10;    // 나이 차가 적으면 "선배" 느낌이 덜하다
-  return clamp(c, 0.08, 0.94);
+  /* 🎓 이미 자기보다 잘하는 후배를 맡는 일은 마음이 편치 않다 — 막지는 않되 어려워진다.
+     (예전에는 아예 후보에서 빼 버려, 잘 큰 유망주가 멘토를 못 붙였다) */
+  if(m.ovr < p.ovr) c -= clamp((p.ovr-m.ovr)*0.030, 0, 0.22);
+  return clamp(c, 0.06, 0.94);
 }
 function askTutor(pid, mid){
   const t=userTeam(); const p=t.players.find(x=>x.id===pid), m=t.players.find(x=>x.id===mid);
@@ -47419,7 +47469,9 @@ function tactics(){
   </div>`;
   /* ⚔️🛡️ 국면 탭 — FM 26 처럼 두 판을 나란히 보거나, 한 판씩 골라 그린다 */
   const _oopOn=oopShapeSet(t)||oopRoleSet(t);
+  const _fold=tacFolded();
   const phTabs=`<div class="phTabs">
+    <button class="phTab fold" onclick="tacToggleFold()" title="${_fold?"포메이션 판을 펼칩니다":"포메이션 판을 접어 명단만 봅니다"}">${_fold?"▸ 펼치기":"▾ 접기"}</button>
     <button class="phTab${TACPH==="both"?" on":""}" onclick="setTacPh('both')" title="두 판을 나란히 봅니다 (편집은 각 판에서)">👁 둘 다</button>
     <button class="phTab${TACPH==="ip"?" on ip":""}" onclick="setTacPh('ip')" title="공을 가졌을 때의 형태를 그립니다">⚔️ 공 소유 시</button>
     <button class="phTab${TACPH==="oop"?" on oop":""}" onclick="setTacPh('oop')" title="공을 빼앗겼을 때의 형태를 그립니다">🛡️ 공 미소유 시</button>
@@ -47452,21 +47504,25 @@ function tactics(){
   <div class="fmBody">
     <div class="fmPitchPane${TACPH==="both"?" wide":""}">
       ${phTabs}
-      ${TACPH==="both"
+      ${_fold
+        ? `<div class="tacFoldBar">📐 포메이션 판을 접어 두었습니다 — <b>${liveFormName}</b>${
+             _oopOn?` <span style="opacity:.8">· 🛡️ 수비 형태를 <b>따로 잡아 둠</b></span>`:""}
+             <button class="mini" style="padding:4px 12px;margin-left:8px" onclick="tacToggleFold()">▸ 펼치기</button></div>`
+        : TACPH==="both"
         ? `<div class="phBoards">
              <div class="phBoard"><div class="phCap ip">⚔️ 공 소유 시</div>${boardHtml(slotOfIP,"ip",false)}</div>
              <div class="phBoard"><div class="phCap oop">🛡️ 공 미소유 시</div>${boardHtml(slotOfOOP,"oop",false)}</div>
            </div>
-           <p class="tacHint">👁 보기 전용입니다 — 고치려면 위에서 <b>⚔️ 공 소유 시</b> 또는 <b>🛡️ 공 미소유 시</b>를 고르세요.</p>`
+           <p class="tacHint">👁 나란히 보는 화면입니다 — 자리를 옮기려면 위에서 <b>⚔️ 공 소유 시</b> 또는 <b>🛡️ 공 미소유 시</b>를 고르세요.</p>`
         : `<div class="phCap ${TACPH}">${TACPH==="oop"?"🛡️ 공 미소유 시 — 이 판을 그립니다":"⚔️ 공 소유 시 — 이 판을 그립니다"}</div>
            ${boardHtml(slotOf, TACPH, true)}`}
-      <div class="fmSubBar">
+      ${_fold?"":`<div class="fmSubBar">
         <span class="small" style="opacity:.7">카드 하단 표시:</span>
         ${[["sta","⚡ 체력"],["mor","😊 사기"],["fam","🎓 전술 능숙도"]].map(([m,n])=>
           `<button class="fmSubBtn${fmSubMode()===m?" on":""}" onclick="setFmSub('${m}')">${n}</button>`).join("")}
-      </div>
+      </div>`}
       ${(function(){ try{ return xiDiffBar(t); }catch(e){ return ""; } })()}
-      <p class="tacHint">🖱️ 드래그하거나 <b>선수를 누른 뒤 옮길 자리를 누르면</b> 배치가 바뀝니다 (폰·패드 권장) · 카드 위 역할 버튼으로 역할·임무 변경 · <span class="frnN">보라색 이름</span>은 외국인 선수</p>
+      ${_fold?"":`<p class="tacHint">🖱️ 드래그하거나 <b>선수를 누른 뒤 옮길 자리를 누르면</b> 배치가 바뀝니다 (폰·패드 권장) · 카드 위 역할 버튼으로 역할·임무 변경 · <span class="frnN">보라색 이름</span>은 외국인 선수</p>`}
     </div>
     ${fmSquadTable(t, xi, slotOfIP, mb2, benchRest, sulking, injured)}
   </div>`;
@@ -48402,7 +48458,12 @@ function renderLiveTactics(){
   // ⚠ 라인 분류는 SW·WB·DM·AM 까지 전 밴드를 다뤄야 한다.
   //    DF/MF/FW 세 칸만 만들어 두고 BANDS_TOPDOWN 7개를 훑으면 undefined.filter 로 화면이 통째로 죽는다.
   const liveFormName=formationLabel(t, xi);
-  const slotOf=computeRenderSlots(t, pitchAndGap.map(x=>x.p));
+  /* ⚔️🛡️ ⚠ 제보 — 「경기 중 전술 수정은 업데이트 안 했네?」.
+     전술 탭에만 국면(공 소유 / 공 미소유) 판을 붙이고, 경기 중 판은 소유 판만 그리고 있었다.
+     경기 중에도 같은 두 판을 오가며 고칠 수 있어야 한다 — 실점 뒤에 수비 형태만 바꾸는 건
+     전술 탭이 아니라 여기서 하는 일이다. */
+  const _lph=tacEditPh();
+  const slotOf=computeRenderSlots(t, pitchAndGap.map(x=>x.p), _lph==="oop"?"oop":undefined);
   const gkX=pitchAndGap.find(x=>slotOf[x.p.id]==="GK") || pitchAndGap.find(x=>x.p.pos==="GK");
   /* ⚠ 줄 나누기는 반드시 "배치된 슬롯"을 따라야 한다.
      타고난 포지션(zone)으로 나누면, 수비수가 미드 슬롯에 배치됐을 때 그 선수는
@@ -48437,6 +48498,15 @@ function renderLiveTactics(){
     const thin=!used;   // 전술판과 같은 규칙 — «카드가 있는 줄»만 펼친다 (제보)
     return `<div class="prow${thin?" thin":""}">${(ROW_SLOTS[band]||[]).map(s=>s?slotCell(band,s):'<div class="pslot empty"></div>').join("")}</div>`;
   };
+  const _lOop=(function(){ try{ return oopShapeSet(t)||oopRoleSet(t); }catch(e){ return false; } })();
+  const livePhTabs=`<div class="phTabs" style="margin-bottom:6px">
+    <button class="phTab${_lph==="ip"?" on ip":""}" onclick="setTacPh('ip')" title="공을 가졌을 때의 형태">⚔️ 공 소유 시</button>
+    <button class="phTab${_lph==="oop"?" on oop":""}" onclick="setTacPh('oop')" title="공을 빼앗겼을 때의 형태">🛡️ 공 미소유 시</button>
+    <span class="small" style="margin-left:auto;opacity:.75">${_lOop
+      ? `🛡️ <b style="color:#8df0bd">수비 형태를 따로 잡아 두었습니다</b>`
+      : "따로 잡지 않으면 두 판이 같습니다"}</span>
+    ${_lOop?`<button class="mini" style="padding:4px 10px" onclick="oopReset()" title="수비 형태·역할을 지우고 소유 판과 같게 만듭니다">↩ 같게</button>`:""}
+  </div>`;
   $("#main").innerHTML = `<h2>📋 경기 중 전술 수정 — <span style="color:var(--gold)">${liveFormName}</span></h2>
   ${liveActiveReason?`<div class="msg warn" style="font-size:15px">${liveActiveReason}</div>`:""}
   <div class="msg info">⏸ 경기가 일시정지되었습니다. 전술 변경은 즉시 반영되고, 교체는 실제 교체 카드(${sd.subs}/${subMax(liveM)})를 사용합니다.${(liveM&&liveM.opts&&liveM.opts.friendly)?` <b style="color:var(--green)">연습경기라 ${SUB_MAX_FR}명까지 바꿀 수 있습니다.</b>`:""}
@@ -48453,6 +48523,8 @@ function renderLiveTactics(){
   ${tacDetailOpen?`<div class="fmDetailPane">${tacticDetailCard(t, xi)}</div>`:""}
   <div class="fmBody">
     <div class="fmPitchPane">
+      ${livePhTabs}
+      <div class="phCap ${_lph}">${_lph==="oop"?"🛡️ 공 미소유 시 — 이 판을 그립니다":"⚔️ 공 소유 시 — 이 판을 그립니다"}</div>
       <div class="pitch">
         ${BANDS_TOPDOWN.map(b=>rowHtml(b)).join('')}
         <div class="pline">${gkX?pitchChip(gkX,'GK'):""}</div>
@@ -86871,6 +86943,12 @@ function delegFinish(M, tag, why, _inj, _acLv){
         : {kind:P.kind, t:(P.kind==="f" ? (G.eacl&&G.eacl.ko.f) : (G.eacl&&(G.eacl.ko[P.kind]||[]).find(x=>x.h===P.hid && x.a===P.aid)))};
       if((P2.m||P2.t)) eaclResolveUser(P2, M.hg, M.ag, M.pk?(M.pk.win==="h"?1:-1):0);
       try{ eaclGate(M); }catch(e){}
+      /* ⚠ 제보 — 「수석코치한테 위임해서 돌리면 골·어시 기록이 대회 순위표에 안 올라간다」.
+         원인 : 대회 개인 기록은 matchNewsEacl 안에서 eaclStatCollect 가 걷어 간다.
+                직접 지휘한 경기는 그 함수를 지나지만, 위임 경기는 지나지 않았다 —
+                CWC 위임에는 cwcStatCollect 가 있는데 EACL 쪽만 빠져 있었다.
+         수정 : 위임 경기도 같은 창구를 지난다. 기사·MOM 도 함께 남는다. */
+      try{ matchNewsEacl(M, P.tag); }catch(e){}
       /* 🟨 대행 경기도 징계 장부는 똑같이 정리한다 */
       try{ const _ut=userTeam(); eaclBanPop(_ut); eaclBanTick(_ut); }catch(e){}
     } else {
@@ -92358,7 +92436,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5170";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5174";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
