@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5175-->
+<!--B:20260913-5180-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -2963,15 +2963,42 @@ const POT_MAP_K=110/58;   // 내부 38~96 → 화면 90~200
      내부 잠재력이 낮을수록 낙폭이 크다 — 내부 65 면 바닥이 141 이라 「170 → 140」이 그대로 나온다.
    ─ 화면 종합이 잠재력 환산을 넘어서는 순간 «내부 잠재력을 그만큼 끌어올린다». 한 번 올라간
      잠재력은 내려오지 않는다(FM 규칙). 화면에 보이던 숫자가 낮아지는 일이 없어진다. */
+/* 🌱 화면 잠재 능력.
+   ⚠ 제보 — 「유스에서 올라올 때 잠재가 192였는데, 종합이 자라더니 잠재도 같이 올라
+     지금은 둘 다 200이 됐다. 잠재는 한 번 정하면 바뀌지 않게 해 달라」.
+   원인 : ① 이 함수가 «화면을 그리면서» p.pot 을 실제로 올리고 있었다(아래 지운 줄).
+          ② 그 위에 자가 두 개였다 — 화면 종합은 능력치에서 나와 내부 1점당 약 3.9씩 오르는데,
+             화면 잠재는 내부 1점당 1.9밖에 안 올랐다. 그래서 내부 74쯤을 넘어서면
+             «종합이 잠재를 추월»하고, max() 가 그걸 받아 잠재가 종합을 따라 올라갔다.
+             한 번 올라간 값은 ①이 내부 잠재에 못 박아 다시는 내려오지 않았다.
+   수정 : 아무것도 고쳐 쓰지 않는다. 그리고 두 값을 «같은 자»로 잰다 —
+          화면 잠재 = 화면 종합 + (남은 폭 × 화면 눈금). 남은 폭이 줄어드는 만큼
+          화면 잠재는 제자리에 서 있고, 천장에 닿으면 종합과 같아진다. */
+/* 🔒 잠재 능력 도장 — 「한 번 정하면 그 어떤 경우에도 바뀌지 않게」(요청).
+   처음 본 순간의 잠재를 p.pot0 에 찍어 둔다. 세이브를 열 때마다 이 값과 맞춰 본다.
+   ⚠ 이미 지금 능력이 그 위로 올라가 버린 옛 세이브는 지금 능력 아래로는 내리지 않는다
+      (그러면 다른 정합성 검사와 서로 밀치게 된다). */
+function potStamp(p){
+  if(!p) return;
+  if(p.pot==null) p.pot=p.ovr||65;
+  if(p.pot0==null) p.pot0=p.pot;
+}
+function potLockSweep(){
+  let n=0, 최대=0;
+  const 훑기=(arr)=>{ for(const p of (arr||[])){ if(!p) continue;
+    if(p.pot0==null){ potStamp(p); continue; }
+    const 바른값=Math.max(p.pot0, Math.ceil(p.ovr||0));
+    if(p.pot>바른값){ 최대=Math.max(최대, p.pot-바른값); p.pot=바른값; n++; } } };
+  try{ for(const id in G.teams) 훑기(G.teams[id].players); }catch(e){}
+  훑기(G.freeAgents); 훑기(G.overseas);
+  return {n, 최대};
+}
 function dispPot(p){
   if(!p) return 0;
+  try{ potStamp(p); }catch(e){}
   const cur=dispOvr(p);
-  const direct0=90 + (((p.pot||p.ovr||65)-38))*POT_MAP_K;
-  if(cur > direct0){
-    try{ const up=potFromDisp(p, cur); if(up > (p.pot||0)) p.pot=clamp(up, p.pot||0, 96); }catch(e){}
-  }
-  const direct=90 + (((p.pot||p.ovr||65)-38))*POT_MAP_K;
-  return clamp(Math.round(Math.max(cur, direct)), 90, 200);
+  const room=Math.max(0, (p.pot!=null?p.pot:(p.ovr||65)) - (p.ovr||65));
+  return clamp(Math.round(Math.max(cur, cur + room*DISP_K)), 90, 200);
 }
 /* 🌱 성장 전망 — ⚠ 제보 원문 「선수 종합 능력이 잠재 능력 끝까지 성장 했는데도 유스 탭에서
    성장 전망이 3칸이 남는 일이 있습니다. … 종합 능력 200, 잠재 능력 200 으로 프로필 기준으로는
@@ -2996,6 +3023,11 @@ function growthGap(p){
 /* 화면 눈금(90~200)으로 받은 잠재력을 내부 눈금으로 되돌린다 (직접 매핑의 역함수) */
 function potFromDisp(p, dv){
   const d=clamp(dv, 90, 200);
+  /* dispPot 과 같은 자로 되돌린다 — 화면 잠재 = 화면 종합 + (남은 폭 × 화면 눈금) */
+  try{
+    const cur=dispOvr(p);
+    return clamp(Math.round((p.ovr||40) + (d-cur)/DISP_K), p.ovr||40, 96);
+  }catch(e){}
   return clamp(Math.round(38 + (d-90)/POT_MAP_K), p.ovr||40, 96);
 }
 /* 세부 능력치와 같은 1~20 눈금으로 읽는 종합 능력.
@@ -5288,14 +5320,26 @@ function meetFinish(){
     const rl=Math.random();
     const r = rl<a-0.18 ? 1 : rl<a+0.22 ? 0 : -1;
     const w = (tk==="lead"?1.15:tk==="high"?1:tk==="mid"?0.7:0.5);
-    /* 말이 얼마나 가 닿았는가 — 등을 돌린 선수에게는 거의 남지 않는다 */
-    const land = (r>0 ? 1 : r<0 ? 0.15 : 0.45);
+    /* ⚠ 제보(두 번째) — 「기강을 잡으면 여전히 공감한 선수의 사기가 떨어지고
+         반발한 선수가 오른다」.
+       앞선 수정은 부호 뒤집기를 없앴지만, «먹힌 정도(land)»를 «주제 효과 전체»에 곱한 것이
+       남아 있었다. 기강처럼 기본 효과가 마이너스인 주제에서는 그 마이너스까지 공감한 선수에게
+       가장 크게 실린다 — 역질문 대답이 험할수록(qMor 가 크게 마이너스) 더 심해져서,
+       결국 공감한 선수가 반발한 선수보다 더 떨어졌다.
+       ─ 이제 «좋은 말»과 «쓴 말»을 갈라서 준다.
+           · 좋은 말은 받아들인 사람에게 온전히 간다 (등 돌린 사람에게는 거의 안 남는다)
+           · 쓴 말은 등 돌린 사람이 온전히 맞는다 (받아들인 사람은 3분의 1만)
+         그래서 회초리를 수긍한 선수는 사기가 조금 오르고, 등을 돌린 선수만 확실히 떨어진다. */
+    const _mB = T.mor + qMor*0.55, _aB = T.aff + qAff*0.55;
+    const 좋게 = (r>0 ? 1    : r<0 ? 0.15 : 0.45);   // 좋은 말이 남는 정도
+    const 쓰게 = (r>0 ? 0.35 : r<0 ? 1    : 0.70);   // 쓴 말을 맞는 정도
+    const 갈라 = (v)=> Math.max(0,v)*좋게 + Math.min(0,v)*쓰게;
     /* 받아들였는가 자체가 만드는 감정 — 여기가 오르내림을 정한다 */
     const rw = bad?1.25 : ok?1 : 1.1;
     const RM = (r>0 ? 1.8 : r<0 ? -3.0 : 0) * rw;
     const RA = (r>0 ? 1.6 : r<0 ? -2.8 : 0) * rw;
-    const mor = ((T.mor + qMor*0.55) * kk * land + RM) * w;
-    const aff2= ((T.aff + qAff*0.55) * kk * land + RA) * w;
+    const mor = (갈라(_mB) * kk + RM) * w;
+    const aff2= (갈라(_aB) * kk + RA) * w;
     p.morale=clamp((p.morale||70)+mor, 20, 99);
     try{ affAdd(p, aff2, "팀 미팅"); }catch(e){}
     sMor+=mor; sAff+=aff2; n++;
@@ -5309,7 +5353,10 @@ function meetFinish(){
      절반 넘게 수긍하면 오르고, 라커룸이 등을 돌리면 내려간다.
      주제의 부호를 뒤집는 대신 여기서 오르내림을 만든다. */
   const inRate = re.length ? (nIn - nOut*0.85)/re.length : 0;
-  const famD=(T.fam + qFam*0.6) * kk * clamp((inRate-0.10)/0.45, -1.1, 1.15);
+  const _rate = clamp((inRate-0.10)/0.45, -1.1, 1.15);
+  /* 조직력도 같은 규칙 — 좋은 몫은 많이 수긍할수록 붙고, 쓴 몫은 등을 돌릴수록 크게 깎인다 */
+  const _fB = T.fam + qFam*0.6;
+  const famD = (Math.max(0,_fB)*_rate + Math.min(0,_fB)*Math.max(0.25, 1-_rate*0.6)) * kk;
   try{ t.fam=clamp((t.fam!=null?t.fam:70)+famD, 0, 100); }catch(e){}
   M.last={k:T.k, s:G.season, d:(G.day||0), ok:ok?1:bad?-1:0,
           lead:Math.round(lead*100), re, log:Q.log||[],
@@ -10389,6 +10436,7 @@ function aiYouthIntake(t){
     const gem=Math.random() < (0.004+(yl-1)*0.010+(tl-1)*0.004);
     const pot0=clamp(Math.round(yp.ovr+3+R(9)+(yl-1)*1.4), 64, Math.round(68+(yl-1)*1.8));
     yp.pot=gem ? clamp(pot0+4+R(7), 84, 92) : pot0;
+    yp.pot0=yp.pot;                      // 🔒 이 값이 이 선수의 천장이다 — 다시는 안 바뀐다
     yp.wage=0.3; yp.ct=aiCtYears(yp);          // 유스는 장기 계약으로 묶는다 (제보 — 보스만 방어)
     yp.ythOf=t.id;                       // 🌱 이 구단 유스 출신 — 은퇴 후 지도자 연봉 할인 근거 (요청)
     t.players.push(yp);
@@ -11762,9 +11810,12 @@ function ovrTeamApply(t, o, avgK, fanD){
   if(o.short) t.short=o.short;
   if(t.stad){
     if(o.stadN) t.stad.n=o.stadN;
-    if(o.stadCap){ t.stad.cap=o.stadCap;
-      if(!o.stadAvg) t.stad.avg=Math.round(o.stadCap*(avgK||0.42));
-      t.fans=Math.round(o.stadCap/(fanD||900)); }
+    if(o.stadCap){
+      /* 🏗️ 기부로 지은 좌석은 패치 위에 얹는다 — 패치는 «원래 구장»의 크기다 */
+      const _don=Math.max(0, Math.round(t.stad._donAdd||0));
+      t.stad.cap=o.stadCap+_don;
+      if(!o.stadAvg) t.stad.avg=Math.round((o.stadCap+_don)*(avgK||0.42));
+      t.fans=Math.round((o.stadCap+_don)/(fanD||900)); }
     if(o.stadAvg) t.stad.avg=Math.min(o.stadAvg, t.stad.cap||o.stadAvg);
   }
   if(o.own && t.own) t.own.n=o.own;
@@ -22198,7 +22249,7 @@ function startNewSeason(){
     const carry=[];
     for(const d of tfDeals().slice()){
       if(d.carry && d.carry.s===G.season+1){ carry.push(d); continue; }
-      tfCollapse(d, "시즌 종료", true);
+      d._noted=1; tfCollapse(d, "시즌 종료", true);
     }
     G.tfDeals=carry; G.tfArrive=null; G.tfRivalPing=null; G.tfDlSeen=null; G.tfFire=[]; G.tfFireKey=null;
     for(const id in G.teams) for(const q of G.teams[id].players) if(q.tfLock) delete q.tfLock;
@@ -23972,9 +24023,19 @@ function tfCollapse(d, why, quiet){
       if(tfIsMine(d) && (d.fee||0)>=18) adjustTrust("fans", -2, `${d.name} 이적 무산`);
     }catch(e){}
   }
+  const nm=d.name||(p&&p.name)||"선수";
+  /* ⚠ 제보 — 「선수가 갑자기 증발하고 40억도 같이 사라졌다」.
+     조용한 무산(quiet)은 기사도 알림도 내지 않았다. 우리 딜이 깨진 것을 감독이 알 길이 없었고,
+     돌아온 돈도 눈에 띄지 않아 «둘 다 증발»로 보였다.
+     ─ 기사·평판 여파는 예전대로 quiet 이 가르되, «우리 딜이 깨졌고 돈이 얼마 돌아왔는지»는
+       언제나 알린다. 자기가 따로 알리는 자리(가로채기·시즌 종료)만 _noted 로 건너뛴다. */
+  if(tfIsMine(d) && !d._noted){
+    const _amt=Math.round((((d.fee)||0)+((d.agFee)||0))*10)/10;
+    const _back=(d.toId===G.userTeamId && _amt>0)
+      ? `<br><span class="small">묶여 있던 <b>${_amt}억</b>이 이적 예산으로 돌아왔습니다.</span>` : "";
+    try{ notify(`❌ <b>${nm}</b> 이적 무산 — ${why}${_back}`,"warn"); }catch(e){}
+  }
   if(!quiet){
-    const nm=d.name||(p&&p.name)||"선수";
-    if(tfIsMine(d)) notify(`❌ <b>${nm}</b> 이적 무산 — ${why}`,"warn");
     addNews(`❌ ${nm}의 ${to?to.short:"이적"}행이 무산됐습니다 — ${why}.`, tfIsMine(d)?"warn":null);
   }
   return false;
@@ -23982,7 +24043,7 @@ function tfCollapse(d, why, quiet){
 /* 완료 — 실제로 사람이 옮겨 간다 */
 function tfComplete(d){
   const p=tfPlayerOf(d), to=G.teams[d.toId], from=d.fromId?G.teams[d.fromId]:null;
-  if(!p || !to) return tfCollapse(d, "대상을 찾을 수 없습니다", true);
+  if(!p || !to) return tfCollapse(d, "대상 선수를 확인할 수 없습니다");
   if(p.army || p.armyCall) return tfCollapse(d, "병역 사유");
   /* 🧷 그 사이 상황이 바뀌었을 수 있다 — 있어야 할 자리에 없으면 딜은 성립하지 않는다.
      (이 확인이 없으면 이미 남의 팀에 간 선수를 한 번 더 밀어 넣어 두 팀에 동시에 존재하게 된다) */
@@ -24109,7 +24170,7 @@ function tfHijack(id){
     `<span class="small">실패하면 이적료는 돌려받지만, 그 선수는 예정대로 ${to?to.short:"상대"}로 갑니다.</span>`,
     ()=>{
       if(Math.random()<pull){
-        tfCollapse(d, `${ut.short}의 역제안`, true);
+        d._noted=1; tfCollapse(d, `${ut.short}의 역제안`, true);
         ut.budget=Math.round((ut.budget-need-ag)*10)/10;
         const nd=tfDealAdd({pid:p.id, name:p.name, fromId:d.fromId, toId:ut.id, fee:need, wage, ct:clamp(d.ct||3,1,5),
                             agFee:ag, os:d.os, hijacked:1});
@@ -24181,7 +24242,7 @@ function tfDealTick(){
       tfCollapse(d, "이적시장 마감"); continue;
     }
     const p=tfPlayerOf(d);
-    if(!p){ tfCollapse(d, "선수를 찾을 수 없습니다", true); continue; }
+    if(!p){ tfCollapse(d, "대상 선수를 확인할 수 없습니다"); continue; }
     tfLockSet(d);
     /* 🥷 경쟁자가 붙는가 — 우리가 사는 딜에만 멈춰 세워 묻는다 */
     if(!d.rival && d.toId===G.userTeamId && tfDaysLeft(d)>0 && Math.random()<tfHijackP(d)){
@@ -24199,7 +24260,7 @@ function tfDealTick(){
         && !isArmyTeam(t) && t.budget>=(d.fee||0)*1.2+0.5);
       if(rivals.length && Math.random()<0.55){
         const c=pick(rivals), nf=Math.round((d.fee||0)*(1.15+Math.random()*0.25)*10)/10;
-        tfCollapse(d, `${c.short}의 역제안`, true);
+        d._noted=1; tfCollapse(d, `${c.short}의 역제안`, true);
         c.budget=Math.round((c.budget-nf)*10)/10;
         const _nd=tfDealAdd({pid:p.id, name:p.name, fromId:d.fromId, toId:c.id, fee:nf,
                    wage:Math.round((d.wage||p.wage||1)*1.05*10)/10, ct:d.ct||aiCtYears(p), os:d.os, hijacked:1});
@@ -24215,7 +24276,7 @@ function tfDealTick(){
       const gap=((d.rival.fee||0)-(d.fee||0))/Math.max(1,(d.fee||1));
       const lose=clamp(0.34 + gap*0.55 + (d.leak||0)*0.05, 0.08, 0.92);
       if(c && Math.random()<lose && (c.budget||0)>=d.rival.fee){
-        tfCollapse(d, `${c.short}의 역제안`, true);
+        d._noted=1; tfCollapse(d, `${c.short}의 역제안`, true);
         c.budget=Math.round((c.budget-d.rival.fee)*10)/10;
         const _nd=tfDealAdd({pid:d.pid, name:d.name, fromId:d.fromId, toId:c.id, fee:d.rival.fee,
                    wage:Math.round(((d.wage||(pl&&pl.wage)||1)*1.06)*10)/10, ct:d.ct||3, os:d.os, hijacked:1});
@@ -27087,10 +27148,48 @@ function migrateLoadedG(){
   step("선수 번호 선점", ()=>{ PID=nextPid(); });
   /* 🕐 진행 중인 이적 — 유령 잠금 청소.
      딜은 사라졌는데 선수에게 tfLock 만 남으면 그 선수는 영영 팔 수도 방출할 수도 없다.
-     반대로 대상이 이미 사라진 딜도 지운다(환불은 하지 않는다 — 어느 시점의 돈인지 알 수 없다). */
+     ⚠ 제보 — 「에이전트로 영입 합의했는데 선수가 갑자기 증발하고 40억도 같이 사라졌다」.
+       원인 : 여기서 «대상이 이상한 딜»을 조용히 버리면서 환불을 하지 않았다
+              (예전 주석: 「어느 시점의 돈인지 알 수 없다」). 합의 순간 이적료·에이전트비는
+              이미 예산에서 빠져 나가 딜에 묶여 있으므로, 딜을 버리면 그 돈은 영영 사라진다.
+              감독 눈에는 선수도 돈도 소리 없이 증발한 것으로 보인다.
+       수정 : ① 버리는 딜의 묶인 돈은 반드시 사는 구단에 돌려준다.
+              ② 대상 선수를 세상 어디에서도 못 찾는 딜도 같은 규칙으로 정리한다
+                 (예전에는 그대로 남아 매일 «찾을 수 없습니다»만 반복했다).
+              ③ 우리 돈이 돌아왔으면 조용히 넘기지 않고 알린다. */
+  /* 🔒 잠재 능력이 저 혼자 오르지 않게 — 도장을 찍고, 어긋났으면 되돌린다 */
+  step("잠재 능력 고정", ()=>{
+    const r=potLockSweep();
+    if(r.n>4){
+      try{ notify(`🔒 <b>잠재 능력을 원래 값으로 되돌렸습니다</b> — ${r.n}명 (최대 ${r.최대}만큼 부풀어 있었습니다).<br>`
+        +`<span class="small">잠재는 한 번 정해지면 다시 바뀌지 않습니다.</span>`,"warn"); }catch(e){}
+    }
+  });
   step("진행 중 이적 정리", ()=>{
     if(!Array.isArray(G.tfDeals)) G.tfDeals=[];
-    G.tfDeals=G.tfDeals.filter(d=>d && d.pid!=null && d.toId && G.teams[d.toId] && (!d.fromId || G.teams[d.fromId]) && !d._dead);
+    const keep=[], drop=[];
+    for(const d of G.tfDeals){
+      const 꼴 = d && d.pid!=null && d.toId && G.teams[d.toId] && (!d.fromId || G.teams[d.fromId]) && !d._dead;
+      const 대상 = 꼴 ? (function(){ try{ return !!tfPlayerOf(d); }catch(e){ return false; } })() : false;
+      (꼴 && 대상 ? keep : drop).push(d);
+    }
+    let 환불=0, 내건=0; const 이름=[];
+    for(const d of drop){
+      if(!d || d._dead) continue;
+      d._dead=1;
+      const to=d.toId && G.teams[d.toId];
+      const amt=Math.round((((d.fee)||0)+((d.agFee)||0))*10)/10;
+      if(to && amt>0){
+        to.budget=Math.round((to.budget+amt)*10)/10;
+        if(to.id===G.userTeamId){ 환불=Math.round((환불+amt)*10)/10; 내건++; 이름.push(d.name||"선수"); }
+      }
+    }
+    G.tfDeals=keep;
+    if(내건){
+      try{ notify(`🕐 <b>진행 중이던 이적 ${내건}건을 정리했습니다</b> — 대상을 확인할 수 없어 계약이 성립하지 않습니다.<br>`
+        +`<span class="small">${이름.join(", ")} · 묶여 있던 <b>${환불}억</b>을 이적 예산으로 돌려드렸습니다.</span>`,"warn"); }catch(e){}
+      try{ addNews(`🕐 ${(G.teams[G.userTeamId]||{}).short||"구단"}, 진행 중이던 이적 ${내건}건 정리 — 계약금 ${환불}억 환수`, "warn", "club"); }catch(e){}
+    }
     const live={}; for(const d of G.tfDeals) live[d.id]=1;
     const sweep=(arr)=>{ for(const q of (arr||[])) if(q && q.tfLock && !live[q.tfLock]) delete q.tfLock; };
     for(const id in G.teams) sweep(G.teams[id].players);
@@ -29186,7 +29285,7 @@ function edSetPlayerQ(p, field, v){
   else if(field==="ct"){ const n=edNum(v,1,6,0); if(n!=null) p.ct=n; }
   else if(field==="mv"){ const n=edNum(v,0,3000,1); if(n!=null){ if(n>0) p.mvFix=n; else delete p.mvFix; } }
   else if(field==="mvAuto"){ delete p.mvFix; }
-  else if(field==="pot"){ const n=edNum(v,90,200,0); if(n!=null) p.pot=potFromDisp(p, n); }
+  else if(field==="pot"){ const n=edNum(v,90,200,0); if(n!=null){ p.pot=potFromDisp(p, n); p.pot0=p.pot; } }
   else if(field==="cond"){ const n=edNum(v,55,100,0); if(n!=null) p.cond=n; }
   else if(field==="morale"){ const n=edNum(v,30,99,0); if(n!=null) p.morale=n; }
   else if(field==="aff"){ const n=edNum(v,0,100,0); if(n!=null) affSet(p,n); }
@@ -30158,7 +30257,7 @@ function pgCreate(toList){
   if(PG.attr){ p.attr=JSON.parse(JSON.stringify(PG.attr)); syncLegacyAttrs(p.attr); }
   if(PG.pos==="GK" && PG.gkA){ p.gkA=JSON.parse(JSON.stringify(PG.gkA)); if(typeof syncLegacyGk==="function"){ try{ syncLegacyGk(p); }catch(e){} } }
   try{ p.ovrF=Math.round(clamp(rawCA(p, PG.ovr),38,96)*100)/100; p.ovr=Math.round(p.ovrF); }catch(e){}
-  p.pot=clamp(Math.max(PG.pot, p.ovr), p.ovr, 96);
+  p.pot=clamp(Math.max(PG.pot, p.ovr), p.ovr, 96); p.pot0=p.pot;
   p.pers=PG.pers; p.wage=PG.wage; p.ct=PG.ct;
   p.prefPos=PG.pref;
   p.posFam=initPosFam(p);
@@ -30231,7 +30330,7 @@ function pgMaterialize(o){
   if(o.attr){ p.attr=JSON.parse(JSON.stringify(o.attr)); try{ syncLegacyAttrs(p.attr); }catch(e){} }
   if(p.pos==="GK" && o.gkA){ p.gkA=JSON.parse(JSON.stringify(o.gkA)); try{ syncLegacyGk(p); }catch(e){} }
   p.ovrF=clamp(o.ovrF||p.ovr, 38, 96); p.ovr=Math.round(p.ovrF);
-  p.pot=clamp(Math.max(o.pot||p.ovr, p.ovr), p.ovr, 96);
+  p.pot=clamp(Math.max(o.pot||p.ovr, p.ovr), p.ovr, 96); p.pot0=p.pot;
   p.pers=clamp(Math.round(o.pers||0),0,3); p.wage=clamp(o.wage||1,0.1,3000); p.ct=clamp(Math.round(o.ct||1),1,6);
   if(SLOT_FAM[o.prefPos]) p.prefPos=o.prefPos;
   p.posFam=initPosFam(p);
@@ -45596,7 +45695,9 @@ function tutorSweep(t){
 }
 function tutorBlock(p){
   const age=G.season-p.by;
-  if(p.sulk>0) return "";
+  /* ⚠ 제보 — 「같은 19세인데 어떤 선수는 멘토가 붙고 어떤 선수는 아무것도 안 뜬다」.
+     안 뜨는 자리마다 «왜 안 되는지»를 적는다. 조용히 사라지는 칸을 없앤다. */
+  if(p.sulk>0) return `<p class="small" style="margin-top:8px;opacity:.8">🎓 <b>${p.name}</b>은(는) 태업 중입니다 — 태업이 풀려야 멘토를 붙일 수 있습니다.</p>`;
   try{ tutorSweep(); }catch(e){}
   if(p.tutor){
     const mt=userTeam().players.find(x=>x.id===p.tutor.id);
@@ -45606,9 +45707,16 @@ function tutorBlock(p){
       <button class="mini" style="margin-left:8px" ${left>0?"disabled":""} onclick="clearTutor(${p.id})">
         ${left>0?`변경까지 ${left}일`:"멘토 바꾸기"}</button></div>`;
   }
-  if(age>TUTOR_MAX_AGE) return "";
+  if(age>TUTOR_MAX_AGE)
+    return `<p class="small" style="margin-top:8px;opacity:.8">🎓 멘토는 <b>${TUTOR_MAX_AGE}세 이하</b>만 받을 수 있습니다 — ${p.name}은(는) ${age}세입니다.</p>`;
   const all=tutorCands(p, true);
-  if(!all.length) return `<p class="small" style="margin-top:8px">🎓 멘토로 붙일 만한 베테랑(${TUTOR_MIN_AGE}세 이상)이 없습니다.</p>`;
+  if(!all.length){
+    const t0=userTeam(), aged=(q)=>G.season-q.by;
+    const 서른=(t0.players||[]).filter(q=>q.id!==p.id && aged(q)>=TUTOR_MIN_AGE);
+    const 태업=서른.filter(q=>q.sulk>0).length;
+    return `<p class="small" style="margin-top:8px">🎓 멘토로 붙일 만한 베테랑(${TUTOR_MIN_AGE}세 이상)이 없습니다.
+      <span style="opacity:.75">— 우리 스쿼드에 ${TUTOR_MIN_AGE}세 이상은 ${서른.length}명${태업?`, 그중 ${태업}명이 태업 중입니다`:"입니다"}.</span></p>`;
+  }
   const cs=TUTOR_ALL ? all : all.slice(0,4);
   const row=(q,i)=>{
     const c=tutorChance(q,p);
@@ -54746,6 +54854,11 @@ function donSeasonTick(){
     /* 🏗️ 대공사는 한 겨울에 다 못 끝낸다 — 1만 2천 석까지만 완공하고 나머지는 이듬해로 (제보 — 대형 증축 2시즌) */
     const done=Math.min(d.pend, DON_WINTER_MAX);
     sd.cap = Math.min(STAD_CAP_MAX, Math.round((sd.cap||10000) + done));
+    /* 🏗️ ⚠ 제보 — 「기부로 8,000석 공사를 마쳤는데 새 시즌에 42,000석 그대로다」.
+       구단 명칭·수용 인원 «현실화 패치»를 쓰면 그 표가 다시 얹힐 때 수용 인원을
+       패치값으로 되돌려, 기부로 지은 좌석이 통째로 사라졌다.
+       ─ 지은 좌석을 따로 적어 둔다. 패치가 다시 얹힐 때 이 몫을 위에 더한다. */
+    sd._donAdd=Math.round((sd._donAdd||0)+done);
     if(sd._base0==null) sd._base0=sd.avg;
     /* ⚠ K리그 구장은 대부분 좌석이 남는다 — 좌석 수만 늘리면 아무 실익이 없다.
        그래서 이 사업은 「구장 개선」으로 다룬다. 시야·편의시설·원정석이 함께 좋아지고,
@@ -92465,7 +92578,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5175";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5180";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
