@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5155-->
+<!--B:20260913-5161-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -1294,6 +1294,32 @@ table.fmTable td{padding:9px 6px;border-bottom:1px solid #1c222b;vertical-align:
 .fmSlot.sub{background:#141b22;color:#a9b4c0;}
 .fmRoleSel{background:#132029;color:#7ee2a8;border:1px solid #24404f;border-radius:5px;padding:3px 5px;font-size:11px;max-width:176px;}
 .fmRoleSel.duty{background:#1b2330;color:#9ecbff;border-color:#2a3a52;max-width:82px;}
+/* 🛡️ 공 미소유 역할 — ⚠ 제보 「두 폰트 색이 다르네?」. 같은 열 종류면 글자색은 같다.
+   «따로 정했는가»는 색이 아니라 테두리(왼쪽 굵은 줄)로만 알린다. */
+.fmRoleSel.own{border-left:3px solid #3fb950;}
+.fmRoleSel.duty.own{border-left:3px solid #58a6ff;}
+/* ⚔️🛡️ 국면 탭 */
+.phTabs{display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:0 0 8px;}
+.phTab{background:#161b22; border:1px solid #2a3441; border-radius:7px; padding:5px 13px;
+  font-size:12.5px; font-weight:700; color:#a9b4c0; cursor:pointer;}
+.phTab:hover{border-color:#4a6a8c; color:#e6edf3;}
+.phTab.on{background:linear-gradient(180deg,#1c5040,#153a2c); border-color:#3fb950; color:#8df0bd;}
+.phTab.on.ip{background:linear-gradient(180deg,#4a2f8f,#33205f); border-color:#7b5cd6; color:#d9c9ff;}
+.phTab.on.oop{background:linear-gradient(180deg,#1c4a5c,#12303c); border-color:#3fa0c9; color:#a9e6ff;}
+.phBoards{display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;}
+.phBoard{flex:1 1 0; min-width:250px;}
+/* 나란히 놓을 때는 판 안쪽 칸도 함께 좁아져야 한다 — 안 그러면 한 줄에 하나만 들어간다 */
+.phBoard .pitch{min-width:0; padding:10px 4px;}
+.phBoard .pslot{min-width:0;}
+.phBoard .fmCard{min-width:0;}
+.phBoard .fmCardName b{font-size:11px;}
+.phBoard .fmCardRole{font-size:9px;}
+/* 두 판을 나란히 볼 때는 좌측 칸이 한 줄을 다 쓴다 — 그래야 옆으로 붙는다 */
+.fmPitchPane.wide{flex:1 1 100%; min-width:0;}
+@media (max-width:860px){ .phBoard{flex:1 1 100%;} }
+.phBoard>.phCap{font-size:12px; font-weight:800; margin:0 0 5px; padding:3px 9px; border-radius:6px; display:inline-block;}
+.phCap.ip{background:#2b2140; color:#c9b6ff;}
+.phCap.oop{background:#12303c; color:#a9e6ff;}
 .fmName b{color:#fff;font-weight:700;}
 .fmName{cursor:pointer;}
 .fmPos{font-size:11px;color:#a9b4c0;}
@@ -3448,7 +3474,15 @@ const ROLE_DEFAULT={GK:["G","D"], SW:["SWP","D"], CB:["CD","D"], FB:["FB","S"], 
       그러니 role 을 먼저 읽어야 전술이 유지된다.
    ⚠ 「벤치 다녀오면 역할이 초기화된다」도 그대로 해결된다 — role[pid] 는 지워지지 않으므로
       같은 자리로 돌아오면 그 역할이 살아 있고, 다른 자리 그룹으로 가면 roleBy 가 받쳐 준다. */
-function getRole(t, p, slot){
+function getRole(t, p, slot, ph){
+  /* 🛡️ 공 미소유 역할 — 감독이 따로 정했으면 그걸, 아니면 소유 시 역할을 그대로 쓴다 */
+  if(tacPh(ph)==="oop"){
+    const dm=(t&&t.tactic&&t.tactic.roleD)||{};
+    const g2=ROLE_GRP[slot]||"CM";
+    const cur2=dm[p.id];
+    if(cur2 && ROLE_BY_KEY[cur2.r] && ROLE_BY_KEY[cur2.r].grp.includes(g2)) return cur2;
+    return getRole(t, p, slot);
+  }
   const g=ROLE_GRP[slot]||"CM";
   const map=(t&&t.tactic&&t.tactic.role)||{};
   const cur=map[p.id];
@@ -3513,8 +3547,8 @@ function roleStars(v){
   return `<span style="color:var(--gold)">${"★".repeat(full)}${half?"☆":""}</span>`;
 }
 /* 역할+임무 → 엔진 효과 */
-function roleFx(t, p, slot){
-  const rd=getRole(t,p,slot); const R=ROLE_BY_KEY[rd.r];
+function roleFx(t, p, slot, ph){
+  const rd=getRole(t,p,slot,ph); const R=ROLE_BY_KEY[rd.r];
   if(!R) return {};
   const fx=R.fx(rd.d)||{};
   // 적합도가 낮으면 역할을 제대로 소화하지 못한다 (FM 설명 그대로)
@@ -3877,6 +3911,24 @@ function roleBias(a){
     fMark:  FX(a,"tightMark")
   };
   if(a) a._rbC={r:R, t:TR, v};
+  return v;
+}
+/* 🛡️ 공 미소유 역할의 편향 — 수비 판단(압박·마킹·되돌아오기)이 이걸 본다.
+   따로 정하지 않았으면 소유 역할과 같은 값이라 결과도 예전과 같다. */
+function roleBiasD(a){
+  const R=(a&&a.roleD)||null;
+  if(!R) return roleBias(a);
+  const TR=(a&&a.tr)||null;
+  const c=a&&a._rbCD;
+  if(c && c.r===R && c.t===TR) return c.v;
+  /* 특성(팀 지시)은 그대로 더하되, 역할 몫만 미소유 역할에서 가져온다 */
+  const _f=(k)=>((TR&&TR[k])||0)+(R[k]||0);
+  const v={
+    rFwd:   R.fwd||0,        rWide:  R.wide||0,       rPress: R.press||0,
+    fFwd:   _f("fwd"),       fWide:  _f("wide"),      fPress: _f("press"),
+    fMark:  _f("tightMark")
+  };
+  if(a) a._rbCD={r:R, t:TR, v};
   return v;
 }
 /* 특성이 경기에서 갖는 무게.
@@ -4975,11 +5027,20 @@ const MEET_TOPIC=[
 ];
 function meetState(){
   if(!G.meet) G.meet={at:-1e9, s:G.season, n:0, last:null};
-  if(G.meet.s!==G.season){ G.meet.s=G.season; G.meet.n=0; }
+  /* ⚠ 제보 — 「올 시즌 0회 소집인데 다음 미팅까지 287일 남았다고 나온다」.
+     원인 : G.day 는 시즌마다 1로 되돌아가는데, 마지막 미팅 날짜(at)는 지난 시즌의
+            큰 날짜(예: 300일째) 그대로 남아 있었다. 그래서 300+28−1 = 327일이 찍혔다.
+     수정 : 시즌이 바뀌면 «지난 시즌에 한 미팅»은 이미 4주보다 훨씬 전의 일이므로
+            쿨타임을 함께 넘긴다. 간격 자체는 시즌 구분 없이 그대로 4주다. */
+  if(G.meet.s!==G.season){ G.meet.s=G.season; G.meet.n=0; G.meet.at=-1e9; }
   return G.meet;
 }
 function meetLeft(){
-  try{ const M=meetState(); return Math.max(0, (M.at|0)+MEET_COOL-(G.day||0)); }catch(e){ return 0; }
+  try{ const M=meetState();
+    const gap=(G.day||0)-(M.at|0);
+    /* 옛 세이브 구제 — 지난 미팅 날짜가 오늘보다 뒤에 있으면(시즌이 넘어간 흔적) 바로 풀어 준다 */
+    if(gap<0){ M.at=-1e9; return 0; }
+    return Math.max(0, MEET_COOL-gap); }catch(e){ return 0; }
 }
 function meetReady(){ try{ return !G.jobless && !!userTeam() && meetLeft()<=0; }catch(e){ return false; } }
 /* 최근 5경기로 본 팀 상태 — 어떤 주제가 먹히는지 가른다 */
@@ -5202,7 +5263,15 @@ function meetFinish(){
   const ok  = lead>=0.5;
   const bad = lead<0.28;
   /* 주제의 기본 효과 × 리더들이 얼마나 받아 줬는가 */
-  const k = ok ? (0.6+lead*0.8) : (bad ? -1.05 : -0.35);
+  /* ⚠ 제보 — 「기강을 잡았더니 반발한 선수의 사기가 오르고 수긍한 선수가 떨어진다」.
+     원인 : 주제의 기본 효과에 (r<0 ? −0.7 : …) 를 곱해 «반응으로 부호를 뒤집었다».
+            사기가 오르는 주제(칭찬 +7)에서는 맞아떨어졌지만, 애초에 사기를 깎는 주제
+            (기강 −2·−3)에서는 마이너스에 마이너스가 곱해져 반발한 선수만 사기가 올랐다.
+     수정 : 부호는 주제가 정하고, 반응은 «그 말이 얼마나 먹혔는가(land)»와
+            «받아들였는가에 대한 자기 감정(RM/RA)» 두 가지로만 작용한다.
+            → 회초리를 수긍한 선수는 사기가 거의 그대로거나 조금 오르고,
+              등을 돌린 선수는 확실히 떨어진다. */
+  const kk = clamp(0.25 + lead*1.15, 0.25, 1.40);   // 의도한 효과가 얼마나 실렸는가 (항상 양수)
   const re=[];
   let sMor=0, sAff=0, n=0;
   try{ for(const p of (t.players||[])){
@@ -5215,8 +5284,14 @@ function meetFinish(){
     const rl=Math.random();
     const r = rl<a-0.18 ? 1 : rl<a+0.22 ? 0 : -1;
     const w = (tk==="lead"?1.15:tk==="high"?1:tk==="mid"?0.7:0.5);
-    const mor = (T.mor*k + qMor*0.55) * w * (r>0?1:r<0?-0.7:0.25);
-    const aff2= (T.aff*k + qAff*0.55) * w * (r>0?1:r<0?-0.7:0.25);
+    /* 말이 얼마나 가 닿았는가 — 등을 돌린 선수에게는 거의 남지 않는다 */
+    const land = (r>0 ? 1 : r<0 ? 0.15 : 0.45);
+    /* 받아들였는가 자체가 만드는 감정 — 여기가 오르내림을 정한다 */
+    const rw = bad?1.25 : ok?1 : 1.1;
+    const RM = (r>0 ? 1.8 : r<0 ? -3.0 : 0) * rw;
+    const RA = (r>0 ? 1.6 : r<0 ? -2.8 : 0) * rw;
+    const mor = ((T.mor + qMor*0.55) * kk * land + RM) * w;
+    const aff2= ((T.aff + qAff*0.55) * kk * land + RA) * w;
     p.morale=clamp((p.morale||70)+mor, 20, 99);
     try{ affAdd(p, aff2, "팀 미팅"); }catch(e){}
     sMor+=mor; sAff+=aff2; n++;
@@ -5224,10 +5299,14 @@ function meetFinish(){
              mor:Math.round(mor*10)/10, aff:Math.round(aff2*10)/10,
              ln:meetLine(r, isLead, p.id+(Q.i|0))});
   } }catch(e){}
-  const famD=(T.fam*k + qFam*0.6);
-  try{ t.fam=clamp((t.fam!=null?t.fam:70)+famD, 0, 100); }catch(e){}
   re.sort((a,b)=> (["lead","high","mid","low"].indexOf(a.tk)-["lead","high","mid","low"].indexOf(b.tk)) || (b.r-a.r));
   const nIn=re.filter(x=>x.r>0).length, nOut=re.filter(x=>x.r<0).length;
+  /* 🧩 조직력 — «몇 명이 실제로 받아들였는가»가 정한다.
+     절반 넘게 수긍하면 오르고, 라커룸이 등을 돌리면 내려간다.
+     주제의 부호를 뒤집는 대신 여기서 오르내림을 만든다. */
+  const inRate = re.length ? (nIn - nOut*0.85)/re.length : 0;
+  const famD=(T.fam + qFam*0.6) * kk * clamp((inRate-0.10)/0.45, -1.1, 1.15);
+  try{ t.fam=clamp((t.fam!=null?t.fam:70)+famD, 0, 100); }catch(e){}
   M.last={k:T.k, s:G.season, d:(G.day||0), ok:ok?1:bad?-1:0,
           lead:Math.round(lead*100), re, log:Q.log||[],
           fam:Math.round(famD*10)/10, mor:Math.round((n?sMor/n:0)*10)/10};
@@ -7135,7 +7214,37 @@ function positionStarRows(p){
   rows.sort((a,b)=> b.rank-a.rank || b.fam-a.fam);
   return rows;
 }
-function setSlot(t,pid,slot){ if(!t.tactic.slot) t.tactic.slot={}; t.tactic.slot[pid]=slot; }
+/* ⚔️🛡️ 지금 전술판에서 «어느 판»을 그리고 있는가 — "both" 는 소유 판을 편집한다 */
+let TACPH="both";
+function tacEditPh(){ return TACPH==="oop" ? "oop" : "ip"; }
+function setTacPh(v){
+  TACPH=(v==="ip"||v==="oop")?v:"both";
+  /* 🛡️ 공 미소유 판을 처음 열면 지금 소유 판을 그대로 베껴 온다 — 백지에서 시작하면 손이 많이 간다 */
+  if(TACPH==="oop"){ try{ oopSeedFromIP(userTeam()); }catch(e){} }
+  refreshTactics();
+}
+/* 공 미소유 판을 소유 판으로 초기화한다 */
+function oopSeedFromIP(t, force){
+  if(!t||!t.tactic) return false;
+  if(!force && oopShapeSet(t)) return false;
+  const xi=(function(){ try{ return pitchPlayersForZoneEdit(); }catch(e){ return bestXI(t); } })();
+  const ip=computeRenderSlots(t, xi);
+  const D={}; for(const q of xi) if(ip[q.id]) D[q.id]=ip[q.id];
+  t.tactic.slotD=D;
+  return true;
+}
+function oopReset(){
+  const t=userTeam();
+  showConfirm(`<b>🛡️ 공 미소유 형태를 공 소유 형태와 같게 되돌립니다.</b>\n\n수비 시 따로 잡아 둔 자리와 역할이 사라집니다.`,
+    ()=>{ t.tactic.slotD={}; t.tactic.roleD={}; oopSeedFromIP(t, true);
+          try{ noteTacticChange(t, 1); }catch(e){}
+          saveGame(); refreshTactics(); }, {okLabel:"되돌린다", cancelLabel:"취소"});
+}
+function setSlot(t,pid,slot,ph){
+  const M=slotMapOf(t, ph===undefined?tacEditPh():ph);
+  M[pid]=slot;
+  /* 소유 판을 옮겼는데 미소유 판을 아직 안 만들었으면 같이 따라가게 둔다(=두 판이 같은 그림) */
+}
 /* 현재 선발 XI 전체를 놓고 각 선수의 세부 슬롯을 계산한다 — 사용자가 직접 지정한 슬롯은 그대로 쓰고,
    아직 지정되지 않은 선수만 같은 라인 내 빈 자리에 자동 배치한다. 자동 배치된 자리는 즉시 t.tactic.slot에
    "고정(sticky)"으로 저장해 둔다 — 그래야 나중에 다른 선수가 같은 라인으로 들어오거나 나가서 인원수가
@@ -7151,7 +7260,53 @@ function xiGkEmptyEdit(t, xi){
               && Array.isArray(xi) && !xi.some(p=>p && p.pos==="GK"));
   }catch(e){ return false; }
 }
-function computeRenderSlots(t, xi){
+/* ═══ ⚔️🛡️ 공 소유 시 / 공 미소유 시 — 두 벌의 형태와 역할 ═══════════════════
+   ⚠ 요청 — 「FM 26처럼 공 소유 시 포메이션, 공 미소유 시 포메이션을 각각 정할 수 있게 하자」.
+   ─ 예전에 있던 «국면 포메이션»은 앵커를 통째로 모핑해 너무 극단적이었다(그래서 걷어냈다).
+     이번에는 FM 26 방식이다 — 감독이 «두 판을 직접 그린다».
+       · t.tactic.slot   / t.tactic.role   = 공 소유 시 (기준판)
+       · t.tactic.slotD  / t.tactic.roleD  = 공 미소유 시 (없으면 기준판을 그대로 쓴다)
+     엔진은 이미 국면별로 앵커를 나눠 계산하고 있었다(tacticalAnchorXY 의 phase).
+     거기에 «국면별 슬롯»만 물리면 수비 시 형태가 실제로 달라진다. */
+const TAC_PH=["ip","oop"];
+function tacPh(ph){ return ph==="oop" ? "oop" : "ip"; }
+/* 그 국면의 배치표 — 공 미소유 판이 비어 있으면 소유 판을 그대로 본다 */
+function slotMapOf(t, ph){
+  if(!t||!t.tactic) return {};
+  if(tacPh(ph)==="oop"){
+    if(!t.tactic.slotD) t.tactic.slotD={};
+    return t.tactic.slotD;
+  }
+  if(!t.tactic.slot) t.tactic.slot={};
+  return t.tactic.slot;
+}
+/* 공 미소유 판을 감독이 한 번이라도 손댔는가 — 안 건드렸으면 두 판은 같은 그림이다 */
+function oopShapeSet(t){
+  try{ return !!(t&&t.tactic&&t.tactic.slotD && Object.keys(t.tactic.slotD).length); }catch(e){ return false; }
+}
+function oopRoleSet(t){
+  try{ return !!(t&&t.tactic&&t.tactic.roleD && Object.keys(t.tactic.roleD).length); }catch(e){ return false; }
+}
+function computeRenderSlots(t, xi, ph){
+  /* 🛡️ 공 미소유 판 — 감독이 그린 게 있으면 그 배치를, 없으면 소유 판을 그대로 쓴다 */
+  if(tacPh(ph)==="oop"){
+    if(!oopShapeSet(t)) return computeRenderSlots(t, xi);
+    const ip=computeRenderSlots(t, xi);
+    const D=slotMapOf(t,"oop"), out={}, taken=new Set();
+    for(const p of xi){ const s=D[p.id];
+      if(s && SLOT_BAND[s] && !taken.has(s)){ out[p.id]=s; taken.add(s); } }
+    /* 공 미소유 자리를 안 정한 선수는 소유 시 자리에 그대로 선다 (자리가 겹치면 비켜 준다) */
+    for(const p of xi){ if(out[p.id]) continue;
+      let s=ip[p.id];
+      if(s==="GK"){ out[p.id]="GK"; continue; }
+      if(!s || taken.has(s)){
+        s=null;
+        for(const b of BANDS) for(const q of ROW_SLOTS[b]) if(q && !taken.has(q)){ s=q; break; }
+      }
+      if(s){ out[p.id]=s; taken.add(s); }
+    }
+    return out;
+  }
   const slotOf={};
   // 골문에 설 선수 — 정식 키퍼가 없으면(전원 부상) 비상 키퍼를 세운다.
   let gkP=xi.find(p=>p.pos==="GK");
@@ -46276,7 +46431,9 @@ function presetFam(t, i){
 /* ⚡ ⚠ 제보 — 「경기에 컨디션보다 체력이 더 영향을 준다면, 전술판·선발/교체/그 외 슬롯도
    컨디션이 아니라 «체력»이 나오는 게 맞다」. 맞는 말이다 — 엔진이 읽는 값은 체력(matchStartFit)이다.
    기본 표시를 체력으로 바꾼다. 컨디션은 전환 버튼으로 그대로 볼 수 있다. */
-function fmSubMode(){ return (typeof G!=="undefined" && G && G.fmSub) ? G.fmSub : "sta"; }
+/* 옛 세이브에 남은 "cond"·"ovr" 는 이제 없는 칸이다 — 체력으로 읽는다 */
+function fmSubOk(m){ return (m==="mor"||m==="fam") ? m : "sta"; }
+function fmSubMode(){ return fmSubOk((typeof G!=="undefined" && G && G.fmSub) || "sta"); }
 function setFmSub(m){ if(typeof G!=="undefined" && G){ G.fmSub=m; } refreshTactics(); }
 function ovrSub(p){
   /* 능력치는 별 개수로 (요청) — 명단·벤치와 같은 잣대(ovrStars). hover 툴팁은 카드 우클릭 팝업과 겹쳐 제거 */
@@ -46291,6 +46448,24 @@ function famSub(t,p,slot){
 /* ⚡ 평시 전술판의 「체력」 — ⚠ 요청: 처음엔 지구력(sta) 능력치를 보여줬는데
    「나는 그냥 현재 뛸 수 있는 체력을 말한 것」. 지금 킥오프하면 시작하는 체력
    (matchStartFit — 컨디션 − 잔여 경기 피로)을 게이지로 보여준다. 다리가 무거우면 🦵 표시. */
+/* 😊 사기 — ⚠ 요청 「카드 하단 표시를 체력 · 사기 · 전술 능숙도로 하자」.
+   ⚠ 함께 제보 — 「컨디션과 체력이 똑같이 나온다」. 맞다. 체력 = 컨디션 − 잔여 피로(mFat×22)라
+     경기 직후 며칠을 빼면 «설계상 같은 숫자»였다. 두 칸을 나란히 둘 이유가 없다.
+     컨디션 칸과 능력치 칸을 걷어내고 그 자리에 사기를 넣는다
+     (능력치는 카드 위 별점이 이미 말하고 있다). */
+function morSub(p){
+  const v=mor(p.morale), col=morCol(v);
+  return `<span class="subFit${(p.sulk>0||p.unhappy>0)?" tired":""}">`
+       + `<i class="condBar"><i style="width:${clamp(v,4,100)}%;background:${col}"></i></i>`
+       + `<b style="color:${col};font-weight:800">${moodIcon(p)}${v}</b>`
+       + ((p.sulk>0||p.unhappy>0)?`<span class="subIc" title="${p.sulk>0?"태업 중":"불만 "+p.unhappy+"/3"}">${p.sulk>0?"🤬":"😠"}</span>`:"")
+       + `</span>`;
+}
+/* 사기 색 — 체력과 같은 원리로 네 구간 (표의 하트 눈금과 어긋나지 않게) */
+function morCol(v){
+  const m=Math.round(v||0);
+  return m>=82 ? "#3fb950" : m>=68 ? "#56d364" : m>=52 ? "#d29922" : "#f85149";
+}
 function staSub(p){
   /* ⚠ 제보 — 「포메이션 카드의 체력 84·81은 초록인데, 선발 정보·교체 대기·그 외 명단에서는
      같은 84·81이 노랗다」. 맞다 — 여기만 눈금이 달랐다(80/66/55). 표(fitColOf)는 85/76/68/60 이라
@@ -46307,24 +46482,24 @@ function staSub(p){
 }
 function fmSubFor(t,p,slot){
   const m=fmSubMode();
-  return m==="ovr" ? ovrSub(p) : m==="fam" ? famSub(t,p,slot) : m==="sta" ? staSub(p) : condSub(p);
+  return m==="fam" ? famSub(t,p,slot) : m==="mor" ? morSub(p) : staSub(p);
 }
 /* 🎚️ 선발 라인업 프리뷰도 같은 전환 (제보 — 「왜 컨디션만 표시되냐」) */
-function fmSubModePrev(){ return (typeof G!=="undefined" && G && G.fmSubPrev) ? G.fmSubPrev : "sta"; }
+function fmSubModePrev(){ return fmSubOk((typeof G!=="undefined" && G && G.fmSubPrev) || "sta"); }
 function setFmSubPrev(m){
   if(typeof G!=="undefined" && G){ G.fmSubPrev=m; }
   try{ if(inLineupPreview && pendingLiveM) $("#main").innerHTML=lineupPreviewLayout(pendingLiveM, pendingLiveTag); }catch(e){}
 }
 function fmSubForPrev(t,p,slot){
   const m=fmSubModePrev();
-  return m==="ovr" ? ovrSub(p) : m==="fam" ? famSub(t,p,slot) : m==="sta" ? staSub(p) : condSub(p);
+  return m==="fam" ? famSub(t,p,slot) : m==="mor" ? morSub(p) : staSub(p);
 }
-/* 🎚️ 경기 중 전술 화면도 같은 전환 (제보) — 경기 중이라 기본은 「체력」, 나머지 셋은 전술창과 동일 */
-function fmSubModeLive(){ return (typeof G!=="undefined" && G && G.fmSubLive) ? G.fmSubLive : "fit"; }
+/* 🎚️ 경기 중 전술 화면도 같은 전환 (제보) — 경기 중이라 기본은 「체력」 */
+function fmSubModeLive(){ const m=(typeof G!=="undefined" && G && G.fmSubLive)||"fit"; return (m==="mor"||m==="fam") ? m : "fit"; }
 function setFmSubLive(m){ if(typeof G!=="undefined" && G){ G.fmSubLive=m; } renderLiveTactics(); }
 function fmSubForLive(t, x, slot){
   const m=fmSubModeLive();
-  return m==="cond" ? condSub(x.p) : m==="ovr" ? ovrSub(x.p) : m==="fam" ? famSub(t,x.p,slot) : fitSub(x.fit, x.y);
+  return m==="fam" ? famSub(t,x.p,slot) : m==="mor" ? morSub(x.p) : fitSub(x.fit, x.y);
 }
 function condSub(p){
   /* 🎨 전술판 리마스터 — 「컨디션 100」 텍스트 대신 바 게이지 + 숫자 (칸 높이 고정의 일부) */
@@ -46344,7 +46519,8 @@ function fitSub(fit, yc){
 }
 function fmPlayerCard(t, p, slot, opt){
   opt=opt||{};
-  const rd=getRole(t,p,slot), R=ROLE_BY_KEY[rd.r];
+  const _ph=(opt.ph==="oop")?"oop":"ip";
+  const rd=getRole(t,p,slot,_ph), R=ROLE_BY_KEY[rd.r];
   const dutyN=DUTY_N[rd.d]||rd.d;
   const fam=getPosFam(p, slot);
   const famCol = fam>=90?"#3fb950" : fam>=60?"#56d364" : fam>=30?"#d29922" : "#f85149";
@@ -46519,12 +46695,24 @@ function fmSquadRow(t, p, slotLabel, slot, idx){
       `<button class="mini" style="padding:1px 7px;font-size:10.5px;margin-left:5px" title="${(p.pos==="GK"||slot==="GK")?"그 외 명단으로 내립니다 — 골문이 빈 자리로 남습니다 (열한 명을 채워야 경기를 시작할 수 있습니다)":"그 외 명단으로 내립니다 — 이 자리는 빈 자리로 남습니다 (열한 명을 채워야 경기를 시작할 수 있습니다)"}"
          onclick="event.stopPropagation();xiOut(${p.id})">⬇ 제외</button>`}</td>
     <td class="fmSlot">${slotLabel}</td>
-    <td onclick="event.stopPropagation()"><select class="fmRoleSel" onchange="fmSetRole(${p.id},this.value)">
+    ${TACPH==="oop" ? "" : `<td onclick="event.stopPropagation()"><select class="fmRoleSel" onchange="fmSetRole(${p.id},this.value)">
       ${opts.map(r=>`<option value="${r.k}" ${r.k===rd.r?"selected":""}>${r.k} · ${r.n}</option>`).join("")}
     </select></td>
     <td onclick="event.stopPropagation()"><select class="fmRoleSel duty" onchange="fmSetDuty(${p.id},this.value)">
       ${(R?R.duty:["S"]).map(d=>`<option value="${d}" ${d===rd.d?"selected":""}>${DUTY_N[d]||d}</option>`).join("")}
-    </select></td>
+    </select></td>`}
+    ${TACPH==="ip" ? "" : (function(){
+      const slD=(function(){ try{ return computeRenderSlots(t, bestXI(t), "oop")[p.id]||slot; }catch(e){ return slot; } })();
+      const rdD=getRole(t,p,slD,"oop"), RD=ROLE_BY_KEY[rdD.r], own=!!((t.tactic.roleD||{})[p.id]);
+      const oD=rolesSortedFor(p, slD);
+      const tip=own?"따로 정한 공 미소유 역할":"소유 역할을 그대로 씁니다 — 여기서 바꾸면 따로 정해집니다";
+      return `<td onclick="event.stopPropagation()"><select class="fmRoleSel${own?" own":""}" title="${tip}" onchange="fmSetRoleD(${p.id},this.value)">
+        ${oD.map(r=>`<option value="${r.k}" ${r.k===rdD.r?"selected":""}>${r.k} · ${r.n}</option>`).join("")}
+      </select>${slD!==slot?`<br><span class="small" style="color:#7ee2a8">🛡️ ${SLOT_SHORT[slD]||slD}</span>`:""}</td>
+      <td onclick="event.stopPropagation()"><select class="fmRoleSel duty${own?" own":""}" title="${tip}" onchange="fmSetDutyD(${p.id},this.value)">
+        ${(RD?RD.duty:["S"]).map(d=>`<option value="${d}" ${d===rdD.d?"selected":""}>${DUTY_N[d]||d}</option>`).join("")}
+      </select></td>`;
+    })()}
     <td class="fmStars">${roleStarsFor(t,p,slot).replace(/ title="[^"]*"/,"")}</td>
     <td class="fmPos pos-${p.pos}">${prefSlotOf(p)}</td>
     ${fmAgeCell(p)}
@@ -46545,6 +46733,27 @@ function fmSetDuty(pid, dk){
   const xi=bestXI(t), slotOf=computeRenderSlots(t,xi);
   const rd=getRole(t,p,slotOf[p.id]||prefSlotOf(p));
   setRole(pid, rd.r, dk);
+}
+/* 🛡️ 공 미소유 시 역할 — 소유 시와 따로 둔다 (FM 26 의 OOP Role) */
+function setRoleD(pid, rk, dk){
+  const t=userTeam(); const R=ROLE_BY_KEY[rk]; if(!R) return;
+  const d=R.duty.includes(dk)?dk:R.duty[0];
+  if(!t.tactic.roleD) t.tactic.roleD={};
+  t.tactic.roleD[pid]={r:rk, d};
+  try{ noteTacticChange(t, 0.5); }catch(e){}
+  saveGame(); refreshTactics();
+}
+function fmSetRoleD(pid, rk){
+  const t=userTeam(); const R=ROLE_BY_KEY[rk]; if(!R) return;
+  const cur=(t.tactic.roleD&&t.tactic.roleD[pid])||{};
+  setRoleD(pid, rk, R.duty.includes(cur.d)?cur.d:R.duty[0]);
+}
+function fmSetDutyD(pid, dk){
+  const t=userTeam();
+  const p=t.players.find(x=>x.id===pid); if(!p) return;
+  const xi=bestXI(t), slotOf=computeRenderSlots(t,xi,"oop");
+  const rd=getRole(t,p,slotOf[p.id]||prefSlotOf(p),"oop");
+  setRoleD(pid, rd.r, dk);
 }
 let FMTAB="info";           // 전술판 우측 탭: info=선발 정보 · kick=전담 키커
 /* 🎯 전담 키커 패널 — 종류별 1~3순위. 능력치 힌트(PK/FK/코너)를 함께 보여 준다. */
@@ -46920,6 +47129,7 @@ let restPage=0;
 function setRestPage(i){ restPage=i; refreshTactics(); }
 /* 선발 + 벤치 + 미등록 표 */
 function fmSquadTable(t, xi, slotOf, mb, rest, sulking, injured){
+  const oopSlots=(function(){ try{ return computeRenderSlots(t, xi, "oop"); }catch(e){ return {}; } })();
   const gkP=xi.find(p=>p.pos==="GK") || (xiGkEmptyEdit(t, xi) ? null : pickEmergencyGK(xi));
   const order=[];
   if(gkP) order.push([gkP,"GK","GK"]);
@@ -46994,7 +47204,13 @@ function fmSquadTable(t, xi, slotOf, mb, rest, sulking, injured){
         onclick="autoPickXI();selSwap=null;refreshTactics()">🔄 자동 선발</button>
     </div>
     ${FMTAB==="kick"?kickerPanel(t, xi):`<div class="tblScroll"><table class="fmTable">
-      <tr><th>선수</th><th>선발</th><th>역할</th><th>임무</th><th>능력</th><th>포지션</th><th>나이</th><th title="지금 킥오프하면 시작하는 체력 — 컨디션에서 지난 경기의 잔여 피로를 뺀 값">체력</th><th class="fmOpt">경고</th><th class="fmOpt">반응</th><th class="fmOpt">평점</th></tr>
+      <tr><th>선수</th><th>선발</th>${
+      /* ⚠ 요청 — 「공 소유 시를 누르면 소유 역할·임무만, 공 미소유 시를 누르면 미소유만.
+         지금은 둘 다 나와 있어 우측 패널이 지나치게 넓다」. 판을 고르면 그 판의 열만 선다.
+         «둘 다»에서만 두 벌이 나란히 선다 — 그건 비교하려고 여는 화면이니까. */
+      (TACPH!=="oop" ? `<th title="공을 가졌을 때 맡는 역할">⚔️ 소유 역할</th><th>임무</th>` : "")
+     +(TACPH!=="ip"  ? `<th title="공을 빼앗겼을 때 맡는 역할 — 따로 정하지 않으면 소유 역할을 그대로 씁니다">🛡️ 미소유 역할</th><th>임무</th>` : "")
+     }<th>능력</th><th>포지션</th><th>나이</th><th title="지금 킥오프하면 시작하는 체력 — 컨디션에서 지난 경기의 잔여 피로를 뺀 값">체력</th><th class="fmOpt">경고</th><th class="fmOpt">반응</th><th class="fmOpt">평점</th></tr>
       ${rows}
       <tr class="fmDiv"><td colspan="11"><span class="fmSecLbl clickable" title="눌러서 접기/펼치기" onclick="G.opt=G.opt||{};G.opt.foldBench=${G.opt&&G.opt.foldBench?"false":"true"};saveGame();refreshTactics()">${G.opt&&G.opt.foldBench?"▸":"▾"} 🪑 교체 명단 (${mb.length}/9)${t.tactic&&t.tactic.benchManual?` <span class="small" style="color:var(--gold)">직접 편성</span>`:""}</span>${G.opt&&G.opt.foldBench?"":benchSortBtns()}${
         (G.opt&&G.opt.foldBench)||matchBench(t).some(p=>p.pos==="GK") ? ""
@@ -47027,7 +47243,10 @@ function tactics(){
   const gkP=xi.find(p=>p.pos==="GK") || (xiGkEmptyEdit(t, xi) ? null : pickEmergencyGK(xi));
   const dfP=xi.filter(p=>getZone(t,p)==="DF"), mfP=xi.filter(p=>getZone(t,p)==="MF"), fwP=xi.filter(p=>getZone(t,p)==="FW");
   const liveFormName=formationLabel(t, xi);
-  const slotOf=computeRenderSlots(t, xi);
+  const slotOfIP=computeRenderSlots(t, xi);
+  const slotOfOOP=computeRenderSlots(t, xi, "oop");
+  /* ⚔️🛡️ 지금 그리고(=편집하고) 있는 판 */
+  const slotOf = (TACPH==="oop") ? slotOfOOP : slotOfIP;
   // 전술탭 선수 칩(이름+적합도 동그라미+별점)은 더 이상 마우스 hover 툴팁을 쓰지 않는다 — 대신
   // 칩 위에서 우클릭하면 showPlayerInfoPopup()이 오버롤·별점·선호 포지션을 인게임 팝업으로 보여준다.
   // 동그라미(posFitDot)·별점(ovrStars/slotStars)이 각자 갖고 있던 title은 예전 hover 툴팁 잔재이므로
@@ -47042,29 +47261,51 @@ function tactics(){
   // 세부 지역(예: LB/CB/ST) 전용 칩 — 이름 옆 동그라미로 선호 포지션 적합도(FM처럼 초록/노랑/빨강)를 색으로만 보여주고,
   // 텍스트 정보는 우클릭 팝업으로만 확인한다(적합도 색은 시각적으로 이미 전달되므로 텍스트로 중복 설명하지 않는다).
   /* FM처럼 두 칸짜리 카드: 위 = 역할 버튼(클릭하면 역할 패널), 아래 = 선수 이름 */
-  const pitchChip=(p,slot)=>fmPlayerCard(t, p, slot, {
-    picked:selSwap===p.id, sub:fmSubFor(t,p,slot),
+  const pitchChip=(p,slot,ph)=>fmPlayerCard(t, p, slot, {
+    picked:selSwap===p.id, sub:fmSubFor(t,p,slot), ph:ph||"ip",
     extra:stripTitle(posFitDot(p,slot))+stripTitle(roleStarsFor(t,p,slot))
   });
   /* 선수를 고른 뒤 빈 자리를 누르면 그 자리로 옮긴다 — 드래그가 어려운 폰·패드용 경로.
      드래그(dropZone)와 결과가 같아야 하므로 같은 함수를 부른다. */
-  const slotCell=(slot)=>{
-    const occ=xi.filter(p=>p!==gkP && slotOf[p.id]===slot);
-    const armed = selSwap!==null && !occ.some(p=>p.id===selSwap);
-    return `<div class="pslot${armed?" dropReady":""}" ondragover="overZone(event)" ondragleave="leaveZone(event)" ondrop="dropZone(event,'${slot}')"
+  const slotCell=(slot, SM, ph, live)=>{
+    const M=SM||slotOf;
+    const occ=xi.filter(p=>p!==gkP && M[p.id]===slot);
+    const armed = live && selSwap!==null && !occ.some(p=>p.id===selSwap);
+    return `<div class="pslot${armed?" dropReady":""}"${live?` ondragover="overZone(event)" ondragleave="leaveZone(event)" ondrop="dropZone(event,'${slot}')"`:""}
       ${armed?`onclick="moveSelTo('${slot}')"`:""}>
-      <div class="pslotLabel">${slot}</div>${occ.map(p=>pitchChip(p,slot)).join("")}
+      <div class="pslotLabel">${slot}</div>${occ.map(p=>pitchChip(p,slot,ph)).join("")}
     </div>`;
   };
   // 비어 있는 라인도 항상 그린다 — 그래야 그 라인으로 드래그해 배치할 수 있다.
   /* 📐 ⚠ 제보 — 빈 줄이 카드 높이를 그대로 먹어 판이 길었고, 그 보상으로 SW 만 24px 로
      눌러 놔서 혼자 좁고 카드를 놓는 순간 판이 튀었다. 이제 «카드가 있는 줄»만 펼친다 —
      어느 줄이든 규칙이 같다. 높이 변화는 CSS 트랜지션으로 부드럽게 넘어간다. */
-  const rowHtml=(band)=>{
-    const used=ROW_SLOTS[band].some(x=>x&&xi.some(p=>slotOf[p.id]===x));
+  const rowHtml=(band, SM, ph, live)=>{
+    const M=SM||slotOf;
+    const used=ROW_SLOTS[band].some(x=>x&&xi.some(p=>M[p.id]===x));
     const thin=!used;
-    return `<div class="prow${thin?" thin":""}">${ROW_SLOTS[band].map(s=>s?slotCell(s):'<div class="pslot empty"></div>').join("")}</div>`;
+    return `<div class="prow${thin?" thin":""}">${ROW_SLOTS[band].map(s=>s?slotCell(s,M,ph,live):'<div class="pslot empty"></div>').join("")}</div>`;
   };
+  /* 한 장의 판 — live 이면 드래그·클릭으로 편집할 수 있다 */
+  const boardHtml=(SM, ph, live)=>`<div class="pitch">
+    ${BANDS_TOPDOWN.map(b=>rowHtml(b, SM, ph, live)).join("")}
+    <div class="pline${gkP?"":" thin"}">${gkP ? fmPlayerCard(t, gkP, "GK", {picked:selSwap===gkP.id, sub:fmSubFor(t,gkP,"GK"), ph}) : (
+      (live && t.tactic&&t.tactic.xiManual)
+        ? `<div class="pslot${selSwap!==null?" dropReady":""}" ondragover="overZone(event)" ondragleave="leaveZone(event)" ondrop="dropZone(event,'GK')"
+             ${selSwap!==null?`onclick="moveSelTo('GK')"`:""}><div class="pslotLabel">GK</div></div>`
+        : "")}</div>
+  </div>`;
+  /* ⚔️🛡️ 국면 탭 — FM 26 처럼 두 판을 나란히 보거나, 한 판씩 골라 그린다 */
+  const _oopOn=oopShapeSet(t)||oopRoleSet(t);
+  const phTabs=`<div class="phTabs">
+    <button class="phTab${TACPH==="both"?" on":""}" onclick="setTacPh('both')" title="두 판을 나란히 봅니다 (편집은 각 판에서)">👁 둘 다</button>
+    <button class="phTab${TACPH==="ip"?" on ip":""}" onclick="setTacPh('ip')" title="공을 가졌을 때의 형태를 그립니다">⚔️ 공 소유 시</button>
+    <button class="phTab${TACPH==="oop"?" on oop":""}" onclick="setTacPh('oop')" title="공을 빼앗겼을 때의 형태를 그립니다">🛡️ 공 미소유 시</button>
+    <span class="small" style="margin-left:auto;opacity:.75">${_oopOn
+      ? `🛡️ <b style="color:#8df0bd">따로 잡아 둔 수비 형태</b>가 있습니다`
+      : "수비 형태를 따로 잡지 않으면 두 판이 같습니다"}</span>
+    ${_oopOn?`<button class="mini" style="padding:4px 10px" onclick="oopReset()" title="공 미소유 형태·역할을 지우고 소유 판과 같게 만듭니다">↩ 같게</button>`:""}
+  </div>`;
   const mb2=matchBench(t);
   // 선발 요약 — 외국인 쿼터·전력·사기는 라인업을 짜면서 계속 보게 되는 값이라 전술판 위쪽에 둔다
   const _frnFree=frnFreeNow();
@@ -47087,25 +47328,25 @@ function tactics(){
   ${tacShareBar()}
   ${tacDetailOpen?`<div class="fmDetailPane">${tacticDetailCard(t, xi)}</div>`:""}
   <div class="fmBody">
-    <div class="fmPitchPane">
-      <div class="pitch">
-        ${BANDS_TOPDOWN.map(b=>rowHtml(b)).join("")}
-        <div class="pline${gkP?"":" thin"}">${gkP ? chip(gkP) : (
-          /* 🧤 요청 — 골문을 비워 뒀다면 「놓을 수 있는 빈 칸」으로 그린다 (다른 자리와 같은 조작) */
-          (t.tactic&&t.tactic.xiManual)
-            ? `<div class="pslot${selSwap!==null?" dropReady":""}" ondragover="overZone(event)" ondragleave="leaveZone(event)" ondrop="dropZone(event,'GK')"
-                 ${selSwap!==null?`onclick="moveSelTo('GK')"`:""}><div class="pslotLabel">GK</div></div>`
-            : "")}</div>
-      </div>
+    <div class="fmPitchPane${TACPH==="both"?" wide":""}">
+      ${phTabs}
+      ${TACPH==="both"
+        ? `<div class="phBoards">
+             <div class="phBoard"><div class="phCap ip">⚔️ 공 소유 시</div>${boardHtml(slotOfIP,"ip",false)}</div>
+             <div class="phBoard"><div class="phCap oop">🛡️ 공 미소유 시</div>${boardHtml(slotOfOOP,"oop",false)}</div>
+           </div>
+           <p class="tacHint">👁 보기 전용입니다 — 고치려면 위에서 <b>⚔️ 공 소유 시</b> 또는 <b>🛡️ 공 미소유 시</b>를 고르세요.</p>`
+        : `<div class="phCap ${TACPH}">${TACPH==="oop"?"🛡️ 공 미소유 시 — 이 판을 그립니다":"⚔️ 공 소유 시 — 이 판을 그립니다"}</div>
+           ${boardHtml(slotOf, TACPH, true)}`}
       <div class="fmSubBar">
         <span class="small" style="opacity:.7">카드 하단 표시:</span>
-        ${[["sta","⚡ 체력"],["cond","💚 컨디션"],["ovr","📊 능력치"],["fam","🎓 역할 능숙도"]].map(([m,n])=>
+        ${[["sta","⚡ 체력"],["mor","😊 사기"],["fam","🎓 전술 능숙도"]].map(([m,n])=>
           `<button class="fmSubBtn${fmSubMode()===m?" on":""}" onclick="setFmSub('${m}')">${n}</button>`).join("")}
       </div>
       ${(function(){ try{ return xiDiffBar(t); }catch(e){ return ""; } })()}
       <p class="tacHint">🖱️ 드래그하거나 <b>선수를 누른 뒤 옮길 자리를 누르면</b> 배치가 바뀝니다 (폰·패드 권장) · 카드 위 역할 버튼으로 역할·임무 변경 · <span class="frnN">보라색 이름</span>은 외국인 선수</p>
     </div>
-    ${fmSquadTable(t, xi, slotOf, mb2, benchRest, sulking, injured)}
+    ${fmSquadTable(t, xi, slotOfIP, mb2, benchRest, sulking, injured)}
   </div>`;
 }
 /* ---------- 벤치 등록 교체 (선발과 무관 — 교체 멤버 ↔ 미등록, 드래그 & 클릭-클릭 확인) ---------- */
@@ -47656,7 +47897,7 @@ function dropZone(e, slotName){ e.preventDefault(); e.currentTarget.classList.re
   if(pid==null) return;
   const t=userTeam();
   const xiPlayers=pitchPlayersForZoneEdit();
-  const slots=computeRenderSlots(t, xiPlayers);
+  const slots=computeRenderSlots(t, xiPlayers, tacEditPh());
   // 드롭한 칸에 이미 다른 선수가 있으면 자리를 "이동"이 아니라 "맞바꾸기"로 처리 —
   // 그래야 한 칸에 두 명이 겹치지도 않고, 관계없는 다른 선수들이 덩달아 밀리지도 않는다.
   const occupant=xiPlayers.find(x=>x.id!==pid && slots[x.id]===slotName);
@@ -47676,7 +47917,7 @@ function moveToZone(pid, slotName){
   if(!p || p.pos==="GK" || band==="GK"){ refreshTactics(); return; } // GK는 항상 고정 — 이동도, GK 자리로의 편입도 불가
   const xiPlayers=pitchPlayersForZoneEdit();
   if(!xiPlayers.some(x=>x.id===pid)){ refreshTactics(); return; }
-  setZone(t, pid, band);
+  if(tacEditPh()==="ip") setZone(t, pid, band);      // 라인(zone)은 소유 판 기준이다
   if(ROW_SLOTS[band] && ROW_SLOTS[band].includes(slotName)) setSlot(t, pid, slotName);
   if(liveM) liveM.xiDirty=true;
   refreshTactics();
@@ -47689,7 +47930,7 @@ function swapSlots(pidA, pidB){
   if(!pA || !pB || pA.pos==="GK" || pB.pos==="GK"){ refreshTactics(); return; }
   const xiPlayers=pitchPlayersForZoneEdit();
   if(!xiPlayers.some(x=>x.id===pidA) || !xiPlayers.some(x=>x.id===pidB)){ refreshTactics(); return; }
-  const slots=computeRenderSlots(t, xiPlayers);
+  const slots=computeRenderSlots(t, xiPlayers, tacEditPh());
   const slotA=slots[pidA], slotB=slots[pidB];
   if(!slotA || !slotB || slotA==="GK" || slotB==="GK"){ refreshTactics(); return; }
   setZone(t, pidA, POS_ROW[slotB]); setSlot(t, pidA, slotB);
@@ -48096,7 +48337,7 @@ function renderLiveTactics(){
       </div>
       <div class="fmSubBar">
         <span class="small" style="opacity:.7">카드 하단 표시:</span>
-        ${[["fit","⚡ 체력"],["cond","💚 컨디션"],["ovr","📊 능력치"],["fam","🎓 역할 능숙도"]].map(([m,n])=>
+        ${[["fit","⚡ 체력"],["mor","😊 사기"],["fam","🎓 전술 능숙도"]].map(([m,n])=>
           `<button class="fmSubBtn${fmSubModeLive()===m?" on":""}" onclick="setFmSubLive('${m}')">${n}</button>`).join("")}
       </div>
       <p class="small" style="margin-top:6px">🖱️ 드래그하거나 <b>선수를 누른 뒤 옮길 자리를 누르면</b> 재배치 (폰·패드 권장) · 그라운드 ↔ 벤치를 맞바꾸면 교체 (카드 ${sd.subs}/${subMax(liveM)}) · 골키퍼 이동 불가</p>
@@ -69812,7 +70053,7 @@ function exposedFlanks(mine, dir){
   const out=[];
   for(const a of mine){
     if(a.slot!=="LB" && a.slot!=="RB" && a.slot!=="LWB" && a.slot!=="RWB") continue;
-    const defAnchor=tacticalAnchorXY(a.team, a.slot, "DEF", a.isHome);
+    const defAnchor=tacticalAnchorXY(a.team, a.slotD||a.slot, "DEF", a.isHome);
     const ahead=(a.x-defAnchor.x)*dir;
     if(ahead>0.09) out.push({by:a, anchor:defAnchor, ahead});
   }
@@ -69826,7 +70067,7 @@ function exposedFlank(mine, dir){
        RECOVER 도 COVER_WIDE 도 한 번도 나오지 않았다(실측 3-5-2 에서 둘 다 0%).
        올라갔다 돌아오는 건 오히려 윙백이 더 잦다. */
     if(a.slot!=="LB" && a.slot!=="RB" && a.slot!=="LWB" && a.slot!=="RWB") continue;
-    const defAnchor=tacticalAnchorXY(a.team, a.slot, "DEF", a.isHome);
+    const defAnchor=tacticalAnchorXY(a.team, a.slotD||a.slot, "DEF", a.isHome);
     const ahead=(a.x-defAnchor.x)*dir;              // 자기 수비 위치보다 얼마나 전진해 있나
     if(ahead>0.09 && (!worst || ahead>worst.ahead)) worst={by:a, anchor:defAnchor, ahead};
   }
@@ -69869,7 +70110,7 @@ function recoverSpot(a, mine, opps, ball, dir, anch){
     if(m===a || m.slot==="GK") continue;
     if(m.slot==="LB"||m.slot==="RB"||m.slot==="LWB"||m.slot==="RWB") continue;
     if((SLOT_BAND[m.slot]||"MF")!=="DF" && (SLOT_BAND[m.slot]||"MF")!=="SW") continue;
-    const ma=tacticalAnchorXY(m.team, m.slot, "DEF", m.isHome);
+    const ma=tacticalAnchorXY(m.team, m.slotD||m.slot, "DEF", m.isHome);
     if(half(ma.y) < -0.02) continue;                   // 내 쪽 센터백만
     if((m.y-ma.y)*side > 0.055){ cbOut={m, ma}; break; }
   }
@@ -70054,7 +70295,7 @@ function assignDefRoles(mine, opps, carrier, pressers, t, dir, ball, jockey){
      RB가 압박을 나갔다 → 그 자리가 빈다 → RCB가 메우러 간다 → RCB 자리가 빈다 →
      DM이 내려앉는다 → 그만큼 반대쪽 LB가 안으로 좁힌다. 이 연쇄가 여기서 만들어진다. */
   const board={vacated:[], filled:new Set()};
-  const _anch=(a)=>tacticalAnchorXY(a.team, a.slot, "DEF", a.isHome);
+  const _anch=(a)=>tacticalAnchorXY(a.team, a.slotD||a.slot, "DEF", a.isHome);
   const _leave=(a)=>{ const an=_anch(a);
     /* ⚠ 「실제로 그 자리를 떠났을 때」만 빈 자리다.
        볼 근처라는 이유로 표시하면, 선수가 제자리에 있는데도 빈 자리로 잡혀
@@ -70310,7 +70551,10 @@ function assignDefRoles(mine, opps, carrier, pressers, t, dir, ball, jockey){
        마크 지정 비율이 28~31%로 똑같았다 — 역할이 협력수비에 관여할 방법이 없었다.
        이제 밀착 마크 성향은 사람을 잡고, 압박 성향은 길목으로 나가고,
        뒤에 서는 역할(fwd 음수)은 라인을 지키는 쪽으로 기운다. */
-    const _B = roleBias(a);
+    /* 🛡️ 여기는 «공을 잃은 순간»의 판단이므로 공 미소유 역할을 읽는다.
+       미소유 역할을 따로 정하지 않았으면 roleBiasD 가 소유 역할을 그대로 돌려주므로
+       예전 세이브의 결과는 한 치도 달라지지 않는다. */
+    const _B = roleBiasD(a);
     const rMark = clamp(_B.fMark, 0, 1.5);
     const rPress= clamp(_B.fPress, 0, 1.5);
     const rDeep = Math.max(0, -_B.fFwd);
@@ -71244,7 +71488,7 @@ function buildDefShape(mine, dir, ball, blockShift, T){
   for(const a of mine){
     a._shX=null; a._shY=null; a._shBond=0;
     if(a.slot==="GK") continue;
-    const an=tacticalAnchorRef(a.team, a.slot, "DEF", a.isHome);   // ⚡ 읽기만 한다
+    const an=tacticalAnchorRef(a.team, a.slotD||a.slot, "DEF", a.isHome);   // ⚡ 읽기만 한다
     rows.push({a, ax:own(clamp01(an.x+blockShift)), ay:an.y});
   }
   if(rows.length<4) return;                  // 퇴장이 겹쳐 라인을 만들 수 없다
@@ -72082,6 +72326,7 @@ class MatchSim{
          경기 시점 점유를 팀에 실어 준다. */
       /* 🎓 교체로 빠진 선수도 정산 때 「그 경기에서 뛴 자리」가 남아야 한다 — 덮지 않고 병합 */
       sd.team._slotOcc=Object.assign({}, sd.team._slotOcc||{}, slotOf);
+      const slotOfD=computeRenderSlots(sd.team, xi, "oop");   // 🛡️ 공 미소유 시 자리
       for(const x of onPitch(sd)){
         const slot = x.p.pos==="GK" ? "GK" : (slotOf[x.p.id]||"CM");
         /* ⚠ 여기서 isHome 을 홈/원정 키로만 다시 계산해서, 후반에 교체를 하면
@@ -72089,7 +72334,8 @@ class MatchSim{
            (제보: "교체하면 후반 공격 진영이 전반이랑 같아진다")
            지금 진영 교대 상태(this.ends)를 반영해서 계산한다. */
         const isHome = (key==="h") !== !!this.ends;
-        const anchor=tacticalAnchorXY(sd.team, slot, "DEF", isHome);
+        const slotD = x.p.pos==="GK" ? "GK" : (slotOfD[x.p.id]||slot);   // 🛡️ 공 미소유 시 자리
+        const anchor=tacticalAnchorXY(sd.team, slotD, "DEF", isHome);
         alive.add(x.p.id);
         let a=this.agents.find(q=>q.id===x.p.id);
         if(!a){
@@ -72099,7 +72345,10 @@ class MatchSim{
           this.agents.push(a); this._sideBust();
         }
         a.p=x.p; a.team=sd.team; a.side=key; a.slot=slot; a.isHome=isHome; a.dir=isHome?1:-1;
+        a.slotD = slotD;
         a.role=roleFx(sd.team, x.p, slot);
+        a.roleD=roleFx(sd.team, x.p, slotD, "oop");
+        a._rbC=null; a._rbCD=null;                    // 역할 편향 캐시를 비운다
         a.home={x:anchor.x, y:anchor.y};
         // 능력치도 다시 계산한다 — 자리가 바뀌면 포지션 능숙도 보정이 달라진다
         Object.assign(a, applyTeamFam(applyRoleFam(applyFamiliarity(matchSkills(x.p), getPosFam(x.p, slot), x.p, slot), x.p, slot, sd.team), famK(sd.team)));
@@ -72377,13 +72626,17 @@ class MatchSim{
          경기 뒤 능숙도 적립(gainPosFam·gainRoleFam)이 「실제로 뛴 자리」를 알아야 하므로
          경기 시점 점유를 팀에 실어 준다. */
       sd.team._slotOcc=slotOf;
+      const slotOfD=computeRenderSlots(sd.team, xi, "oop");   // 🛡️ 공 미소유 시 자리
       for(const x of onPitch(sd)){
         const slot = x.p.pos==="GK" ? "GK" : (slotOf[x.p.id]||"CM");
+        const slotD = x.p.pos==="GK" ? "GK" : (slotOfD[x.p.id]||slot);
         const isHome = key==="h";
-        const anchor=tacticalAnchorXY(sd.team, slot, "DEF", isHome);
+        const anchor=tacticalAnchorXY(sd.team, slotD, "DEF", isHome);
         const _rfx=roleFx(sd.team, x.p, slot);
+        /* 🛡️ 공 미소유 역할 — 수비 국면에서는 이 역할의 성향을 쓴다 (요청: 매치엔진 반영) */
+        const _rfxD=roleFx(sd.team, x.p, slotD, "oop");
         this.agents.push({
-          id:x.p.id, p:x.p, team:sd.team, side:key, slot, isHome, role:_rfx,
+          id:x.p.id, p:x.p, team:sd.team, side:key, slot, slotD, isHome, role:_rfx, roleD:_rfxD,
           dir: isHome?1:-1,
           x:anchor.x, y:anchor.y,
           home:{x:anchor.x, y:anchor.y},   // 역할 판단의 기준이 되는 타고난 자리
@@ -72911,7 +73164,7 @@ class MatchSim{
   kickoff(key){
     const b=this.ball;
     for(const a of this.agents){
-      const an=tacticalAnchorXY(a.team, a.slot, "DEF", a.isHome);
+      const an=tacticalAnchorXY(a.team, a.slotD||a.slot, "DEF", a.isHome);
       // 킥오프 순간에는 어느 팀도 하프라인을 넘을 수 없다
       a.x = a.dir>0 ? Math.min(an.x, 0.485) : Math.max(an.x, 0.515);
       a.y = an.y; if(!a._injured) a._down=0; a._spot=null; a.vx=0; a.vy=0; a._smx=undefined; a._smy=undefined;
@@ -73122,7 +73375,7 @@ class MatchSim{
             /* 🛤️ 압박 회랑 — 홈 앵커(블록 이동 반영)에서 캐리어까지가 회랑보다 멀면 감점 (PRESS_CORR 주석) */
             {
               const _bs=((this._bRef&&this._bRef[key])?this._bRef[key].x:b.x)-0.5;   // blockShift 는 아래에서 정의된다 — 직전 틱 기준점으로
-              const _hr=tacticalAnchorRef(a.team, a.slot, "DEF", a.isHome);
+              const _hr=tacticalAnchorRef(a.team, a.slotD||a.slot, "DEF", a.isHome);
               const _ha={x:clamp01(_hr.x+_bs*BLOCK_SHIFT_K), y:_hr.y};   // 고쳐 쓸 값이므로 사본
               const _hd=HYP((carrier.x-_ha.x)*PITCH_AR, carrier.y-_ha.y);
               const _cr=pressCorridor(a, T);
@@ -73622,7 +73875,7 @@ class MatchSim{
         /* ⚡ 예전엔 즉시실행 함수 안에서 앵커 두 개를 「복사본」으로 받아 세 번째 객체를 만들었다 —
            선수마다 매 틱 객체 3개(경기당 200만 개). 참조판으로 읽고 결과만 한 개 만든다. */
         const _pA=tacticalAnchorRef(a.team, a.slot, "ATT", a.isHome);
-        const _pD=tacticalAnchorRef(a.team, a.slot, "DEF", a.isHome);
+        const _pD=tacticalAnchorRef(a.team, a.slotD||a.slot, "DEF", a.isHome);
         const anchor={x:_pD.x+(_pA.x-_pD.x)*phK, y:_pD.y+(_pA.y-_pD.y)*phK};   // 🚶 국면 전환 완충
         anchor.x=clamp01(anchor.x + blockShift*(a.slot==="GK"?0.25:1) + (a.slot==="GK"?0:dirBias));
         /* 🎼 「소유 국면 셰이프」 — 만들었다가 <b>되돌렸다</b>(기록).
@@ -79068,7 +79321,7 @@ class MatchSim{
         tx=0.5-a.dir*0.10; ty=a.home.y; spd=SPD.JOG*0.7;
       }
       if(back>0){                                       // 끝나갈 무렵엔 킥오프 자리로 돌아간다
-        const anchor=tacticalAnchorXY(a.team, a.slot, "DEF", a.isHome);
+        const anchor=tacticalAnchorXY(a.team, a.slotD||a.slot, "DEF", a.isHome);
         tx=lerp(tx, anchor.x, back); ty=lerp(ty, anchor.y, back); spd=SPD.SPRINT;
       } else if(a.side===cel.side && rush<1){
         spd=SPD.SPRINT;
@@ -83488,7 +83741,7 @@ function lineupPreviewLayout(M, tag){
   ${(function(){ try{ return xiDiffBar(userTeam()); }catch(e){ return ""; } })()}
   <div class="fmSubBar" style="margin:2px 0 10px">
     <span class="small" style="opacity:.7">카드 하단 표시:</span>
-    ${[["cond","💚 컨디션"],["sta","⚡ 체력"],["ovr","📊 능력치"],["fam","🎓 역할 능숙도"]].map(([m,n])=>
+    ${[["sta","⚡ 체력"],["mor","😊 사기"],["fam","🎓 전술 능숙도"]].map(([m,n])=>
       `<button class="fmSubBtn${fmSubModePrev()===m?" on":""}" onclick="setFmSubPrev('${m}')">${n}</button>`).join("")}
   </div>
   <div class="row">
@@ -91977,7 +92230,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5155";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5161";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
