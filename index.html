@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5174-->
+<!--B:20260913-5175-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -6429,16 +6429,31 @@ function autoPickXI(){
   const t=userTeam(), T=t.tactic;
   /* 🚪 제보 — '제외'로 비워 둔 자리도 여기서 되돌린다. 이 버튼이 곧 「자동 편성으로 복귀」다. */
   try{ if(T){ T.xiExcl=[]; T.xiManual=false; } }catch(e){}
-  /* 1) 지금 판의 스냅샷 — 자리 목록과 자리별 역할 */
-  let slots=null; const slotRole={};
+  /* 1) 지금 판의 스냅샷 — 자리 목록 · 자리별 역할 · 그리고 «그 자리가 수비 시 어디로 가는가»
+     ⚠ 제보 — 「공 소유 시 / 미소유 시 자동 선발 배선 확인해줘」.
+       확인해 보니 두 군데가 어긋나 있었다.
+         ① setSlot 이 국면을 안 받아, 🛡️ 미소유 탭을 켜 둔 채 자동 선발을 누르면
+            열한 자리가 전부 «미소유 판»에 찍히고 공 소유 판(T.slot)은 비워진 채로 남았다.
+         ② 미소유 판(slotD·roleD)은 지우지도 물려주지도 않아, 선발에서 빠진 선수의
+            수비 자리가 그대로 남고 새로 들어온 선수는 수비 자리를 물려받지 못했다.
+       ─ 자동 선발은 언제나 «공 소유 판»을 정한다. 그리고 소유 자리별로 잡아 둔
+         «수비 시 자리·역할»을 그 자리의 새 주인에게 그대로 물려준다. */
+  let slots=null; const slotRole={}, slotToD={}, slotRoleD={};
+  const _oopOn=(function(){ try{ return oopShapeSet(t)||oopRoleSet(t); }catch(e){ return false; } })();
   try{
     const cur=bestXI(t);
     const so=computeRenderSlots(t, cur);
+    const soD=_oopOn ? computeRenderSlots(t, cur, "oop") : null;
     const list=cur.map(p=>so[p.id]).filter(Boolean);
     if(list.length===11){
       slots=list.slice();
       for(const p of cur){ const sl=so[p.id]; if(!sl) continue;
-        const rd=getRole(t,p,sl); if(rd&&rd.r) slotRole[sl]={r:rd.r,d:rd.d}; }
+        const rd=getRole(t,p,sl); if(rd&&rd.r) slotRole[sl]={r:rd.r,d:rd.d};
+        if(soD){
+          const sd=soD[p.id]; if(sd) slotToD[sl]=sd;
+          const rdD=getRole(t,p,sd||sl,"oop"); if(rdD&&rdD.r) slotRoleD[sl]={r:rdD.r,d:rdD.d};
+        }
+      }
     }
   }catch(e){}
   if(!slots) slots=formationSlots((T&&T.formation)||"4-3-3");
@@ -6491,13 +6506,27 @@ function autoPickXI(){
   G.userXI=finalXI.map(p=>p.id);
   T.slot={}; T.zone={};
   if(!T.role) T.role={};
+  /* 🛡️ 미소유 판도 새로 짠다 — 옛 선수의 수비 자리가 남아 뒤엉키지 않게 통째로 비우고,
+     자리별로 잡아 둔 그림을 새 주인에게 물려준다. 따로 잡아 둔 게 없으면 그냥 비워 둔다
+     (비어 있으면 두 판이 같은 그림이라 예전과 똑같이 움직인다). */
+  T.slotD={}; T.roleD={};
   for(const p of finalXI){
     const sl=slotOf[p.id]; if(!sl||sl==="GK") continue;
-    setSlot(t, p.id, sl); setZone(t, p.id, SLOT_BAND[sl]||p.pos);
+    setSlot(t, p.id, sl, "ip");                      // ⚔️ 자동 선발이 정하는 것은 «공 소유 판»이다
+    setZone(t, p.id, SLOT_BAND[sl]||p.pos);
     const rd=slotRole[sl];
     if(rd && ROLE_BY_KEY[rd.r]){
       const R=ROLE_BY_KEY[rd.r], g=ROLE_GRP[sl]||"CM";
       if(R.grp.includes(g)) T.role[p.id]={r:rd.r, d:R.duty.includes(rd.d)?rd.d:R.duty[0]};
+    }
+    if(_oopOn){
+      const sd=slotToD[sl];
+      if(sd) setSlot(t, p.id, sd, "oop");
+      const rdD=slotRoleD[sl];
+      if(rdD && ROLE_BY_KEY[rdD.r]){
+        const R2=ROLE_BY_KEY[rdD.r], g2=ROLE_GRP[sd||sl]||"CM";
+        if(R2.grp.includes(g2)) T.roleD[p.id]={r:rdD.r, d:R2.duty.includes(rdD.d)?rdD.d:R2.duty[0]};
+      }
     }
   }
   saveGame();
@@ -92436,7 +92465,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5174";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5175";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
