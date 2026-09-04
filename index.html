@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5165-->
+<!--B:20260913-5168-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -13527,6 +13527,20 @@ function cvCompOf(season, group){
 const CV_STAGE={champ:"우승", champ2:"우승", promo:"승격", po:"승강 PO", releg:"강등",
   eacl:"우승", eaclRunner:"준우승", eaclSF:"4강", eaclQF:"8강",
   cwc:"우승", cwcRunner:"준우승", cwcSF:"4강", cwcQF:"8강"};
+/* 🏅 그 시즌에 «실제로 뛴» 리그.
+   ⚠ 제보 — 「2026 시즌 K리그2였는데 경력에는 K리그1, 순위는 –, 12팀으로 나온다」.
+     원인 : 시즌 줄을 찍는 시점(startNewSeason)이 승강 처리(applyPromotionRelegation) 뒤였다.
+            그 사이에 t.div 가 이미 1로 바뀌어, K1 순위표에서 우리 팀을 찾다가 못 찾고
+            순위 0(–) · 12팀이 박혔다. 승무패는 팀 기록이라 멀쩡했던 이유다.
+     수정 : 그 시즌 최종 순위 스냅샷(G.finalTbl)에서 어느 쪽 명단에 있었는지로 리그를 정한다. */
+function cvSeasonDiv(t){
+  try{ const F=G.finalTbl;
+    if(F && F.s===G.season && t){
+      if((F.k1||[]).indexOf(t.id)>=0) return 1;
+      if((F.k2||[]).indexOf(t.id)>=0) return 2;
+    } }catch(e){}
+  return (t&&t.div)||1;
+}
 /* 시즌 한 줄을 찍는다 — 순위표·기록이 살아 있는 동안에만 부를 수 있다.
    why: "season"(시즌 종료) | "leave"(중도 퇴임) */
 function cvPushRow(why){
@@ -13541,17 +13555,18 @@ function cvPushRow(why){
     }
     /* 같은 시즌·같은 팀 줄이 이미 있으면 덮어쓴다 — 두 번 찍히지 않게 */
     const old=C.rows.findIndex(r=>r.s===sN && r.tid===t.id);
+    const dv=cvSeasonDiv(t);                       // 🏅 승강 처리 전의 «뛴 리그»
     let pos=0, N=0;
-    try{ const tb=tableOf(t.div); N=tb.length; pos=tb.findIndex(x=>x.id===t.id)+1; }catch(e){}
+    try{ const tb=tableOf(dv); N=tb.length; pos=tb.findIndex(x=>x.id===t.id)+1; }catch(e){}
     const notes=[];
     if(why==="leave") notes.push((G.sack&&G.sack.kind==="sack")?"시즌 중 경질"
                                :(G.sack&&G.sack.kind==="quit")?"시즌 중 사임":"시즌 중 퇴임");
     if((G.hiredAtR||0)>0 && why==="season") notes.push("시즌 중 부임");
-    const lg=cvCompOf(sN, t.div===1?"champ":"champ2");
-    if(lg==="우승") notes.push(t.div===1?"리그 우승":"K리그2 우승");
+    const lg=cvCompOf(sN, dv===1?"champ":"champ2");
+    if(lg==="우승") notes.push(dv===1?"리그 우승":"K리그2 우승");
     if(cvCompOf(sN,"promo")) notes.push("승격");
     if(cvCompOf(sN,"releg")) notes.push("강등");
-    const row={s:sN, tid:t.id, sh:t.short, nm:t.name, div:t.div,
+    const row={s:sN, tid:t.id, sh:t.short, nm:t.name, div:dv,
       pos, N, W:t.W|0, D:t.Dw|0, L:t.L|0, GF:t.GF|0, GA:t.GA|0, Pts:t.Pts|0,
       po:cvCompOf(sN,"po"), eacl:cvCompOf(sN,"eacl"), cwc:cvCompOf(sN,"cwc"),
       top:cvTopScorer(t), note:notes.join(" · ")||"", part:(why==="leave")?1:0};
@@ -39871,21 +39886,43 @@ function careerView(){
   </div>`;
 
   /* ── 대회 성적 요약 ── */
-  const compRow=(ic,nm2,keys)=>{
+  /* 🏅 리그 줄은 «우승»만 세지 않는다 — 요청: 「K리그2 기록이 있다면 순위를 기재」.
+     그 리그에서 뛴 시즌의 최고 순위·시즌 수를 함께 보여 준다. 우승이 없어도 남는 이력이다. */
+  /* 진행 중인 시즌은 «최고 순위»에 넣지 않는다 — 아직 끝나지 않은 순위다 */
+  const lgSeasons=(dv)=>all.filter(r=>!r.seed && !r.now && r.tid && (r.div|0)===dv && (r.pos|0)>0)
+                           .sort((a,b)=>b.s-a.s);
+  const lgLine=(dv)=>{
+    const L2=lgSeasons(dv); if(!L2.length) return null;
+    const best=L2.slice().sort((a,b)=>a.pos-b.pos || b.s-a.s)[0];
+    const top3=L2.filter(r=>r.pos<=3).length;
+    return {n:L2.length, best, top3,
+      txt:L2.slice(0,6).map(r=>`${r.s} ${r.pos}위`).join(" · ")+(L2.length>6?` 외 ${L2.length-6}시즌`:"")};
+  };
+  const compRow=(ic,nm2,keys,dv)=>{
     const list=(G.trophies||[]).filter(x=>keys.indexOf(x.kind)>=0).sort((a,b)=>b.s-a.s);
+    const LG=dv?lgLine(dv):null;
+    if(!list.length && LG){
+      /* 우승은 없지만 그 리그를 뛴 시즌이 있다 — 최고 순위로 남긴다 */
+      const col=LG.best.pos===1?"var(--gold)":LG.best.pos<=3?"var(--green)":"var(--sub)";
+      return `<div class="meRow"><span class="meIc">${ic}</span>
+        <span class="meN"><b>${nm2}</b> <span class="small" style="color:${col}">최고 ${LG.best.pos}위</span><br>
+          <span class="small">${LG.n}시즌${LG.top3?` · 3위 이내 ${LG.top3}회`:""} <span style="opacity:.6">— ${LG.txt}</span></span></span>
+        <span class="meV" style="color:${col}">${LG.best.pos}위</span></div>`;
+    }
     if(!list.length) return `<div class="meRow"><span class="meIc">${ic}</span>
       <span class="meN"><b>${nm2}</b><br><span class="small" style="opacity:.6">기록 없음</span></span><span class="meV">–</span></div>`;
     const best=list.slice().sort((a,b)=>(TROPHY_RANK[b.kind]||0)-(TROPHY_RANK[a.kind]||0))[0];
     const cnt={}; for(const x of list) cnt[CV_STAGE[x.kind]||x.kind]=(cnt[CV_STAGE[x.kind]||x.kind]||0)+1;
     return `<div class="meRow"><span class="meIc">${ic}</span>
       <span class="meN"><b>${nm2}</b> <span class="small" style="color:var(--gold)">최고 ${CV_STAGE[best.kind]||""}</span><br>
-        <span class="small">${Object.keys(cnt).map(k=>`${k} ${cnt[k]}회`).join(" · ")} <span style="opacity:.6">— ${list.map(x=>x.s).join(", ")}</span></span></span>
+        <span class="small">${Object.keys(cnt).map(k=>`${k} ${cnt[k]}회`).join(" · ")} <span style="opacity:.6">— ${list.map(x=>x.s).join(", ")}</span>${
+          LG?`<br><span style="opacity:.75">${LG.n}시즌 · 최고 ${LG.best.pos}위 <span style="opacity:.7">— ${LG.txt}</span></span>`:""}</span></span>
       <span class="meV">${list.length}회</span></div>`;
   };
   const compCard=`<div class="card">
     <h3>🌏 대회 성적</h3>
-    ${compRow("🏆", divName(1), ["champ"])}
-    ${compRow("🥇", divName(2), ["champ2"])}
+    ${compRow("🏆", divName(1), ["champ"], 1)}
+    ${compRow("🥇", divName(2), ["champ2"], 2)}
     ${compRow("🎫", "승강 플레이오프", ["po"])}
     ${compRow("🌏", (function(){ try{ return eaclShort(); }catch(e){ return "EACL"; } })(), ["eacl","eaclRunner","eaclSF","eaclQF"])}
     ${compRow("🌍", (function(){ try{ return cwcShort(); }catch(e){ return "CWC"; } })(), ["cwc","cwcRunner","cwcSF","cwcQF"])}
@@ -48543,7 +48580,8 @@ function tableView(){
     ${SPL?`<div class="msg info" style="margin-bottom:8px">📊 <b>스플릿 이후에는 그룹이 순위를 가릅니다.</b>
       파이널 A 6팀이 승점과 무관하게 <b>1~6위</b>, 파이널 B 6팀이 <b>7~12위</b>입니다.
       남은 경기는 <b>같은 그룹끼리만</b> 치릅니다.</div>`:""}
-    <div class="tblScroll"><table><tr><th>#</th><th>팀</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>득실</th><th>승점</th><th>폼</th></tr>
+    <!-- ⚽ 요청 — 「득실 총합만 있어 득점형인지 수비형인지 가늠이 안 된다」. 득점·실점을 따로 세운다 -->
+    <div class="tblScroll"><table><tr><th>#</th><th>팀</th><th>경기</th><th>승</th><th>무</th><th>패</th><th title="득점">득</th><th title="실점">실</th><th>득실</th><th>승점</th><th>폼</th></tr>
     ${tbl.map((t,i)=>{
       /* ⚠ 승강 규정이 시즌마다 다르다 — 2026(확대 시즌)은 김천 확정 강등 + 최하위만 조건부 승강PO,
          2027부터는 팀 수(14팀)에 맞춰 최하위 자동 강등 + 그 위 두 자리가 승강PO. 하드코딩 금지. */
@@ -48569,8 +48607,8 @@ function tableView(){
                  "rank-po":["PO","po"], "rank-rel":["강등","rel"] }[cls];
       const rkTag = RK ? `<span class="rkTag ${RK[1]}">${RK[0]}</span>` : "";
       const splHead = !SPL ? ""
-        : i===0   ? `<tr class="splHead splA"><td colspan="9">🅰️ 파이널 A <span class="small">우승 · ${eaclShort()} 진출 경쟁 (1~6위)</span></td></tr>`
-        : i===SPL ? `<tr class="splHead splB"><td colspan="9">🅱️ 파이널 B <span class="small">잔류 · 강등 싸움 (7~12위)</span></td></tr>` : "";
+        : i===0   ? `<tr class="splHead splA"><td colspan="11">🅰️ 파이널 A <span class="small">우승 · ${eaclShort()} 진출 경쟁 (1~6위)</span></td></tr>`
+        : i===SPL ? `<tr class="splHead splB"><td colspan="11">🅱️ 파이널 B <span class="small">잔류 · 강등 싸움 (7~12위)</span></td></tr>` : "";
       const splCls = !SPL ? "" : (i<SPL?" inA":" inB") + (i===tbl.length-1?" splLast":"");
       return splHead + `<tr class="${cls}${splCls}" style="${t.isUser?'font-weight:700':''}">
       <td style="white-space:nowrap">${i+1}${rkTag}</td><td class="clickable" title="스쿼드 보기" onclick="openTeamSquad('${t.id}')" style="text-decoration:underline dotted; text-underline-offset:3px">${t.name}${(function(){
@@ -48581,6 +48619,7 @@ function tableView(){
         if(ES.pushed===t.id) b.push(`<span class="tag" style="background:#f8514922;color:#ff9d95" title="${eaclShort()} 챔피언 자동 진출로 진출권이 밀렸습니다">↘</span>`);
         return b.length?" "+b.join(""):"";
       })()}</td><td>${t.W+t.Dw+t.L}</td><td>${t.W}</td><td>${t.Dw}</td><td>${t.L}</td>
+      <td>${t.GF|0}</td><td>${t.GA|0}</td>
       <td>${t.GF-t.GA>0?"+":""}${t.GF-t.GA}</td><td><b>${t.Pts}</b></td>
       <td>${t.form.slice(-5).map(f=>f==="W"?"🟢":f==="D"?"🟡":"🔴").join("")}</td></tr>`;}).join("")}
     </table></div>
@@ -48993,7 +49032,9 @@ function eaclCard(){
     const cut=i<8;
     return `<tr class="${i===0?"rank-champ":cut?"rank-acl":""}" style="${id===me?"background:rgba(80,160,255,.10)":""}">
       <td>${i+1}</td><td style="text-align:left">${eaclNm(id)}<span class="small" style="opacity:.55"> ${t&&t.nat?t.nat:"한국"}</span></td>
-      <td>${r.W}</td><td>${r.D}</td><td>${r.L}</td><td>${r.GF}:${r.GA}</td><td><b>${r.Pts}</b></td></tr>`;
+      <td>${r.W}</td><td>${r.D}</td><td>${r.L}</td>
+      <td>${r.GF|0}</td><td>${r.GA|0}</td><td>${(r.GF-r.GA)>0?"+":""}${(r.GF|0)-(r.GA|0)}</td>
+      <td><b>${r.Pts}</b></td></tr>`;
   }).join("");
 
   /* ③ 내 일정 */
@@ -49068,7 +49109,7 @@ function eaclCard(){
     <div class="tblScroll"><table><tr><th colspan=2 style="text-align:left">🎱 추첨 포트 <span class="small" style="font-weight:400;opacity:.7">— 각 포트에서 홈 1 · 원정 1씩 뽑아 8경기</span></th></tr>${pots}</table></div>
     ${mine}
     <div class="tblScroll" style="margin-top:8px"><table>
-      <tr><th>#</th><th style="text-align:left">클럽</th><th>승</th><th>무</th><th>패</th><th>득실</th><th>승점</th></tr>${rows}</table></div>
+      <tr><th>#</th><th style="text-align:left">클럽</th><th>승</th><th>무</th><th>패</th><th title="득점">득</th><th title="실점">실</th><th>득실</th><th>승점</th></tr>${rows}</table></div>
     <div class="small" style="opacity:.6;margin-top:4px">🔵 1~8위 토너먼트 진출 — 조 없이 12팀 단일 순위표 (승점 → 골득실 → 다득점)</div>
     ${ko}
     ${(function(){
@@ -49427,7 +49468,9 @@ function cwcGroupTable(k){
     return `<tr class="${i<2?"rank-acl":""}" style="${id===me?"background:rgba(80,160,255,.10)":""}">
       <td>${i+1}</td>
       <td style="text-align:left">${cwcFlag(id)}${cwcNm(id)}<span class="small" style="opacity:.5"> ${Math.round(teamOVR(t)||0)}</span></td>
-      <td>${r.W}</td><td>${r.D}</td><td>${r.L}</td><td>${r.GF}:${r.GA}</td><td><b>${r.Pts}</b></td></tr>`;
+      <td>${r.W}</td><td>${r.D}</td><td>${r.L}</td>
+      <td>${r.GF|0}</td><td>${r.GA|0}</td><td>${(r.GF-r.GA)>0?"+":""}${(r.GF|0)-(r.GA|0)}</td>
+      <td><b>${r.Pts}</b></td></tr>`;
   }).join("");
   /* ⚠ 제보 원문 — 「순위표 탭의 CWC 항목에서 각 조의 박스가 A, B, C 조는 조그마한데 D 조만
      커서 A, B, C, D 조의 조별 상황 박스를 균등하게 크기를 맞춰 달라」.
@@ -49437,7 +49480,7 @@ function cwcGroupTable(k){
   return `<div class="cwcGrpBox">
     <div class="small" style="font-weight:800;margin-bottom:3px">${k}조</div>
     <div class="tblScroll"><table>
-      <tr><th>#</th><th style="text-align:left">클럽</th><th>승</th><th>무</th><th>패</th><th>득실</th><th>점</th></tr>
+      <tr><th>#</th><th style="text-align:left">클럽</th><th>승</th><th>무</th><th>패</th><th title="득점">득</th><th title="실점">실</th><th>득실</th><th>점</th></tr>
       ${rows}</table></div></div>`;
 }
 function cwcCard(){
@@ -92274,7 +92317,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5165";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5168";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
