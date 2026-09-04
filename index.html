@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5168-->
+<!--B:20260913-5170-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -24223,6 +24223,27 @@ function tfDealList(){
   return tfDeals().slice().sort((a,b)=>(a.due-b.due)||((a.fee||0)-(b.fee||0)));
 }
 
+/* 🔁 이 선수를 우리가 팔 수 있는가 — 팔 수 없으면 그 까닭을 돌려준다.
+   ⚠ 제보 원문 — 「임대해 온 선수한테 이적 제안이 오네요. 인천한테 임대한 남의 팀 선수를
+     선수+15억 트레이드로 팔아버림」.
+   원인 : 임대 확인이 두 곳에만 있었다 — 이적명단 등록(listForSale)과
+          상대가 끼워 넣는 선수 고르기(pickSwapCandidate). 그런데 AI 의 «기습 제의»
+          (핵심 선수·준척급 노림수)는 명단과 무관하게 만들어지고, 그 경로에는 임대 확인이
+          없었다. 받은 뒤(acceptOffer)·성사(completeSale)에도 관문이 없어 그대로 팔렸다.
+          팔린 선수는 원 소속 구단(인천)의 것인데 우리 계좌로 이적료가 들어왔다.
+   수정 : 제의를 만들 때 · 목록에 남길 때 · 받을 때 · 성사시킬 때 네 곳이 모두 여기를 본다. */
+function saleBlockWhy(t, p){
+  if(!t || !p) return "그 선수를 찾을 수 없습니다.";
+  if(!(t.players||[]).some(x=>x.id===p.id)) return "우리 소속 선수가 아닙니다.";
+  if(p.loan) return (p.loan.own===t.id)
+    ? "다른 구단에 임대 보낸 선수입니다 — 먼저 불러들여야 합니다."
+    : `${((G.teams||{})[p.loan.own]||{}).short||"원 소속 구단"}에서 임대해 온 선수입니다 — 우리 소유가 아니라 팔 수 없습니다.`;
+  if(p.army) return "군 복무 중인 선수입니다 — 우리 소유가 아닙니다.";
+  if(p.armyCall) return "입영 통지를 받은 선수입니다 — 입소 전에는 이적할 수 없습니다.";
+  if(p.emg) return "긴급 등록된 임시 소집 선수입니다.";
+  return null;
+}
+function sellableBy(t, p){ return !saleBlockWhy(t, p); }
 function listForSale(pid, quiet){
   if(armyGate("선수 판매")) return;
   const ut=userTeam(); const p=ut.players.find(x=>x.id===pid); if(!p) return;
@@ -24488,7 +24509,9 @@ function genOffers(){
   G.offers=G.offers.filter(o=>{
     if(!o.seen && o.exp<=1 && (o.grace||0)<3) o.grace=(o.grace||0)+1;
     else o.exp--;
-    return o.exp>0 && ut.players.some(p=>p.id===o.pid);
+    /* 🔁 우리 소유가 아닌 선수(임대해 온 선수 등)에게 붙은 제의는 여기서 사라진다 —
+       옛 세이브에 이미 쌓여 있던 잘못된 제의도 함께 정리된다 */
+    return o.exp>0 && sellableBy(ut, ut.players.find(p=>p.id===o.pid));
   });
   for(const b of G.transferBids){
     const p=ut.players.find(x=>x.id===b.pid); if(!p) continue;
@@ -24514,7 +24537,7 @@ function genOffers(){
     }
   }
   if(Math.random()<0.14){ // 핵심 선수 노리는 기습 오퍼
-    const stars=ut.players.filter(p=>p.ovr>=75&&!p.army&&!p.armyCall&&!p.tfLock&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
+    const stars=ut.players.filter(p=>p.ovr>=75&&sellableBy(ut,p)&&!p.tfLock&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
     if(stars.length){
       const p=pick(stars);
       const rich=Object.values(G.teams).filter(t2=>!t2.isUser && !isArmyTeam(t2) && t2.budget>marketValue(p)*0.5);
@@ -24590,7 +24613,7 @@ function genOffers(){
     }
   }
   if(Math.random()<0.18){ // 준주전급에도 협상 요청이 온다
-    const mids=ut.players.filter(p=>p.ovr>=68&&p.ovr<75&&!p.army&&!p.armyCall&&!p.tfLock&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
+    const mids=ut.players.filter(p=>p.ovr>=68&&p.ovr<75&&sellableBy(ut,p)&&!p.tfLock&&!G.transferBids.some(b=>b.pid===p.id)&&!G.offers.some(o=>o.pid===p.id));
     if(mids.length){
       const p=pick(mids);
       const _b2=Object.values(G.teams).filter(t2=>!t2.isUser && !isArmyTeam(t2) && !ceAusterity(t2.id));
@@ -24640,9 +24663,22 @@ function tfLogView(){
   return `<div class="msg info">이번 커리어에서 영입·방출·판매한 선수들의 장부입니다. 최근이 위로 옵니다.</div>
   <div class="row">${mk(L.filter(x=>x.k==="in"),"영입한 선수","📥")}${mk(L.filter(x=>x.k==="out"),"방출·판매한 선수","📤")}</div>`;
 }
+/* 관문 한 겹 — 막히면 그 제의를 걷어내고 까닭을 알린다 */
+function saleGuard(t, pid){
+  const p=(t&&t.players||[]).find(x=>x.id===pid);
+  const why=saleBlockWhy(t, p);
+  if(!why) return false;
+  G.offers=(G.offers||[]).filter(x=>x.pid!==pid);
+  try{ G.transferBids=(G.transferBids||[]).filter(b=>b.pid!==pid); }catch(e){}
+  try{ notify(`🔁 <b>${p?p.name:"그 선수"}</b> — ${why}`,"warn"); }catch(e){}
+  try{ show("offers"); }catch(e){}
+  return true;
+}
 function completeSale(pid, tid, fee, swapPid){
   const ut=userTeam(), buyer=G.teams[tid];
   const p=ut.players.find(x=>x.id===pid); if(!p) return false;
+  /* 🔁 마지막 창구 — 임대해 온 선수·복무 중인 선수는 우리 것이 아니다 */
+  if(saleGuard(ut, pid)) return false;
   if(p.emg){ notify("🚨 긴급 등록 선수는 임시 소집 신분이라 이적할 수 없습니다.","warn"); return false; }
   /* 🎖️ ⚠ 제보 원문 — 「김천상무로 시작해서 다른 팀에서 상무팀에 있는 선수에게 이적 요청해서
      거기 수락하니까 선수가 없어진다」.
@@ -24777,6 +24813,7 @@ function armySoldGuard(pid){
 function acceptOffer(pid, tid){
   const o=findOffer(pid, tid); if(!o) return offerGone();
   const ut=userTeam();
+  if(saleGuard(ut, o.pid)) return;
   if(armyGate("선수 판매")){ G.offers=(G.offers||[]).filter(x=>x.pid!==o.pid); return; }
   if(armySoldGuard(o.pid)) return;
   if(!o.swapPid && ut.players.length<=18){
@@ -24820,6 +24857,7 @@ function negoStay(){ try{ return (VIEW==="offers") ? "offers" : "nego"; }catch(e
 /* 판매 역협상: 오퍼 금액을 올려받기 */
 function startSellNego(pid, tid){
   const o=findOffer(pid, tid); if(!o) return offerGone();
+  if(saleGuard(userTeam(), o.pid)) return;
   if(armyGate("선수 판매")){ G.offers=(G.offers||[]).filter(x=>x.pid!==o.pid); return; }
   if(armySoldGuard(o.pid)) return;
   {
@@ -24981,6 +25019,16 @@ function startNego(pid, fromId){
       ()=>{ try{ tfTab="deal"; }catch(e){} show("transfer"); }, {okLabel:"🕐 진행 중인 이적 보기", cancelLabel:"닫기"});
     return;
   }
+  /* 🔁 그 구단이 «빌려 온» 선수다 — 파는 권한은 원 소속 구단에 있다.
+     ⚠ 같은 제보의 반대편 — 남의 팀 임대 선수를 그 팀과 협상해 데려올 수 있으면 안 된다. */
+  if(p.loan && p.loan.own!==from.id){
+    const own=G.teams[p.loan.own];
+    showConfirm(fixJosa(`<b>🔁 ${p.name} — 임대 선수입니다</b>\n\n`+
+      `<b>${from.name}</b>이/가 <b>${own?own.name:"다른 구단"}</b>에서 빌려 온 선수라, ${from.short}에는 팔 권한이 없습니다.\n\n`+
+      `영입하려면 원 소속 구단인 <b>${own?own.name:"원 소속 구단"}</b>과/와 이야기해야 합니다.`),
+      ()=>{}, {okLabel:"알겠습니다", cancelLabel:""});
+    return;
+  }
   if(p.army && p.army.out){
     const own=p.army.own&&G.teams[p.army.own];
     showConfirm(`<b>🎖️ ${p.name} — 군 복무 중</b>\n\n현역 군인 신분이라 어떤 구단도 영입할 수 없습니다.\n\n· 전역일: <b>${p.army.out}</b> (D-${Math.max(0,armyDaysLeft(p))})\n· 전역 후 복귀: <b>${own?own.name:"무소속 — 자유계약(FA)"}</b>`,
@@ -25027,15 +25075,8 @@ function startNego(pid, fromId){
       「선수 포함 제안」의 목록은 우리 명단 전체를 그대로 뿌리고 있었다.
    판매·트레이드·스왑 모든 경로가 이 한 곳을 통과하게 한다. */
 function tradeBlockWhy(p){
-  if(!p) return "그 선수를 찾을 수 없습니다.";
-  const t=userTeam();
-  if(!t || !t.players.some(x=>x.id===p.id)) return "우리 소속 선수가 아닙니다.";
-  if(p.loan) return (p.loan.own===t.id)
-    ? "다른 구단에 임대 보낸 선수입니다 — 먼저 불러들여야 합니다."
-    : "임대해 온 선수입니다 — 우리 소유가 아니라 내줄 수 없습니다.";
-  if(p.army) return "군 복무 중인 선수입니다 — 전역 전에는 어떤 거래도 할 수 없습니다.";
-  if(p.armyCall) return `입영 통지를 받은 선수입니다 — 입소(D-${armyCallLeft(p)})까지는 거래할 수 없습니다.`;
-  if(p.emg) return "긴급 등록된 임시 소집 선수입니다.";
+  const why=saleBlockWhy(userTeam(), p);      // 🔁 판매와 같은 잣대를 쓴다
+  if(why) return why;
   if(p.noMove) return "본인이 잔류를 선언한 선수입니다.";
   return null;
 }
@@ -92317,7 +92358,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5168";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5170";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
