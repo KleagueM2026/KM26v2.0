@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5161-->
+<!--B:20260913-5165-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -13465,6 +13465,39 @@ function eaclHonorOf(tid){ return (G.eaclHonors&&G.eaclHonors[tid]) || {champ:0,
      · rows   — 시즌 한 줄. 순위표가 지워지기 전(startNewSeason)에 찍는다.
      · spells — 구단별 재임 구간. 부임·사임·경질·계약만료 시점에 여닫는다.
    시즌 도중에 팀이 바뀌면 그 시즌은 두 줄이 된다(퇴임 시점에 한 줄, 시즌 끝에 한 줄). */
+/* 🏷️ 경력에 찍힌 구단 이름을 «지금 이름»으로 되살린다.
+   ⚠ 제보 — 「구단 현실화 패치를 넣었는데 오피스▸경력▸팀 경력은 «수원 블루스타» 그대로다」.
+     원인 : 장부에 이름을 찍는 순간의 «그때 이름»을 문자열로 박아 두었다.
+            나중에 패치로 구단 이름이 바뀌어도 장부는 옛 이름을 들고 있었다.
+     수정 : 장부에는 구단 번호(tid)도 함께 남아 있으니, 화면에 그릴 때
+            그 번호로 지금 이름을 찾아 쓴다. 번호가 없거나 사라진 구단이면
+            찍혀 있던 옛 이름을 그대로 쓴다(무직·장부 이전 시즌 줄). */
+function cvTeamOf(tid){ try{ return tid ? (G.teams[tid]||null) : null; }catch(e){ return null; } }
+function cvNm(o){ const t=cvTeamOf(o&&o.tid); return (t&&t.name) || (o&&(o.nm||o.sh)) || "–"; }
+function cvSh(o){ const t=cvTeamOf(o&&o.tid); return (t&&t.short) || (o&&(o.sh||o.nm)) || "–"; }
+/* 트로피 줄은 구단 번호가 없던 시절 기록이 섞여 있다 — 번호가 있으면 지금 이름, 없으면 옛 이름 */
+function cvTroTid(x){
+  if(!x) return null;
+  if(x.tid) return x.tid;
+  /* 옛 기록에는 구단 번호가 없다 — 이름이 그대로면 그 이름으로 찾고,
+     이미 이름이 바뀌었다면 «그 시즌에 어느 구단에 있었는가»로 되짚는다 */
+  try{ for(const k in G.teams){ const q=G.teams[k];
+    if(q && (q.name===x.team || q.short===x.team)) return q.id; } }catch(e){}
+  try{ const C=G.mgrCv;
+    if(C && Array.isArray(C.spells)) for(const sp of C.spells){
+      const s0=sp.s0|0, s1=sp.done?(sp.s1|0):9999;
+      if((x.s|0)>=s0 && (x.s|0)<=s1) return sp.tid||null; } }catch(e){}
+  return null;
+}
+function cvTroNm(x){ const t=cvTeamOf(cvTroTid(x)); return (t&&t.name) || (x&&x.team) || ""; }
+/* 이 트로피가 이 재임 구간의 구단 것인가 — 번호로 맞추고, 없으면 이름(지금·옛것)으로 맞춘다 */
+function cvTroSame(x, sp){
+  if(!x||!sp) return false;
+  const xt=cvTroTid(x);
+  if(xt && sp.tid) return xt===sp.tid;
+  const t=cvTeamOf(sp.tid);
+  return !!x.team && (x.team===sp.nm || x.team===sp.sh || (t && (x.team===t.name||x.team===t.short)));
+}
 function mgrCv(){
   if(!G.mgrCv) G.mgrCv={rows:[], spells:[], seed:0};
   if(!Array.isArray(G.mgrCv.rows))   G.mgrCv.rows=[];
@@ -13601,7 +13634,13 @@ function trophyAdd(kind, label, teamName, season){
   const same=G.trophies.filter(x=>x.s===s && trophyGroup(x.kind)===gp);
   if(same.some(x=>(TROPHY_RANK[x.kind]||0)>=rk)) return null;    // 이미 더 좋은 성적이 있다
   if(same.length) G.trophies=G.trophies.filter(x=>!(x.s===s && trophyGroup(x.kind)===gp));
-  const o={s, kind, label, team:teamName};
+  /* 🏷️ 구단 번호를 함께 남긴다 — 나중에 구단 이름이 바뀌어도 따라간다 */
+  let _tid=null;
+  try{ const u=userTeam();
+    if(u && (u.name===teamName || u.short===teamName)) _tid=u.id;
+    else { for(const k in G.teams){ const q=G.teams[k];
+      if(q && (q.name===teamName||q.short===teamName)){ _tid=q.id; break; } } } }catch(e){}
+  const o={s, kind, label, team:teamName, tid:_tid};
   G.trophies.push(o);
   return o;
 }
@@ -21898,7 +21937,7 @@ function seasonCeremony(t1, t2, champ, champ2, relIds, proIds){
   if(!G.trophies) G.trophies=[];
   const utTbl=u.div===1?t1:t2, pos=utTbl.findIndex(x=>x.isUser)+1;
   const V={t:u.short, o:"", n:pos};
-  const add=(kind,label)=>{ G.trophies.push({s:G.season, kind, label, team:u.name}); };
+  const add=(kind,label)=>{ G.trophies.push({s:G.season, kind, label, team:u.name, tid:u.id}); };
   const bump=(fans,mor)=>{ u.fans=Math.round(clamp(u.fans*(1+fans),4,120)*10)/10;
     for(const p of u.players) p.morale=clamp(p.morale+mor,30,99);
     u.morale=clamp((u.morale||70)+mor,40,99); };
@@ -28851,6 +28890,11 @@ function renameEverywhere(pairs){
   walk(G.fmk,    ["txt","u"]);
   walk(G.feed,   ["head","sub"]);
   walk(G.rumors, ["txt"]);
+  /* 🏷️ 감독 경력 장부(G.mgrCv·G.trophies)는 여기서 건드리지 않는다.
+     한 번 시도해 봤다가 「수원 블루스타 → 수원 삼성 블루윙즈」 뒤에 약칭 「수원 → 수원삼성」이
+     겹쳐 걸려 「수원삼성 삼성 블루윙즈」가 되는 것을 확인했다.
+     장부는 «그때 그 이름»으로 남겨 두고, 화면에서 구단 번호로 지금 이름을 찾아 그린다
+     (cvNm·cvSh·cvTroNm). 그래야 패치를 몇 번 얹어도 안전하다. */
   if(G.trust) walk(G.trust.log, ["why","t","txt"]);
   if(G.staff) walk(G.staff.log, ["t","txt"]);
   try{ walk(refState().log, ["t"]); }catch(e){}
@@ -39772,7 +39816,7 @@ function careerView(){
                 : rk>=40?"#7ee2a8" : "var(--sub)";
         const ic=rk>=100?"🏆":rk>=60?"🥈":rk>=40?"🎖️":x.kind==="releg"?"⬇️":x.kind==="promo"?"⬆️":"🎫";
         return `<span class="tag" style="border:1px solid ${col};color:${col};padding:4px 9px;border-radius:8px;font-size:12px">
-          ${ic} ${x.label||""}${x.team?` <span style="opacity:.6">· ${x.team}</span>`:""}</span>`; }).join("")}
+          ${ic} ${x.label||""}${(function(){ const _n=cvTroNm(x); return _n?` <span style="opacity:.6">· ${_n}</span>`:""; })()}</span>`; }).join("")}
     </div></div>`:"";
 
   /* ── 팀 경력 ── */
@@ -39789,9 +39833,9 @@ function careerView(){
       const n2=w+d+l;
       return `<div class="meRow">
         <span class="meIc">${ic}</span>
-        <span class="meN"><b>${sp.nm||sp.sh}</b> <span class="small" style="color:${col}">${nm2}</span><br>
+        <span class="meN"><b>${cvNm(sp)}</b> <span class="small" style="color:${col}">${nm2}</span><br>
           <span class="small">${per}${sp.est?' <span style="opacity:.6">(추정)</span>':""}${n2?` · ${n2}경기 ${w}승 ${d}무 ${l}패 (승률 ${cvPct(w,d,l)}%)`:" · 기록 없음"}</span></span>
-        <span class="meV">${(function(){ const ts=(G.trophies||[]).filter(x=>x.team===sp.nm && (TROPHY_RANK[x.kind]||0)>=90).length;
+        <span class="meV">${(function(){ const ts=(G.trophies||[]).filter(x=>cvTroSame(x,sp) && (TROPHY_RANK[x.kind]||0)>=90).length;
           return ts?`🏆 ${ts}`:""; })()}</span></div>`;
     }).join("") : `<p class="small" style="opacity:.7">재임 기록이 없습니다.</p>`}
   </div>`;
@@ -39806,12 +39850,12 @@ function careerView(){
           <th>${(function(){ try{ return cwcShort(); }catch(e){ return "CWC"; } })()}</th><th>최다 득점</th><th>비고</th></tr>
       ${all.length? all.map(r=>{
         if(r.seed||!r.tid) return `<tr style="opacity:.72">
-          <td><b>${r.s}</b></td><td>${r.nm||r.sh||"–"}</td><td colspan="6" class="small" style="opacity:.7">기록 없음 <span style="opacity:.6">(장부 이전 시즌)</span></td>
+          <td><b>${r.s}</b></td><td>${cvNm(r)}</td><td colspan="6" class="small" style="opacity:.7">기록 없음 <span style="opacity:.6">(장부 이전 시즌)</span></td>
           <td>${cell(r.po)}</td><td>${cell(r.eacl)}</td><td>${cell(r.cwc)}</td><td>–</td><td class="small">${r.note||""}</td></tr>`;
         const n2=(r.W|0)+(r.D|0)+(r.L|0);
         return `<tr${r.now?' style="background:#161b22"':""}>
           <td><b>${r.s}</b>${r.now?' <span class="small" style="color:var(--green)">●</span>':""}</td>
-          <td>${r.sh||"–"}</td>
+          <td>${cvSh(r)}</td>
           <td class="small">${r.div?divName(r.div):"–"}</td>
           <td><b style="color:${cvPosCol(r)}">${r.pos?r.pos+"위":"–"}</b>${r.N?`<span class="small" style="opacity:.55">/${r.N}</span>`:""}</td>
           <td>${n2}</td>
@@ -91030,11 +91074,11 @@ function cmCareerPack(){
     const doneN=all.filter(r=>!r.now).length;
     if(!doneN && !troAll.length) return null;
     const tro=troAll.slice(0,24).map(x=>({k:String(x.kind||"").slice(0,12),
-      l:cmEsc(x.label,22), t:cmEsc(x.team,12), s:x.s|0}));
-    const sp=C.spells.slice().reverse().slice(0,8).map(x=>({sh:cmEsc(x.sh,8), s0:x.s0|0,
+      l:cmEsc(x.label,22), t:cmEsc(cvTroNm(x),12), s:x.s|0}));   /* 🏷️ 지금 구단 이름으로 */
+    const sp=C.spells.slice().reverse().slice(0,8).map(x=>({sh:cmEsc(cvSh(x),8), s0:x.s0|0,
       s1:x.done?(x.s1|0):0, W:x.W|0, D:x.D|0, L:x.L|0,
       how:x.done?String(x.how||"leave").replace(/[^a-z]/g,"").slice(0,8):"", n:x.seasons|0}));
-    const rr=all.slice(0,12).map(r=>({s:r.s|0, sh:cmEsc(r.sh,8), dv:r.div|0, p:r.pos|0, N:r.N|0,
+    const rr=all.slice(0,12).map(r=>({s:r.s|0, sh:cmEsc(cvSh(r),8), dv:r.div|0, p:r.pos|0, N:r.N|0,
       W:r.W|0, D:r.D|0, L:r.L|0, po:cmEsc(r.po,6), ea:cmEsc(r.eacl,6), cw:cmEsc(r.cwc,6),
       nt:cmEsc(r.note,20), now:r.now?1:0, sd:r.seed?1:0}));
     /* 🏅 「위신」은 사는 집·부동산에서 오는 개인 자산 지표라 −1 같은 값이 나온다.
@@ -92230,7 +92274,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5161";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5165";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
