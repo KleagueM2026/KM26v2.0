@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5189-->
+<!--B:20260913-5190-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -5625,7 +5625,12 @@ function hierMeetLast(t, M){
 /* 🎯 새 시즌 목표를 아직 안 세웠는가 — 부임 절차를 마친 감독만 해당(부임 중엔 인사 흐름이 담당) */
 function goalNeeded(){
   if(G.jobless || !G.introDone) return false;
-  return !(G.goal && G.goal.s===G.season);
+  /* 🎩 ⚠ 배선 모순 — takeJob 은 «중도 부임이니 이번 시즌 공식 목표는 없다»며 G.goal 을 비우는데,
+     여기서는 그걸 «목표를 아직 안 정했다»로 읽어 진행 버튼이 「🎯 시즌 목표 필요」로 굳었다.
+     시즌 도중에 부임했으면 이번 시즌은 목표 없이 간다 — 다음 시즌 프리시즌에 정한다. */
+  if(G.goal && G.goal.s===G.season) return false;
+  try{ if(G.midHireS===G.season) return false; }catch(e){}
+  return true;
 }
 /* ⚠ 제보 — 「주장단 선임 필요에서 자진 사임하면 진행 버튼이 그 상태로 멈춘다」.
    goalNeeded 에는 무직 가드가 있었는데 여기에는 없었다. 팀을 떠난 뒤에도 옛 팀의 주장이
@@ -14122,6 +14127,8 @@ function findUserFixture(){
   return null;
 }
 function advance(){
+  /* 🎩 경기·라운드를 열기 전에 소속을 한 번 맞춘다 (제보 — 이직 뒤 옛 구단 경기가 열림) */
+  try{ fixUserTeamWiring(); }catch(e){}
   if(G.phase==="sacked"){ showSackScreen(); return {type:"sacked"}; }
   if(G.phase==="seasonEnd"){
     /* 🏖️ 아직 12월 31일이 아니다 — 달력이 더 돌아야 한다 (진행 상자가 날짜를 흘린다) */
@@ -27391,8 +27398,66 @@ function purgePlayerFrom(t, pred){
     return gone.length;
   }catch(e){ return 0; }
 }
+/* ═══ 🎩 «내가 어느 구단 감독인가» 배선 점검 ═══════════════════════════════
+   ⚠ 제보 — 「강원 감독하다가 부산으로 바꿨는데 스쿼드·전술은 부산으로 뜨는데 정작 경기를
+     시작하니 선발 라인업이 강원 선수단으로 뜨고, 경기 중에 «내 팀 경기가 아니다»라고 나온다」.
+   ─ 소속은 두 곳에 적혀 있다. G.userTeamId(화면 대부분이 본다)와 팀마다의 t.isUser
+     (경기 생성·라인업·중계 화면이 본다). 둘이 어긋나면 정확히 그 증상이 난다 —
+     한쪽 화면은 새 구단, 다른 쪽은 옛 구단.
+   ─ 지금 코드에서 둘을 동시에 옮기는 곳은 takeJob 하나뿐이고 그 경로는 정상이다(재현 실패).
+     그래도 «어긋난 상태로 저장된 세이브»는 스스로 못 빠져나온다 — 불러올 때와 경기를 열기 전에
+     한 번씩 맞춰 준다. 옛 구단의 선발 명단(G.userXI)도 함께 씻는다.
+   반환: 고친 게 있으면 무엇을 고쳤는지, 없으면 null. */
+function fixUserTeamWiring(){
+  try{
+    if(!G || !G.teams) return null;
+    const fixed=[];
+    if(G.jobless){
+      /* 무직이면 어느 팀도 «내 팀»이 아니다 */
+      for(const id in G.teams) if(G.teams[id].isUser){ G.teams[id].isUser=false; fixed.push(`${G.teams[id].short} 소속 표식 해제`); }
+      if(Array.isArray(G.userXI) && G.userXI.length){ G.userXI=null; fixed.push("옛 선발 명단 비움"); }
+      return fixed.length?fixed:null;
+    }
+    let t=G.teams[G.userTeamId];
+    if(!t){
+      /* userTeamId 가 깨졌다 — isUser 가 붙은 팀을 정답으로 본다 */
+      const cand=Object.keys(G.teams).filter(id=>G.teams[id].isUser);
+      if(cand.length===1){ G.userTeamId=cand[0]; t=G.teams[cand[0]]; fixed.push(`소속 구단을 ${t.short}(으)로 되찾음`); }
+      else return null;                                  // 판단 근거가 없다 — 건드리지 않는다
+    }
+    for(const id in G.teams){
+      const q=G.teams[id];
+      if(id===G.userTeamId){ if(!q.isUser){ q.isUser=true; fixed.push(`${q.short} 소속 표식 복구`); } }
+      else if(q.isUser){
+        q.isUser=false;
+        fixed.push(`${q.short} 의 옛 소속 표식 해제`);
+        /* 옛 구단은 AI 감독이 맡는다 — 표식만 내리면 전술이 유저 것 그대로 남는다 */
+        try{ assignAITactics(q); }catch(e){}
+      }
+      /* 경기 생성이 물고 있던 옛 캐시 */
+      try{ delete q._xiC; delete q._xiCK; delete q._xiCf; delete q._xiCKf; delete q._planBase0; }catch(e){}
+    }
+    /* 선발 명단이 남의 구단 선수를 물고 있으면 버린다 — 「경기 시작하니 옛 구단 라인업」의 직접 원인 */
+    if(Array.isArray(G.userXI) && G.userXI.length){
+      const mine=new Set((t.players||[]).map(p=>p.id));
+      const keep=G.userXI.filter(id=>mine.has(id));
+      if(keep.length!==G.userXI.length){
+        G.userXI = keep.length>=11 ? keep : null;
+        fixed.push("선발 명단에서 남의 구단 선수를 뺌");
+      }
+    }
+    return fixed.length?fixed:null;
+  }catch(e){ return null; }
+}
 function migrateLoadedG(){
   const step=(name,f)=>{ try{ f(); }catch(e){ try{ console.warn("세이브 승격 단계 실패:",name,e); }catch(_){} } };
+  step("감독 소속 배선", ()=>{
+    const f=fixUserTeamWiring();
+    if(f && f.length){
+      try{ notify(`🎩 <b>감독 소속 정보를 바로잡았습니다</b><br><span class="small">${f.join(" · ")}</span>`,"warn"); }catch(e){}
+      try{ addNews(`🎩 감독 소속 정보 정정 — ${f.join(" · ")}`); }catch(e){}
+    }
+  });
   /* 🆔 번호부터 맞춘다 — 마이그레이션 도중에 선수가 새로 만들어지는 단계(긴급 등록·스쿼드 보강)가
      있어서, 여기서 PID 를 올려 두지 않으면 그 선수들이 기존 번호를 물고 나온다. */
   step("선수 번호 선점", ()=>{ PID=nextPid(); });
@@ -61436,6 +61501,7 @@ function takeJob(tid){
     mgrSignContract(yrs, wg, 0);
   }
   G.goal=null;                                     // 중도 부임 — 이번 시즌 공식 목표는 없다
+  G.midHireS=G.season;                             // 🎯 그래서 이번 시즌은 목표를 묻지 않는다 (goalNeeded)
   G.userXI=null;
   if(t.tactic){ t.tactic.benchSel=[]; t.tactic.benchExcl=[]; t.tactic.benchManual=false; }
   for(const p of t.players){ affSet(p, 48+R(12)); p.talkR=-9; }
@@ -93089,7 +93155,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5189";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5190";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
