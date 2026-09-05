@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5180-->
+<!--B:20260913-5187-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -6772,6 +6772,47 @@ function TAC(src){
   }
   return o;
 }
+/* ═══ 🛡️ 국면별 세부 전술 ══════════════════════
+   ⚠ 요청 — 「공 소유시/공 미소유시로 나눠진 만큼 각 상황에서도 세부전술 설정이 가능하면
+     좋겠다. AI도 마찬가지로」.
+   ─ 열넷 중 열둘은 애초에 한쪽 국면에서만 의미가 있다. 패스 길이·템포·중거리 슛·크로스는
+     공을 가졌을 때, 압박·태클·마킹·트랩·수비 간격·가담 인원은 공이 없을 때, 역습·전환 속도는
+     소유가 바뀌는 순간의 지시다. 이 열둘은 <b>탭별로 갈라 보여 주기만</b> 하면 된다.
+   ─ 「양쪽에서 다 의미가 있고, 값이 서로 달라야 하는」 지시는 둘뿐이다.
+       · line  — 소유 시 백라인을 어디까지 밀어 올리나 / 미소유 시 블록을 어디에 세우나
+       · width — 소유 시 얼마나 벌려 공격하나 / 미소유 시 블록을 얼마나 좁혀 서나
+     이 둘만 미소유 전용 값(lineD·widthD)을 따로 갖는다. 안 정하면 소유 값을 그대로 쓴다
+     — 옛 세이브는 두 값이 없으므로 예전과 <b>완전히 같게</b> 돈다.
+   ─ 엔진에는 창구가 둘뿐이다: moveAgents 의 국면 판정과 앵커(phase). 그 아래로
+     blockComp·buildDefShape·pressPurposeFor 가 전부 같은 T 를 물려받는다. */
+const TAC_SPLIT=["line","width"];
+function tacHasD(T){ return !!T && (T.lineD!=null || T.widthD!=null); }
+/* 🛡️ 공 미소유 국면용 전술값 — TAC() 와 같은 모양이되 line·width 만 미소유 값으로 바뀐다.
+   미소유 값을 안 정했으면 TAC() 를 그대로 돌려준다(객체가 하나면 앵커 캐시도 하나로 끝난다). */
+function TACD(src){
+  const _tc=(src && src.tactic) ? src.tactic : null;
+  if(!_tc || !tacHasD(_tc)) return TAC(src);
+  const c=_tc._tacDC;
+  if(c!==undefined && c.f===_tc.formation && c.a===_tc.mentality && c.b===_tc.pass
+     && c.c===_tc.tempo && c.d===_tc.press && c.e===_tc.line && c.g===_tc.width
+     && c.h===_tc.tackle && c.i===_tc.longShot && c.j===_tc.counter && c.k===_tc.crossFq
+     && c.l===_tc.defGap && c.m===_tc.transSpd
+     && c.n===_tc.defCommit && c.p===_tc.marking && c.q===_tc.trap
+     && c.r===_tc.lineD && c.s===_tc.widthD) return c.o;
+  const raw=Object.assign({}, TAC_DEF, _tc);
+  for(const k of TAC_SPLIT) if(_tc[k+"D"]!=null) raw[k]=_tc[k+"D"];
+  const o={formation:raw.formation, raw};
+  for(const k of TAC_KEYS) o[k]=tacVal(raw[k]);
+  o.counter=ctrLv(raw);
+  const cc={f:_tc.formation, a:_tc.mentality, b:_tc.pass, c:_tc.tempo, d:_tc.press,
+            e:_tc.line, g:_tc.width, h:_tc.tackle, i:_tc.longShot, j:_tc.counter,
+            k:_tc.crossFq, l:_tc.defGap, m:_tc.transSpd,
+            n:_tc.defCommit, p:_tc.marking, q:_tc.trap, r:_tc.lineD, s:_tc.widthD, o};
+  try{ Object.defineProperty(_tc, "_tacDC", {value:cc, enumerable:false, writable:true, configurable:true}); }catch(e){}
+  return o;
+}
+/* 국면으로 고른다 — 엔진의 단일 창구 */
+function TACP(src, phase){ return (phase==="ATT") ? TAC(src) : TACD(src); }
 const HI =(v)=>v>=1.5;      // 슬라이더 4·3 칸 (높음 쪽)
 const LO =(v)=>v<=0.5;      // 슬라이더 0·1 칸 (낮음 쪽)
 const MID=(v)=>v>0.5&&v<1.5;// 정확히 가운데
@@ -7318,6 +7359,26 @@ function setTacPh(v){
   if(TACPH==="oop"){ try{ oopSeedFromIP(userTeam()); }catch(e){} }
   refreshTactics();
 }
+/* 🛡️ ⚠ 제보 — 「공 소유 시 위치를 바꾸면 미소유 위치도 바뀐다」.
+   미소유 자리를 «따로 정하지 않은» 선수는 소유 판을 그대로 따라간다(그게 기본 설계다).
+   문제는 감독이 이미 🛡️ 판을 그려 둔 뒤다 — 그 뒤에 선발을 바꾸거나 새로 영입하면
+   그 선수만 소유 판을 따라다니고, ⚔️ 판을 건드릴 때마다 🛡️ 판이 함께 흔들렸다.
+   ─ ⚔️ 판을 고치기 «직전»에 지금 보이는 🛡️ 그림을 통째로 못 박는다.
+     🛡️ 판을 한 번도 안 그린 팀은 아무 일도 하지 않는다(두 판은 계속 같은 그림이다). */
+function oopPinNow(t){
+  try{
+    if(!t || !t.tactic) return false;
+    if(!oopShapeSet(t)) return false;                 // 따로 안 그린 팀은 건드리지 않는다
+    const xi=(function(){ try{ return pitchPlayersForZoneEdit(); }catch(e){ return bestXI(t); } })();
+    if(!xi || xi.length<3) return false;
+    const cur=computeRenderSlots(t, xi, "oop");
+    const D=slotMapOf(t, "oop");
+    let n=0;
+    for(const p of xi){ const s=cur[p.id];
+      if(s && s!=="GK" && SLOT_BAND[s] && D[p.id]!==s){ D[p.id]=s; n++; } }
+    return n>0;
+  }catch(e){ return false; }
+}
 /* 공 미소유 판을 소유 판으로 초기화한다 */
 function oopSeedFromIP(t, force){
   if(!t||!t.tactic) return false;
@@ -7390,13 +7451,29 @@ function computeRenderSlots(t, xi, ph){
     const D=slotMapOf(t,"oop"), out={}, taken=new Set();
     for(const p of xi){ const s=D[p.id];
       if(s && SLOT_BAND[s] && !taken.has(s)){ out[p.id]=s; taken.add(s); } }
-    /* 공 미소유 자리를 안 정한 선수는 소유 시 자리에 그대로 선다 (자리가 겹치면 비켜 준다) */
+    /* 공 미소유 자리를 안 정한 선수는 소유 시 자리에 그대로 선다 (자리가 겹치면 비켜 준다)
+       ⚠ 제보 — 「공 소유 시 위치를 바꾸면 미소유 위치도 «이상하게» 바뀐다」. 원인이 바로 아래였다.
+         빈자리를 찾는 두 겹 반복문의 break 가 <b>안쪽 줄만</b> 빠져나가, 바깥 루프가 남은 줄을
+         계속 돌며 s 를 덮어썼다. 최종값은 «맨 앞줄(FW)의 첫 빈자리» — 그래서 센터백이
+         스트라이커 자리로 날아갔다(실측: LCB → LS).
+       ─ 이제 <b>자기 줄에서 먼저</b> 찾고, 없으면 가까운 줄 순서로 내려간다. */
     for(const p of xi){ if(out[p.id]) continue;
       let s=ip[p.id];
       if(s==="GK"){ out[p.id]="GK"; continue; }
       if(!s || taken.has(s)){
+        const b0=SLOT_BAND[s] || (function(){ try{ return getZone(t,p); }catch(e){ return "MF"; } })() || "MF";
+        const i0=Math.max(0, BANDS.indexOf(b0));
+        /* 자기 줄 → 한 칸씩 멀어지는 줄 순서 */
+        const order=[b0];
+        for(let k=1;k<BANDS.length;k++){
+          if(BANDS[i0-k]) order.push(BANDS[i0-k]);
+          if(BANDS[i0+k]) order.push(BANDS[i0+k]);
+        }
         s=null;
-        for(const b of BANDS) for(const q of ROW_SLOTS[b]) if(q && !taken.has(q)){ s=q; break; }
+        for(const b of order){
+          for(const q of (ROW_SLOTS[b]||[])) if(q && !taken.has(q)){ s=q; break; }
+          if(s) break;
+        }
       }
       if(s){ out[p.id]=s; taken.add(s); }
     }
@@ -7662,6 +7739,16 @@ function assignAITactics(t){
     if(Math.random()<0.75) T.formation=pick(FPOOL);   // 극단 전술(2-3-5·7-2-1)은 시즌 편성에 쓰지 않는다
     /* ⚠ 요청 — 「국면 포메이션은 없애자. 너무 극단적이었던 것 같다」. AI 채택도 함께 걷어냈다. */
   }
+  /* 🛡️ 국면별 세부 전술 — ⚠ 요청 「AI도 마찬가지로」.
+     예전 AI는 공을 가졌든 없든 <b>같은 라인·같은 폭</b>으로 섰다. 실제 감독은 대개 미소유에서
+     한 칸 내려서고 좁혀 선다. 다만 색깔이 갈리게 한다:
+       · 압박이 센 팀은 미소유에서도 라인을 안 내린다(게겐프레싱)
+       · 가담 인원이 많거나 간격이 좁은 팀은 확실히 내려앉고 더 좁힌다(버스)
+       · 대인 마킹 팀은 상대를 따라가느라 블록이 덜 좁혀진다
+     ※ 여기서 «뽑아 둔» 값이라 경기마다 흔들리지 않는다 — 팀의 시즌 색깔이 된다. */
+  T.lineD  = clamp((T.line|0) - 1 + (T.press>=3?1:0) + (T.trap>=3?1:0)
+                     - (T.defCommit>=3?1:0) - (T.mentality<=1?1:0) + (R(3)-1), 0, 4);
+  T.widthD = clamp((T.width|0) - 1 - (T.defGap<=1?1:0) + (T.marking>=3?1:0) + (R(3)-1), 0, 4);
   assignAIRoles(t);
 }
 /* ── AI 구단의 개인 역할 배정 ──────────────────────────────────────────
@@ -8027,6 +8114,13 @@ function aiPlanFor(t, opp, isHome){
   const jd=(c.judg-15)/5, tq=(c.tac-15)/5;
   const rnd=planRand(`${G.season}|${t.id}|${opp.id}|${isHome?1:0}`);
   const changed=_aiPlanBody(P, c, gap, jd, tq, opp, rnd);
+  /* 🛡️ 플랜이 라인·폭을 밀면 미소유 값도 <b>같은 폭만큼</b> 따라간다 —
+     안 그러면 「라인을 내리라」는 플랜이 수비 라인만 그대로 두고 지나간다 (요청) */
+  for(const k of TAC_SPLIT){
+    const dk=k+"D";
+    if(T[dk]==null) continue;
+    P[dk]=clamp((T[dk]|0) + ((P[k]|0)-(T[k]|0)), 0, TAC_STEPS-1);
+  }
   return changed ? P : null;
 }
 function aiMatchPlan(M, t, opp, isHome){
@@ -8034,7 +8128,9 @@ function aiMatchPlan(M, t, opp, isHome){
   if(!P) return;
   const T=t.tactic;
   const base={formation:T.formation}; for(const k of TAC_KEYS) base[k]=T[k];
+  for(const k of TAC_SPLIT) if(T[k+"D"]!=null) base[k+"D"]=T[k+"D"];
   T.formation=P.formation; for(const k of TAC_KEYS) T[k]=P[k];
+  for(const k of TAC_SPLIT) if(P[k+"D"]!=null) T[k+"D"]=P[k+"D"];
   t._planBase0=base;                       // 정찰이 원래 판을 볼 수 있게 남겨 둔다
   (M._planBase=M._planBase||{})[t.id]=base;
 }
@@ -8079,6 +8175,7 @@ function aiPlanRestore(M){
     const t=G.teams[tid]; if(!t || !t.tactic) continue;
     const b=M._planBase[tid];
     for(const k of TAC_KEYS) if(b[k]!=null) t.tactic[k]=b[k];
+    for(const k of TAC_SPLIT) if(b[k+"D"]!=null) t.tactic[k+"D"]=b[k+"D"];
     if(b.formation) t.tactic.formation=b.formation;
     delete t._planBase0;
   }
@@ -8973,6 +9070,18 @@ function freezeLiveSlots(sd){
     const sl=slotOf[q.id];
     if(sl && sl!=="GK" && SLOT_BAND[sl]) t.tactic.slot[q.id]=sl;
   }
+  /* 🛡️ ⚠ 배선 점검 — 소유 판만 굳히고 미소유 판은 그대로 뒀다. 퇴장·부상으로 인원이 빠지면
+     미소유 판만 «남은 인원용 기본 배치»로 다시 짜여 두 판이 어긋났다. 따로 잡아 둔 팀만 함께 굳힌다. */
+  try{
+    if(t.tactic.slotD && Object.keys(t.tactic.slotD).length){
+      const sD=computeRenderSlots(t, xi, "oop");
+      for(const q of xi){
+        if(partial && t.tactic.slotD[q.id]) continue;
+        const sl=sD[q.id];
+        if(sl && sl!=="GK" && SLOT_BAND[sl]) t.tactic.slotD[q.id]=sl;
+      }
+    }
+  }catch(e){}
 }
 /* ═══ 🔁 교체 카드 한 장 ═══════════════════════════════════════════
    공식 경기는 다섯 장. 다만 연습경기는 승점이 걸린 경기가 아니라, 실제로도 감독들이
@@ -17648,6 +17757,11 @@ const MD_REST   = REST_COND;   // 경기 당일 회복 = 휴식일과 동일
        (선발급 기준 — 90분 시절 87.89 · 보정 전 87.42 · 보정 후 88.03)
      유저 구단과 AI 구단이 같은 상수를 쓴다. */
 const RECOV_K   = 1.04;
+/* 😤 ⚠ 제보 — 「휴식을 5일 넘게 연속으로 돌려도 회복이 전혀 안 된다」.
+   태업 중인 선수는 회복 루프에서 통째로 «continue» 였다 — 즉 <b>회복이 0</b>.
+   훈련일에는 컨디션이 깎이므로, 태업이 풀릴 때까지 바닥(55)까지 내려가기만 했다.
+   ─ 태업은 «훈련을 열심히 안 한다»지 «잠을 안 잔다»가 아니다. 느리게라도 회복시킨다. */
+const SULK_REC  = 0.45;   // 태업 중 휴식 회복 배수
 const MFAT_SLOW = 0.30;   // 잔여 피로 1.0(풀타임)이면 다음 날 회복이 30% 느리다 (0.20 → 0.30 · 제보)
 const MFAT_DECAY= 0.58;   // 하루가 지나면 잔여 피로는 58%가 남는다 — 나흘은 다리가 무겁다 (0.42 → 0.58)
 /* 오늘 이 선수의 회복 배수 — 나이·회복력에 지난 경기의 잔여 피로를 얹는다 */
@@ -17700,8 +17814,8 @@ function matchDayRecover(t){
     if(p.loan) continue;                        // 임대 나간 선수는 임대처에서 회복한다
     const rm=dayRecMul(p)*_mK; mFatDecay(p);    // 지난 경기의 잔여 피로도 하루만큼 빠진다
     if(p.inj>0){ p.cond=Math.round(clamp(p.cond+2*recoverMul(p),55,100)*10)/10; continue; }
-    if(p.sulk>0) continue;                      // 태업 중인 선수는 회복도 더디다
-    p.cond=Math.round(clamp(p.cond+MD_REST*RECOV_K*rm, 55, 100)*10)/10;
+    const _sk=(p.sulk>0)?SULK_REC:1;            // 😤 태업 중이면 더디게 (예전엔 0)
+    p.cond=Math.round(clamp(p.cond+MD_REST*RECOV_K*rm*_sk, 55, 100)*10)/10;
   }
 }
 /* 👔 AI 감독의 선수 관리 배수 — 회복에 곱한다 (유저 팀은 1, 감독 없으면 1) */
@@ -17766,8 +17880,8 @@ function applyDayToTeam(t, pl){
       if(p.loan){ trainLoanee(t, p); continue; }
       developPlayer(t, p, null);                              // 쉬는 날에도 몸은 아주 조금 변한다
       const rmR=dayRecMul(p)*aiManK(t); mFatDecay(p);         // 👔 AI 감독의 선수 관리가 회복 속도를 가른다
-      if(p.sulk>0) continue;                                  // 태업 중인 선수는 회복도 더디다
-      p.cond=Math.round(Math.round(clamp(p.cond+REST_COND*RECOV_K*rmR+(p.inj>0?1:0), 55, 100)*10)/10*10)/10;
+      const _sk=(p.sulk>0)?SULK_REC:1;                        // 😤 태업 중이면 더디게 (예전엔 0)
+      p.cond=Math.round(Math.round(clamp(p.cond+REST_COND*RECOV_K*rmR*_sk+(p.inj>0?1:0), 55, 100)*10)/10*10)/10;
     }
     t.morale=Math.round(clamp(t.morale+0.06, 40, 99)*100)/100;
     /* 📋 훈련을 쉬면 손발은 서서히 어긋난다 — 다만 최근 그 전술로 실전을 치렀다면
@@ -18174,8 +18288,12 @@ function advanceCalendar(){
    같은 전술로 오래 훈련할수록 선수들이 서로의 위치를 안다. 포메이션을 갈아엎으면 그게 리셋된다.
    FM의 전술 친숙도와 같은 개념이되, 이 게임에서는 팀 단위 하나의 숫자로만 다룬다. */
 function tacticSig(t){
-  const T=TAC(t);
-  return [T.formation,T.mentality,T.pass,T.tempo,T.press,T.line,T.width,T.tackle,T.longShot,ctrLv(T)].join("|");
+  /* ⚠ T.raw 를 보면 안 된다 — TAC() 캐시 키에 lineD 가 없어서, 미소유 값만 바꾼 순간에는
+     캐시된 옛 raw 가 그대로 돌아온다(실측: 서명이 안 바뀜). 팀 전술을 직접 읽는다. */
+  const T=TAC(t), R=(t&&t.tactic)||T.raw||{};
+  /* 🛡️ 미소유 라인·폭도 «다른 전술»이다 — 바꾸면 친숙도가 흔들려야 한다 (요청) */
+  return [T.formation,T.mentality,T.pass,T.tempo,T.press,T.line,T.width,T.tackle,T.longShot,ctrLv(T),
+          R.lineD==null?"-":R.lineD, R.widthD==null?"-":R.widthD].join("|");
 }
 /* ⚠ 제보 — 「4-3-3 을 쓰다가 4-2-1-3 으로 바꿔도 친숙도가 그대로다」.
    두 가지가 겹쳐 있었다.
@@ -23961,7 +24079,14 @@ function tfLocked(pid){ return !!tfDealOfPid(pid); }
 function tfPlayerOf(d){
   try{
     if(d.fromId && G.teams[d.fromId]){ const p=G.teams[d.fromId].players.find(x=>x.id===d.pid); if(p) return p; }
-    if(d.os){ const p=(G.overseas||[]).find(x=>x.id===d.pid); if(p) return p; }
+    /* 🔎 ⚠ 제보 — 「스카우트로 선수를 데려와도 목록에 계속 떠 있어 같은 선수를 또 영입할 수 있다」.
+       뿌리는 여기였다. 스카우트 보고서 선수도 os:true 딜을 타는데, 이 창구는 G.overseas 만 봤다.
+       그래서 tfPlayerOf 가 null → tfComplete 가 «대상 선수를 확인할 수 없습니다»로 딜을 깨뜨렸고,
+       선수는 오지 않고 목록에는 그대로 남아 몇 번이고 다시 협상할 수 있었다(실측). */
+    if(d.os){
+      const p=(G.overseas||[]).find(x=>x.id===d.pid); if(p) return p;
+      const q=((G.scout&&G.scout.list)||[]).find(x=>x.id===d.pid); if(q) return q;
+    }
     const f=(G.freeAgents||[]).find(x=>x.id===d.pid); if(f) return f;
     for(const id in G.teams){ const q=G.teams[id].players.find(x=>x.id===d.pid); if(q) return q; }
   }catch(e){}
@@ -24048,7 +24173,11 @@ function tfComplete(d){
   /* 🧷 그 사이 상황이 바뀌었을 수 있다 — 있어야 할 자리에 없으면 딜은 성립하지 않는다.
      (이 확인이 없으면 이미 남의 팀에 간 선수를 한 번 더 밀어 넣어 두 팀에 동시에 존재하게 된다) */
   if(from){ if(from.players.indexOf(p)<0) return tfCollapse(d, "원소속이 바뀌었습니다"); }
-  else if(d.os){ if(!(G.overseas||[]).some(x=>x.id===p.id)) return tfCollapse(d, "해외 구단 사정 변경"); }
+  else if(d.os){
+    const _inOs=(G.overseas||[]).some(x=>x.id===p.id);
+    const _inSc=((G.scout&&G.scout.list)||[]).some(x=>x.id===p.id);
+    if(!_inOs && !_inSc) return tfCollapse(d, "해외 구단 사정 변경");
+  }
   else { if(!(G.freeAgents||[]).some(x=>x.id===p.id)) return tfCollapse(d, "다른 구단과 계약했습니다"); }
   if(from && !d.swapPid && from.players.length<=18) return tfCollapse(d, `${from.short} 스쿼드 부족`);
   const mine=tfIsMine(d), buying=(d.toId===G.userTeamId);
@@ -24060,9 +24189,21 @@ function tfComplete(d){
     from.players.splice(from.players.indexOf(p),1);
     from.budget=Math.round((from.budget+(d.fee||0))*10)/10;
   } else if(d.os){
-    G.overseas=(G.overseas||[]).filter(x=>x.id!==p.id);
-    (G.osGone=G.osGone||[]).push(p.osKey||p.name);
-    try{ if(G.scout){ G.scout.list=(G.scout.list||[]).filter(x=>x.id!==p.id); delete p.scErr; delete p._scShow; delete p.mvFix; } }catch(e){}
+    /* 🔎 스카우트 보고서에서 온 선수는 해외 진열대가 아니라 보고서 목록에서 내린다.
+       ⚠ 예전에는 osGone 에 이름을 밀어 넣어, 같은 이름의 «해외 시장» 선수까지 영영 막았다. */
+    const _wasOs=(G.overseas||[]).some(x=>x.id===p.id);
+    if(_wasOs){
+      G.overseas=(G.overseas||[]).filter(x=>x.id!==p.id);
+      (G.osGone=G.osGone||[]).push(p.osKey||p.name);
+    }
+    try{
+      if(G.scout && Array.isArray(G.scout.list) && G.scout.list.some(x=>x.id===p.id)){
+        G.scout.list=G.scout.list.filter(x=>x.id!==p.id);
+        if(Array.isArray(G.scout.gone) && G.scout.gone.indexOf(p.name)<0) G.scout.gone.push(p.name);
+      }
+      delete p.scErr; delete p.scErr0; delete p._scShow; delete p._scBias;
+      delete p.scUntil; delete p.scNewTil; delete p.scAt; delete p.scJack; delete p.mvFix;
+    }catch(e){}
   } else {
     G.freeAgents=(G.freeAgents||[]).filter(x=>x.id!==p.id);
   }
@@ -25782,8 +25923,101 @@ function saudiWhy(p){
   }catch(e){}
   return "";
 }
+/* ═══ 🌍 해외 이적 제의 — 이제 사우디만이 아니다 ═══════════════════════
+   ⚠ 요청 — 「이적 제의가 사우디 리그 이외에 다른 리그에서도 오면 좋겠다」.
+   리그마다 «부르는 이유»와 «부르는 값»이 다르다. 배관(G.saOffer 한 건 · 수락/거절/카드)은
+   그대로 쓰고, 어느 리그가 불렀는지만 o.lg 에 적는다 — 옛 세이브는 lg 가 없으니 사우디로 읽힌다.
+     · minOvr  그 리그가 눈길을 주는 최저 능력치
+     · need    "acc" = 개인상·득점왕급 실적이 있어야 움직인다 / "form" = 지금 잘하고 있으면 온다
+     · feeK/feeMax  시장가 대비 이적료 배수와 상한(억)
+     · wageK   현재 연봉 대비 제시 연봉 배수
+     · age     그 리그가 선호하는 나이대 (밖으로 나가면 확률이 급히 준다)
+     · want    선수 본인이 흔들리는 정도의 가감 (유럽은 «꿈», 걸프는 «돈»)
+     · w       리그별 빈도 가중치 */
+const OVS_LEAGUES=[
+  {k:"sa", n:"사우디 프로리그", ic:"🇸🇦", w:1.00, minOvr:77, need:"acc", exp:6,
+   feeK:[1.7,2.8], feeMax:250, wageK:[3.2,6.0], age:[25,34], want:0.00, clubs:SAUDI_CLUBS},
+  {k:"jp", n:"J1리그", ic:"🇯🇵", w:0.85, minOvr:72, need:"form", exp:9, gi:5,
+   feeK:[1.1,1.8], feeMax:130, wageK:[1.4,2.3], age:[21,31], want:0.02, clubs:[
+    {n:"가와사키 프론탈레", c:"#1b7fc4", d:"패스로 상대를 갈아 버리는 J리그의 기준점."},
+    {n:"요코하마 F. 마리노스", c:"#0b3f8f", d:"라인을 끝까지 올리는 공격 축구. 외국인 활용이 능하다."},
+    {n:"우라와 레즈", c:"#c8102e", d:"일본 최대 서포터를 가진 구단. 아시아 무대를 늘 노린다."},
+    {n:"비셀 고베", c:"#7a1f6a", d:"모기업의 지원이 두텁다. 검증된 아시아 자원을 좋아한다."},
+    {n:"감바 오사카", c:"#0a2f6b", d:"기술 좋은 미드필더를 꾸준히 사 모으는 구단."},
+    {n:"산프레체 히로시마", c:"#5b2a86", d:"조직력으로 버티는 팀. 성실한 자원을 선호한다."},
+    {n:"FC 도쿄", c:"#0d2f6e", d:"수도 구단. 측면과 최전방에 늘 자리가 있다."},
+    {n:"가시마 앤틀러스", c:"#8b1a1a", d:"J리그 최다 우승. 이기는 법을 아는 선수를 찾는다."}]},
+  {k:"cn", n:"중국 슈퍼리그", ic:"🇨🇳", w:0.80, minOvr:74, need:"form", exp:7, gi:5,
+   feeK:[1.5,2.4], feeMax:170, wageK:[2.6,4.6], age:[25,33], want:0.04, clubs:[
+    {n:"상하이 하이강", c:"#c8102e", d:"리그 최상위 예산. 즉시 전력을 산다."},
+    {n:"상하이 선화", c:"#0a4fa0", d:"파란 상하이. 아시아 쿼터 자리를 늘 비워 둔다."},
+    {n:"베이징 궈안", c:"#0b7a3b", d:"수도 구단. 관중과 압박이 함께 큰 곳이다."},
+    {n:"산둥 타이산", c:"#e35205", d:"국유 자본. 검증된 공격 자원에 아낌없이 쓴다."},
+    {n:"청두 룽청", c:"#c02a2a", d:"신흥 강호. 리그 최고 관중 동원력을 자랑한다."},
+    {n:"저장 FC", c:"#1c6fb5", d:"젊은 스쿼드에 기둥 하나를 얹으려 한다."}]},
+  {k:"gu", n:"걸프 리그 (카타르·UAE)", ic:"🇶🇦", w:0.60, minOvr:75, need:"form", exp:6, gi:5,
+   feeK:[1.4,2.2], feeMax:150, wageK:[2.6,4.4], age:[26,35], want:0.02, clubs:[
+    {n:"알 사드", c:"#8b1a1a", d:"카타르의 명문. 아시아 정상급 대우를 약속한다."},
+    {n:"알 두하일", c:"#a3162a", d:"도하의 신흥 부자 구단. 씀씀이가 크다."},
+    {n:"알 라이얀", c:"#1f4fa0", d:"안정된 재정. 아시아 쿼터를 중시한다."},
+    {n:"알 아인", c:"#5b2a86", d:"UAE 최다 우승. 아시아 챔피언 경험이 있다."},
+    {n:"샤바브 알 아흘리", c:"#c8102e", d:"두바이 연고. 최근 아시아 무대 투자를 늘렸다."},
+    {n:"알 와슬", c:"#c9a227", d:"두바이의 노란 구단. 창의적인 자원을 찾는다."}]},
+  {k:"us", n:"메이저리그사커", ic:"🇺🇸", w:0.55, minOvr:75, need:"form", exp:9, gi:6,
+   feeK:[1.2,2.0], feeMax:150, wageK:[1.9,3.3], age:[23,33], want:0.06, clubs:[
+    {n:"LAFC", c:"#0a0a0a", d:"서부의 강호. 지정선수 자리를 아시아로 열어 두고 있다."},
+    {n:"인터 마이애미 CF", c:"#f4b3c2", d:"세계적인 이름들이 모이는 곳. 노출은 최고다."},
+    {n:"시애틀 사운더스", c:"#5d9741", d:"북미에서 가장 축구 같은 관중을 가진 구단."},
+    {n:"애틀랜타 유나이티드", c:"#a01c2e", d:"리그 최다 관중. 공격 자원에 크게 쓴다."},
+    {n:"뉴욕 시티 FC", c:"#6cabdd", d:"도시 구단. 기술적인 미드필더를 선호한다."},
+    {n:"포틀랜드 팀버스", c:"#004812", d:"작지만 뜨거운 구단. 측면 자원을 찾는다."}]},
+  {k:"eu", n:"유럽", ic:"🇪🇺", w:0.55, minOvr:78, need:"acc", exp:10,
+   feeK:[1.6,2.9], feeMax:320, wageK:[1.5,2.6], age:[19,27], want:0.30, clubs:[
+    {n:"셀틱 FC", c:"#018749", d:"스코틀랜드의 거인. 유럽 무대와 챔피언스리그 예선이 열린다."},
+    {n:"페예노르트", c:"#c8102e", d:"로테르담. 아시아 선수를 유럽에 안착시켜 온 통로다."},
+    {n:"스타드 렌 FC", c:"#c8102e", d:"리그앙 중상위. 젊은 자원을 사서 키워 판다."},
+    {n:"FC 아우크스부르크", c:"#a4343a", d:"분데스리가. 아시아 선수를 오래 써 온 구단."},
+    {n:"1. FSV 마인츠 05", c:"#c8102e", d:"압박 축구. 활동량 좋은 선수를 찾는다."},
+    {n:"지로나 FC", c:"#c8102e", d:"라리가. 데이터로 저평가된 자원을 사들인다."},
+    {n:"로얄 앤트워프 FC", c:"#c8102e", d:"벨기에. 유럽 진출의 첫 정거장으로 통한다."},
+    {n:"스파르타 프라하", c:"#8b1a1a", d:"체코 명문. 유럽 대항전을 매년 치른다."}]}
+];
+function ovsLeagueOf(o){
+  const k=(o && o.lg) || "sa";
+  return OVS_LEAGUES.find(x=>x.k===k) || OVS_LEAGUES[0];
+}
 function saudiOffer(){ return G.saOffer || null; }
-function saClubOf(o){ return (SAUDI_CLUBS.find(x=>x.n===(o&&o.club)) || SAUDI_CLUBS[0]); }
+function saClubOf(o){
+  const L=ovsLeagueOf(o);
+  return (L.clubs.find(x=>x.n===(o&&o.club)) || L.clubs[0] || SAUDI_CLUBS[0]);
+}
+/* 그 리그가 이 선수를 부를 만한가 */
+function ovsEligible(p, L){
+  if(!p || !L) return false;
+  if(p.ovr < (L.minOvr||77)) return false;
+  if(L.need==="acc") return saudiEligible(p);
+  /* "form" — 훈장이 아니라 «지금 잘하고 있는가»를 본다 */
+  try{
+    if(saudiAccText(p)) return true;
+    if((p.apps||0) < 8) return false;
+    if(((p.goals||0)+(p.assists||0)) >= (L.gi!=null?L.gi:4)) return true;
+    if(p.ovr >= (L.minOvr||77)+4) return true;      // 골키퍼·수비수는 숫자로 안 잡힌다
+  }catch(e){}
+  return false;
+}
+/* 그 리그가 선호하는 나이대 밖이면 확률이 급히 준다 */
+function ovsAgeK(L, age){
+  const a0=(L.age&&L.age[0])||24, a1=(L.age&&L.age[1])||34;
+  if(age<a0) return Math.max(0.12, 1-(a0-age)*0.24);
+  if(age>a1) return Math.max(0.08, 1-(age-a1)*0.30);
+  return 1;
+}
+function ovsWhy(p, L){
+  const w=saudiWhy(p);
+  if(w) return w;
+  if(((p.goals||0)+(p.assists||0))>0) return `${G.season} 시즌 ${p.apps||0}경기 ${p.goals||0}골 ${p.assists||0}도움`;
+  return `${G.season} 시즌 ${p.apps||0}경기 출전`;
+}
 /* 하루치 — 이적시장이 열려 있을 때만 */
 function tickSaudi(){
   try{
@@ -25796,9 +26030,9 @@ function tickSaudi(){
       if(!still){ G.saOffer=null; }
       else if(day>=G.saOffer.due){
         const p=ut0.players.find(x=>x.id===G.saOffer.pid);
-        const cn=G.saOffer.club;
+        const cn=G.saOffer.club, _lgx=G.saOffer.lg||"sa";
         G.saOffer=null;
-        addNews(`🇸🇦 ${cn}, ${p.name} 영입 협상 철회 — "다른 자원으로 방향을 틀었다"`, null, "club");
+        addNews(`${ovsLeagueOf({lg:_lgx}).ic} ${cn}, ${p.name} 영입 협상 철회 — "다른 자원으로 방향을 틀었다"`, null, "club");
         if(p){ delete p._saWant; p._saCool=day+30+R(30); }
       }
       return;                                    // 한 번에 한 건만 굴린다
@@ -25807,40 +26041,47 @@ function tickSaudi(){
     const ut=userTeam();
     /* 한 번 거절했거나 제안이 지나간 선수는 한동안 조용하다 —
        매번 흔들어 대면 거절할 때마다 사기가 깎여 감독이 벌을 받는 구조가 된다 */
-    const cands=ut.players.filter(p=>
-      p.ovr>=SA_MIN_OVR && !p.emg && !p.loan && !p.army && (p.inj||0)<=0
-      && !(G.saGone||[]).includes(p.id) && !(p._saCool>day)
-      && saudiEligible(p));      // 🏅 실적이 있어야 대륙이 움직인다 (제보)
-    if(!cands.length) return;
-    /* 잘하는 선수일수록 자주 온다 — 77에서는 거의 안 오고, 85 이상이면 시즌에 몇 번씩 */
-    let best=null, bw=0;
-    for(const p of cands){
-      const w=Math.pow(p.ovr-(SA_MIN_OVR-1), 1.7) * (1+clamp((28-(G.season-p.by))/10, -0.35, 0.45));
-      if(w>bw){ bw=w; best=p; }
+    const base=ut.players.filter(p=>
+      !p.emg && !p.loan && !p.army && (p.inj||0)<=0
+      && !(G.saGone||[]).includes(p.id) && !(p._saCool>day));
+    if(!base.length) return;
+    /* 🌍 선수 × 리그 조합을 전부 저울에 올린다 — 잘하는 선수일수록, 그 리그 취향에 맞을수록 자주 온다 */
+    const pool=[]; let tot=0;
+    for(const q of base){
+      const age=G.season-(q.by||2000);
+      for(const L of OVS_LEAGUES){
+        if(!ovsEligible(q, L)) continue;
+        const w=Math.pow(q.ovr-((L.minOvr||77)-1), 1.7) * (L.w||1) * ovsAgeK(L, age);
+        if(w<=0) continue;
+        pool.push({p:q, L, w}); tot+=w;
+      }
     }
-    if(!best) return;
-    if(Math.random() > clamp(bw*0.00042, 0, 0.05)) return;
-    const p=best;
-    const club=pick(SAUDI_CLUBS);
+    if(!pool.length) return;
+    if(Math.random() > clamp(tot*0.00034, 0, 0.055)) return;
+    let r=Math.random()*tot, sel=pool[pool.length-1];
+    for(const c of pool){ r-=c.w; if(r<=0){ sel=c; break; } }
+    const p=sel.p, L=sel.L;
+    const club=pick(L.clubs);
     const mv=marketValue(p);
-    const fee=Math.min(SA_FEE_MAX, Math.round(mv*(SA_FEE_K[0]+Math.random()*(SA_FEE_K[1]-SA_FEE_K[0]))));
-    const wage=Math.round((p.wage||1)*(SA_WAGE_K[0]+Math.random()*(SA_WAGE_K[1]-SA_WAGE_K[0]))*10)/10;
-    G.saOffer={pid:p.id, club:club.n, fee, wage, mv, due:day+SA_EXP, at:day, seen:0};
-    /* 선수 본인이 먼저 흔들린다 — 야심가일수록, 나이가 있을수록 크게 */
+    const fee=Math.min(L.feeMax, Math.round(mv*(L.feeK[0]+Math.random()*(L.feeK[1]-L.feeK[0]))));
+    const wage=Math.round((p.wage||1)*(L.wageK[0]+Math.random()*(L.wageK[1]-L.wageK[0]))*10)/10;
+    G.saOffer={pid:p.id, lg:L.k, club:club.n, fee, wage, mv, due:day+(L.exp||SA_EXP), at:day, seen:0};
+    /* 선수 본인이 먼저 흔들린다 — 야심가일수록, 나이가 있을수록 크게. 유럽은 «꿈»이라 더 흔들린다 */
     const age=G.season-(p.by||2000);
-    let want=0.34 + (p.pers===1?0.26:0) + clamp((age-27)/12, 0, 0.24) + clamp((wage/Math.max(0.2,p.wage||1)-3)*0.05, 0, 0.16);
+    let want=0.34 + (L.want||0) + (p.pers===1?0.26:0) + clamp((age-27)/12, 0, 0.24) + clamp((wage/Math.max(0.2,p.wage||1)-3)*0.05, 0, 0.16);
     if(p.pers===2) want-=0.12;                    // 조용한 성격은 덜 흔들린다
     if((p.loyal||0)>=70) want-=0.14;
     p._saWant = Math.random() < clamp(want, 0.10, 0.86) ? 1 : 0;
-    addNews(`🇸🇦 <b>${club.n}</b>, ${p.name} 영입 제안 — 이적료 <b>${fee}억</b> · 연봉 <b>${wage}억</b> (시장가 ${mv}억)`, "warn", "club",
-      {cat:"transfer", ic:"🇸🇦", tone:0, tid:ut.id, src:"사우디 프로리그",
-       head:`${club.n}, ${ut.short} ${p.name}에 거액 제시`,
-       sub:`${club.d} 이적료 ${fee}억은 ${p.name}의 시장가(${mv}억)를 크게 웃도는 금액이다.`});
-    try{ socialFill(SOC.saudiIn, 3+R(3), 0, {t:ut.short, p:p.name, c:club.n, m:fee, w:wage}); }catch(e){}
-    try{ fmkFill(FMK.saudiIn, 2+R(3), {t:ut.short, p:p.name, c:club.n, m:fee, w:wage}); }catch(e){}
+    const _V={t:ut.short, p:p.name, c:club.n, m:fee, w:wage, l:L.n};
+    addNews(`${L.ic} <b>${club.n}</b>, ${p.name} 영입 제안 — 이적료 <b>${fee}억</b> · 연봉 <b>${wage}억</b> (시장가 ${mv}억)`, "warn", "club",
+      {cat:"transfer", ic:L.ic, tone:0, tid:ut.id, src:L.n,
+       head:`${club.n}, ${ut.short} ${p.name}에 영입 제안`,
+       sub:`${club.d} 이적료 ${fee}억은 ${p.name}의 시장가(${mv}억)를 ${(fee/Math.max(1,mv)).toFixed(1)}배 웃도는 금액이다.`});
+    try{ socialFill(L.k==="sa"?SOC.saudiIn:SOC.ovsIn, 3+R(3), 0, _V); }catch(e){}
+    try{ fmkFill(L.k==="sa"?FMK.saudiIn:FMK.ovsIn, 2+R(3), _V); }catch(e){}
     if(p._saWant) addMood(`💬 ${p.name}: "감독님... ${club.n}에서 연락이 왔다고 들었습니다. 솔직히 마음이 흔들립니다."`);
     else addMood(`💬 ${p.name}: "${club.n} 얘기는 들었습니다. 저는 여기서 더 하고 싶습니다."`, "good");
-    notify(`🇸🇦 <b>${club.n}</b>이(가) ${p.name}에게 이적료 ${fee}억을 제시했습니다 — 📨 타 구단 제의에서 확인하세요.`, "warn");
+    notify(`${L.ic} <b>${club.n}</b>이(가) ${p.name}에게 이적료 ${fee}억을 제시했습니다 — 📨 타 구단 제의에서 확인하세요.`, "warn");
   }catch(e){}
 }
 /* 수락 — 선수는 K리그를 떠난다 */
@@ -25849,7 +26090,7 @@ function saudiAccept(){
   const ut=userTeam(); const p=ut.players.find(x=>x.id===o.pid);
   if(!p){ G.saOffer=null; show("offers"); return; }
   if(ut.players.length<=18){ notify("⚠️ 스쿼드가 18명 이하라 선수를 보낼 수 없습니다.","warn"); return; }
-  const club=saClubOf(o), wasStar=p.ovr>=SA_MIN_OVR+2, wanted=!!p._saWant;
+  const _L=ovsLeagueOf(o), club=saClubOf(o), wasStar=p.ovr>=(_L.minOvr||SA_MIN_OVR)+2, wanted=!!p._saWant;
   showConfirm(`<b>🇸🇦 ${o.club}행을 수락합니다</b>\n\n${p.name} (${p.pos} ${dispOvr(p)}) — 이적료 <b>${o.fee}억</b>\n선수 연봉은 ${p.wage}억 → ${o.wage}억이 됩니다.\n\n<span class="small">${wanted?"본인도 떠나고 싶어 합니다.":"본인은 잔류를 원하고 있습니다 — 강행하면 라커룸이 흔들립니다."}</span>`,
   ()=>{
     try{ socialOnSale(p); }catch(e){}
@@ -25857,31 +26098,31 @@ function saudiAccept(){
     try{ clearClubBaggage(p, 80); }catch(e){}
     ut.budget=Math.round((ut.budget+o.fee)*10)/10;
     try{ const fin=finLedger(ut); fin.sell=Math.round(((fin.sell||0)+o.fee)*100)/100; }catch(e){}
-    try{ tfLogAdd("out", p, o.club+" (사우디)", o.fee, null, null); }catch(e){}
+    try{ tfLogAdd("out", p, o.club+" ("+_L.n+")", o.fee, null, null); }catch(e){}
     G.offers=(G.offers||[]).filter(x=>x.pid!==p.id);
     G.transferBids=(G.transferBids||[]).filter(b=>b.pid!==p.id);
     (G.saGone=G.saGone||[]).push(p.id);
     if(Array.isArray(G.userXI)) G.userXI=G.userXI.filter(id=>id!==p.id);
     G.saOffer=null;
-    const V={t:ut.short, p:p.name, c:o.club, m:o.fee, w:o.wage};
-    addNews(`🇸🇦 <b>${p.name}, ${o.club} 이적 확정</b> — 이적료 ${o.fee}억 (시장가 ${o.mv}억). 구단 예산에 반영되었습니다.`, "warn", "club",
+    const V={t:ut.short, p:p.name, c:o.club, m:o.fee, w:o.wage, l:_L.n};
+    addNews(`${_L.ic} <b>${p.name}, ${o.club} 이적 확정</b> — 이적료 ${o.fee}억 (시장가 ${o.mv}억). 구단 예산에 반영되었습니다.`, "warn", "club",
       {cat:"transfer", ic:"✍️", tone:0, tid:ut.id, src:"K리그 공식",
-       head:`${p.name}, 사우디로 — ${o.fee}억`,
+       head:`${p.name}, ${o.club}행 확정 — ${o.fee}억`,
        sub:`${ut.name}은 시장가의 ${(o.fee/Math.max(1,o.mv)).toFixed(1)}배를 받았다. 그라운드에 남은 공백은 감독의 몫이다.`});
     try{ socialFill(wasStar&&!wanted?SOC.saudiOutRage:SOC.saudiOut, 4+R(3), wasStar&&!wanted?-1:0, V);
-         fmkFill(FMK.saudiOut, 3+R(3), V); }catch(e){}
+         fmkFill(_L.k==="sa"?FMK.saudiOut:FMK.ovsOut, 3+R(3), V); }catch(e){}
     try{ queueFarewell(p, o.club); }catch(e){}
     if(wasStar && !wanted){
       ut.morale=clamp(ut.morale-5, 40, 99);
       G.starGone=3;
-      adjustTrust("fans", -9, `${p.name} 사우디 이적`);
+      adjustTrust("fans", -9, `${p.name} ${_L.n} 이적`);
       adjustTrust("owner", o.fee>=o.mv*2.5 ? 6 : -2, `${p.name} 이적료 ${o.fee}억`);
       addMood(`😥 기둥이 떠났습니다. 라커룸이 조용합니다. <span class="small">(팀 사기 -5)</span>`);
     } else {
       adjustTrust("owner", 5, `${p.name} 고액 매각 (${o.fee}억)`);
       if(wanted) addMood(`💬 ${p.name}: "보내 주셔서 감사합니다. 이 팀은 제 커리어의 전부였습니다."`, "good");
     }
-    try{ bumpHype(ut, -clamp((playerLevel(p)-starRefLevel())*0.008, 0, 0.09)*(wanted?0.5:1), `${p.name} 사우디 이적`); }catch(e){}
+    try{ bumpHype(ut, -clamp((playerLevel(p)-starRefLevel())*0.008, 0, 0.09)*(wanted?0.5:1), `${p.name} ${_L.n} 이적`); }catch(e){}
     notify(`💰 <b>이적 확정</b> — ${p.name} → ${o.club} (${o.fee}억)`, "good");
     saveGame(); show("offers");
   }, {okLabel:`${o.fee}억에 보낸다`, cancelLabel:"다시 생각한다"});
@@ -25892,12 +26133,13 @@ function saudiReject(){
   const ut=userTeam(); const p=ut.players.find(x=>x.id===o.pid);
   G.saOffer=null;
   if(!p){ show("offers"); return; }
-  const V={t:ut.short, p:p.name, c:o.club, m:o.fee, w:o.wage};
+  const _L=ovsLeagueOf(o);
+  const V={t:ut.short, p:p.name, c:o.club, m:o.fee, w:o.wage, l:_L.n};
   addNews(`🚫 ${ut.name}, ${o.club}의 ${p.name} 영입 제안 거절 — "팔 생각이 없다"`, "good", "club");
   try{ socialFill(SOC.saudiKeep, 3+R(3), 1, V); fmkFill(FMK.saudiKeep, 2+R(2), V); }catch(e){}
   if(p._saWant){
     p.morale=clamp((p.morale||70)-14, 25, 99);
-    try{ affAdd(p, -12, "사우디행 거절"); }catch(e){}
+    try{ affAdd(p, -12, `${_L.n}행 거절`); }catch(e){}
     p.unhappy=Math.max(p.unhappy||0, 1); p.uWhy="이적 무산";
     addMood(`😠 ${p.name}: "...알겠습니다. 하지만 이런 기회가 또 올지 모르겠습니다." <span class="small">(사기 -14 · 불만)</span>`, "warn");
     adjustTrust("owner", -3, `${o.fee}억 제안 거절`);
@@ -25917,13 +26159,13 @@ function saudiCard(){
   const ut=userTeam(); const p=ut && ut.players.find(x=>x.id===o.pid);
   if(!p) return "";
   o.seen=1;
-  const club=saClubOf(o);
+  const _L=ovsLeagueOf(o), club=saClubOf(o);
   const left=Math.max(0, o.due-(G.day||0));
   const mult=(o.fee/Math.max(1,o.mv)).toFixed(1);
   return `<div class="card" style="border:2px solid ${club.c}">
-    <h3>🇸🇦 ${o.club}의 영입 제안 <span class="small">— 답변 기한 D-${left}</span></h3>
+    <h3>${_L.ic} ${o.club}의 영입 제안 <span class="small">— ${_L.n} · 답변 기한 D-${left}</span></h3>
     <p class="small" style="margin:2px 0 8px">${club.d}</p>
-    ${(()=>{ const w=saudiWhy(p); return w?`<p class="small" style="margin:0 0 8px;color:var(--gold)">🏅 ${club.n||o.club} 단장: "<b>${w}</b> — 우리가 찾던 선수입니다."</p>`:""; })()}
+    ${(()=>{ const w=ovsWhy(p, _L); return w?`<p class="small" style="margin:0 0 8px;color:var(--gold)">🏅 ${club.n||o.club} 단장: "<b>${w}</b> — 우리가 찾던 선수입니다."</p>`:""; })()}
     <div class="tblScroll"><table>
       <tr><th>선수</th><th>제시 이적료</th><th>시장가</th><th>제시 연봉</th><th>본인 의사</th></tr>
       <tr><td><b>${p.name}</b> <span class="small">${p.pos} ${dispOvr(p)}</span></td>
@@ -25932,7 +26174,7 @@ function saudiCard(){
           <td>${p.wage}억 → <b class="money">${o.wage}억</b></td>
           <td>${p._saWant?'<span style="color:#d29922">떠나고 싶어 함</span>':'<span style="color:var(--green)">잔류를 원함</span>'}</td></tr>
     </table></div>
-    <p class="small" style="margin-top:6px">오일머니는 기다려 주지 않습니다. 기한이 지나면 제안은 사라집니다.
+    <p class="small" style="margin-top:6px">${_L.k==="sa"?"오일머니는 기다려 주지 않습니다.":"이런 제안은 오래 기다려 주지 않습니다."} 기한이 지나면 제안은 사라집니다.
       ${p._saWant?"거절하면 <b>선수가 크게 실망</b>합니다.":"본인은 남고 싶어 합니다 — 강행하면 라커룸이 흔들립니다."}</p>
     <div style="display:flex;gap:7px;margin-top:8px">
       <button class="mini" style="flex:1;border-color:var(--green);color:var(--green)" onclick="saudiAccept()">💰 ${o.fee}억에 보낸다</button>
@@ -26158,6 +26400,14 @@ function startOverseasNego(pid){
   const left=negoBlockDaysLeft(pid);
   if(left>0){ notify(`협상이 결렬된 지 얼마 되지 않았습니다. ${left}일 뒤에 다시 접촉할 수 있습니다.`,"warn"); return; }
   const p=overseasList().find(x=>x.id===pid) || scoutedList().find(x=>x.id===pid); if(!p) return;
+  /* 🩹 이미 어느 구단 소속인 선수는 시장 매물이 아니다 — 목록 찌꺼기로 두 번 사는 일을 막는다 */
+  try{
+    for(const id in G.teams) if((G.teams[id].players||[]).some(q=>q.id===p.id)){
+      if(G.scout) G.scout.list=(G.scout.list||[]).filter(x=>x.id!==p.id);
+      notify(`${p.name} 선수는 이미 ${G.teams[id].short}에 소속되어 있습니다 — 보고서에서 내렸습니다.`,"warn");
+      show("transfer"); return;
+    }
+  }catch(e){}
   if(p.osLink) p.osLink.due=Math.max(p.osLink.due, (G.day||0)+5);   // 협상 중에 채가지 않는다
   const ut=userTeam(); const mv=marketValue(p);
   if(ut.budget < mv*0.8){ notify(`❌ 몸값이 ${mv}억입니다. 최소한 그 정도는 마련해야 협상 테이블에 앉을 수 있습니다. (보유 ${ut.budget}억)`,"warn"); return; }
@@ -31788,12 +32038,16 @@ function roleTagText(t,p,slot){
   if(!R) return "";
   return `${R.k}<span class="rd">${DUTY_N[rd.d]||rd.d}</span>`;
 }
-function openRoleMenu(e, pid, slot){
+/* 🛡️ ⚠ 배선 점검 — 카드는 국면에 맞는 역할을 «보여 주고» 있었는데(getRole(...,_ph)),
+   역할 버튼은 언제나 소유 역할 메뉴를 열었다. 그래서 🛡️ 판에서 역할을 고치면
+   화면에 뜬 미소유 역할이 아니라 <b>소유 역할이 조용히 바뀌었다</b>. 국면을 함께 넘긴다. */
+function openRoleMenu(e, pid, slot, ph){
   if(e){ e.preventDefault&&e.preventDefault(); e.stopPropagation&&e.stopPropagation(); }
   const t=userTeam(), p=t&&t.players.find(x=>x.id===pid);
-  const cur=p?getRole(t,p,slot):{r:null,d:null};
+  const _ph=(ph==="oop"||ph==="ip") ? ph : tacEditPh();
+  const cur=p?getRole(t,p,slot,_ph):{r:null,d:null};
   // 고르는 동안에는 실제 전술을 건드리지 않는다 — 적용을 눌러야 반영된다(FM과 같다)
-  RMENU={pid, slot, x:(e&&e.clientX)||40, y:(e&&e.clientY)||40, pick:{r:cur.r, d:cur.d}, base:{r:cur.r, d:cur.d}};
+  RMENU={pid, slot, ph:_ph, x:(e&&e.clientX)||40, y:(e&&e.clientY)||40, pick:{r:cur.r, d:cur.d}, base:{r:cur.r, d:cur.d}};
   renderRoleMenu();
   return false;
 }
@@ -31820,8 +32074,8 @@ function rmPickDuty(dk){
 /* 적용 — 여기서 처음으로 실제 전술에 반영된다 */
 function rmApply(){
   if(!RMENU) return;
-  const pid=RMENU.pid, r=RMENU.pick.r, d=RMENU.pick.d;
-  setRole(pid, r, d);
+  const pid=RMENU.pid, r=RMENU.pick.r, d=RMENU.pick.d, ph=RMENU.ph;
+  if(ph==="oop") setRoleD(pid, r, d); else setRole(pid, r, d);
 }
 function setRole(pid, rk, dk){
   const t=userTeam();
@@ -31830,6 +32084,7 @@ function setRole(pid, rk, dk){
   const d = R.duty.includes(dk) ? dk : R.duty[0];
   t.tactic.role[pid]={r:rk, d};
   rememberRole(t, pid, rk, d);        // 🧠 벤치에 갔다 와도, 다른 자리를 거쳤다 와도 그대로
+  if(typeof liveM!=="undefined" && liveM) liveM.xiDirty=true;
   saveGame(); closeRoleMenu();
   if(typeof refreshTactics==="function") refreshTactics(); else show("tactics");
 }
@@ -31840,7 +32095,7 @@ function renderRoleMenu(){
   const p=t.players.find(x=>x.id===RMENU.pid);
   if(!p){ closeRoleMenu(); return; }
   const slot=RMENU.slot;
-  const saved=getRole(t,p,slot);
+  const saved=getRole(t,p,slot,RMENU.ph);
   if(!RMENU.pick) RMENU.pick={r:saved.r, d:saved.d};
   if(!RMENU.base) RMENU.base={r:saved.r, d:saved.d};
   const cur=RMENU.pick;            // 화면은 "지금 고른 것"을 보여 준다
@@ -41398,14 +41653,22 @@ function fmkRankRoll(tone){
   const r=Math.random() + (tone>0?0.06:0);
   return r<0.26?0 : r<0.50?1 : r<0.70?2 : r<0.85?3 : r<0.95?4 : 5;
 }
-/* 예전 세이브에는 등급이 없다 — 닉네임에서 안정적으로 만들어 낸다(같은 글은 늘 같은 등급) */
-function fmkRankOf(x){
-  if(x && x.rk!=null) return clamp(x.rk|0, 0, FMK_RANK.length-1);
-  const u=(x&&x.u)||"", d=(x&&x.d)||0;
-  let h=d*2654435761>>>0;
-  for(let i=0;i<u.length;i++){ h=(Math.imul(h,31)+u.charCodeAt(i))>>>0; }
-  return [0,0,1,1,2,2,3,3,4,5][h%10];
+/* 🐶 등급은 «닉네임»에만 달려 있다 — 같은 사람이면 어느 글, 어느 날에 나타나도 같은 아이콘이다.
+   ⚠ 제보 — 「같은 유저인데 레벨 아이콘이 다르게 표시된다」. 원인이 두 갈래였다.
+     ① 글·댓글·대댓글마다 fmkRankRoll() 을 새로 굴려 등급을 «따로» 박아 넣었다.
+        같은 닉네임이 다른 글에 등장하면 등급이 매번 달랐다.
+     ② 등급이 없는 옛 글은 닉네임에 «날짜(d)»를 섞어 해싱했다. 날이 바뀌면 등급도 바뀌었다.
+   이제 닉네임만 해싱한다(FNV-1a). 저장된 rk 는 더 이상 읽지 않으므로 옛 세이브도 함께 교정된다.
+   분포(알·새싹이 절반 남짓, 흰여우는 5%)는 예전 굴림표를 그대로 옮겼다. */
+function fmkRankNick(u){
+  const t=String(u||""); if(!t) return 0;
+  try{ for(const k in RUM_TROLL_NICK) if(RUM_TROLL_NICK[k]===t) return 0; }catch(e){}   // 어그로 닉은 늘 «알»
+  let h=2166136261>>>0;
+  for(let i=0;i<t.length;i++){ h=Math.imul(h ^ t.charCodeAt(i), 16777619)>>>0; }
+  const r=(h%10000)/10000;
+  return r<0.26?0 : r<0.50?1 : r<0.70?2 : r<0.85?3 : r<0.95?4 : 5;
 }
+function fmkRankOf(x){ return fmkRankNick((x&&x.u)||""); }
 const FMK_NICK=["대전루빅발","우영쌀","보라남이","차가운프라푸치노","조팡뇌","악질씨드대디",
  "숭3아레나","0115","감자파인애플피자",
  "조건도종신하면닉변","처칠","K리그매니저쏘쏘","행궁동즐라탄","청백적흑사탕",
@@ -44410,8 +44673,10 @@ function rumCVote(id, ci, ri, dir){
   try{ saveGame(); }catch(e){}
 }
 function rumViewCnt(v){ return v>=10000 ? Math.floor(v/10000)+"만" : (v||0).toLocaleString(); }
-function rumRankImg(rk){
-  const i=clamp(rk|0,0,FMK_RANK.length-1);
+/* 등급 아이콘 — 글·댓글 «객체»를 그대로 받는다(닉네임에서 등급을 뽑기 때문).
+   옛 호출처럼 숫자를 넘겨도 죽지 않게 막아 둔다. */
+function rumRankImg(x){
+  const i=(x && typeof x==="object") ? fmkRankOf(x) : clamp(x|0,0,FMK_RANK.length-1);
   return `<img class="fmkRk" src="${FMK_RANK[i]}" alt="${FMK_RANK_N[i]}" title="${FMK_RANK_N[i]}">`;
 }
 function rumListCard(){
@@ -44429,7 +44694,7 @@ function rumListCard(){
       ${r.conf?`<span class="rumConf">정ㅋ벅ㅋ</span>`:""}
       ${r.troll?`<span class="rumTrollTag">주의</span>`:""}
       <span class="rumGap"></span>
-      <span class="rumU">${rumRankImg(r.rk)}${r.u}</span>
+      <span class="rumU">${rumRankImg(r)}${r.u}</span>
       <span class="rumV">${rumViewCnt(r.v)}</span>
       <span class="rumUp${((r.up||0)-(r.dn||0))<0?" neg":""}">${(r.up||0)-(r.dn||0)}</span>
     </div>`).join("")}</div></div>`;
@@ -44446,7 +44711,7 @@ function rumPostCard(){
   const vbtn=(on,dir,n,fn,key)=>`<button id="cv${dir>0?"u":"d"}${key}" class="rumVb${on===(dir>0?1:-1)?" on":""}" onclick="${fn}">${dir>0?"👍":"👎"}<span>${n||0}</span></button>`;
   const cmHtml=(c,i)=>`
     <div class="rumCm1${i===0?" best":""}">
-      <div class="rumCmTop">${i===0?`<span class="rumBest">BEST</span>`:""}${rumRankImg(c.rk)}
+      <div class="rumCmTop">${i===0?`<span class="rumBest">BEST</span>`:""}${rumRankImg(c)}
         <b>${nickHtml(c.u, mine)}</b>
         <span class="small">${1+R(5)}시간 전</span>
         <span class="rumCmVote">
@@ -44459,7 +44724,7 @@ function rumPostCard(){
         <div class="rumRe">
           <span class="rumReArrow">↳</span>
           <div style="flex:1;min-width:0">
-            <div class="rumCmTop">${rumRankImg(q.rk)}<b>${nickHtml(q.u, mine)}</b>
+            <div class="rumCmTop">${rumRankImg(q)}<b>${nickHtml(q.u, mine)}</b>
               <span class="small">${1+R(5)}시간 전</span>
               <span class="rumCmVote">
                 ${vbtn(q._v,+1,q.up,`rumCVote(${r.id},${i},${j},1)`,`${r.id}_${i}_${j}`)}
@@ -44476,7 +44741,7 @@ function rumPostCard(){
       <span class="small">${dateLabel(r.d)}${r.s!=null&&r.s!==G.season?` · ${r.s}시즌`:""}</span>
     </div>
     <div class="rumMeta">
-      ${rumRankImg(r.rk)}${nickHtml(r.u, mine)}
+      ${rumRankImg(r)}${nickHtml(r.u, mine)}
       <span>조회 수 <b>${(r.v||0).toLocaleString()}</b></span>
       <span>추천 수 <b style="color:#f0883e">${r.up}</b></span>
       <span>댓글 <b>${cm.length}</b></span>
@@ -46056,7 +46321,7 @@ function talkCtx(p){
 }
 const TALK_CTX_DEF={
   wage:     {ic:"💸", n:"밀린 급여에 대해 설명한다", d:"불안을 정면으로 다룬다 — 얼버무리면 더 나빠진다"},
-  saudi:    {ic:"🇸🇦", n:"잔류를 설득한다",         d:"사우디 제안을 받은 선수의 마음을 돌린다"},
+  saudi:    {ic:"🌍", n:"잔류를 설득한다",         d:"해외 구단의 제안을 받은 선수의 마음을 돌린다"},
   rumor:    {ic:"📰", n:"떠도는 이적설을 정리한다",  d:"게시판에 오른 이야기를 직접 짚는다"},
   renewSoon:{ic:"📜", n:"재계약 의사를 묻는다",      d:"계약이 얼마 남지 않았다 — 미리 온도를 잰다"},
   role:     {ic:"📋", n:"전술 속 역할을 설명한다",    d:"전술 이해도가 높을수록 잘 전달된다 (조직력)"},
@@ -46839,7 +47104,7 @@ function fmPlayerCard(t, p, slot, opt){
   return `<div class="fmCard ${opt.picked?'picked':''}" onclick="swapSel(${p.id})"
       draggable="true" ondragstart="dragP(event,${p.id})" ondragover="overP(event)" ondragleave="leaveP(event)" ondrop="dropP(event,${p.id})"
       oncontextmenu="return false;">
-    <button class="fmCardRole" onclick="event.stopPropagation();openRoleMenu(event,${p.id},'${slot}')"
+    <button class="fmCardRole" onclick="event.stopPropagation();openRoleMenu(event,${p.id},'${slot}','${_ph}')"
       title="역할 변경">${R?R.k:"?"}<span class="rd">${dutyN}</span><span class="cw">▾</span></button>
     <div class="fmCardName">
       <span class="fmDot" style="background:${famCol}"></span>
@@ -47039,7 +47304,8 @@ function fmSetRole(pid, rk){
 function fmSetDuty(pid, dk){
   const t=userTeam();
   const p=t.players.find(x=>x.id===pid); if(!p) return;
-  const xi=bestXI(t), slotOf=computeRenderSlots(t,xi);
+  /* 🛡️ 배선 점검 — bestXI 는 경기 중 «실제로 뛰는 열한 명»이 아니다(교체·퇴장 반영 안 됨) */
+  const xi=pitchPlayersForZoneEdit(), slotOf=computeRenderSlots(t,xi);
   const rd=getRole(t,p,slotOf[p.id]||prefSlotOf(p));
   setRole(pid, rd.r, dk);
 }
@@ -47050,6 +47316,8 @@ function setRoleD(pid, rk, dk){
   if(!t.tactic.roleD) t.tactic.roleD={};
   t.tactic.roleD[pid]={r:rk, d};
   try{ noteTacticChange(t, 0.5); }catch(e){}
+  if(typeof liveM!=="undefined" && liveM) liveM.xiDirty=true;
+  try{ closeRoleMenu(); }catch(e){}
   saveGame(); refreshTactics();
 }
 function fmSetRoleD(pid, rk){
@@ -47060,7 +47328,7 @@ function fmSetRoleD(pid, rk){
 function fmSetDutyD(pid, dk){
   const t=userTeam();
   const p=t.players.find(x=>x.id===pid); if(!p) return;
-  const xi=bestXI(t), slotOf=computeRenderSlots(t,xi,"oop");
+  const xi=pitchPlayersForZoneEdit(), slotOf=computeRenderSlots(t,xi,"oop");
   const rd=getRole(t,p,slotOf[p.id]||prefSlotOf(p),"oop");
   setRoleD(pid, rd.r, dk);
 }
@@ -47715,15 +47983,22 @@ function tacticDetailCard(t, xi){
   const T=TAC(t); const L=lineAvgs(xi, t);
   const raw=Object.assign({}, TAC_DEF, t.tactic);
   /* FM식 슬라이더 한 줄. 값은 0~4이고, 지금 칸의 이름과 스쿼드 적합도 배지를 옆에 붙인다. */
-  const seg=(label,key,fits,tip)=>{
-    const v=clamp(Math.round(tacVal(raw[key])*2),0,4);
+  /* 🛡️ ph="oop" 이고 국면이 갈리는 지시(line·width)면 «미소유 전용 값»을 다룬다 (요청) */
+  const seg=(label,key,fits,tip,ph)=>{
+    const dOn = (ph==="oop" && TAC_SPLIT.indexOf(key)>=0);
+    const has = dOn && raw[key+"D"]!=null;
+    const v=clamp(Math.round(tacVal(has?raw[key+"D"]:raw[key])*2),0,4);
     const fit=fits?fits[v]:undefined;
+    const set = dOn ? `setTacD('${key}',this.value)` : `setTac('${key}',this.value)`;
+    const own = !dOn ? "" : (has
+      ? ` <button class="mini" style="padding:1px 6px;font-size:10px;margin-left:5px" onclick="resetTacD('${key}')" title="공 소유 시 값과 같게 되돌립니다">↩ 소유 값으로</button>`
+      : ` <span class="small" style="opacity:.55;margin-left:5px">= 소유 값</span>`);
     return `<tr><th style="width:96px">${label}</th><td style="min-width:210px">
       <div class="tacSlide">
         <input type="range" min="0" max="4" step="1" value="${v}"
-               oninput="tacPreview(this,'${key}')" onchange="setTac('${key}',this.value)" aria-label="${label}">
+               oninput="tacPreview(this,'${key}')" onchange="${set}" aria-label="${label}">
         <div class="tacTicks">${[0,1,2,3,4].map(i=>`<span class="${i===v?'on':''}"></span>`).join("")}</div>
-        <div class="tacNow"><b>${tacLabel(key,v)}</b>${fit!==undefined?" "+fitBadge(fit):""}</div>
+        <div class="tacNow"><b>${tacLabel(key,v)}</b>${fit!==undefined?" "+fitBadge(fit):""}${own}</div>
       </div></td><td class="small">${tip}</td></tr>`;
   };
   // 스쿼드 적합도 — 슬라이더 5칸 각각에 대해 "이 스쿼드로 감당되는가"를 매긴다
@@ -47852,43 +48127,62 @@ function tacticDetailCard(t, xi){
     ${sv("팀 내 활동량 평균 수치", L.wor20.toFixed(1))}
     ${sv("팀 평균 연령", L.age.toFixed(1), "세")}
   </div>`;
-  return `<div class="card"><h3>⚙️ 세부 전술 <span class="small">— 스쿼드 적합도와 상대 전술에 따라 효과가 달라집니다</span></h3>
+  const _phN=(function(){ try{ return TACPH==="ip"?"⚔️ 공 소유 시":TACPH==="oop"?"🛡️ 공 미소유 시":"⚔️🛡️ 둘 다"; }catch(e){ return ""; } })();
+  return `<div class="card"><h3>⚙️ 세부 전술 <span class="small">— ${_phN} · 위 탭으로 국면을 바꿉니다</span></h3>
   ${statBar}
   <div style="margin-bottom:8px">
     <b class="small">프리셋:</b>
     ${[["티키타카","tiki"],["게겐프레싱","gegen"],["롱볼 역습","long"],["선수비 후역습","park"],["기본","def"]].map(([n,k])=>`<button class="mini" onclick="applyPreset('${k}')">${n}</button>`).join(" ")}
   </div>
 
-  <div class="tblScroll"><table>
+  ${(function(){
+    /* ⚔️🛡️ 국면별 세부 전술 (요청) — 위쪽 「공 소유 시 / 공 미소유 시」 탭을 그대로 따라간다.
+       열둘은 한쪽 국면에서만 의미가 있어 그 탭에만 놓고, line·width 만 양쪽에 따로 놓았다. */
+    const IP=`
   ${seg("패스 스타일","pass",passFits,
-    "짧게 = 중원을 거치는 짧은 연결(중원 능력 의존) · 다이렉트 = 전방으로 길게, 압박을 건너뛰고 뒷공간을 노린다")}
+    "짧게 = 중원을 거치는 짧은 연결(중원 능력 의존) · 다이렉트 = 전방으로 길게, 압박을 건너뛰고 뒷공간을 노린다","ip")}
   ${seg("템포","tempo",tempoFits,
-    "빠름 = 잡자마자 처리, 기회↑ 실수↑ 체력 소모↑ · 느림 = 안정적이지만 상대가 자리 잡을 시간을 준다")}
-  ${seg("압박 강도","press",pressFits,
-    "압박을 나가는 빈도와 범위(회랑 ±25%), 라인 사이 간격까지 죈다. 높으면 높은 위치 탈취·체력 소모, 낮으면 내려서서 저지")}
-  ${seg("수비 강도","tackle",null,
-    "거칠게 = 태클·슬라이딩을 아끼지 않는다(파울·카드·부상 위험↑) · 신중하게 = 붙어서 견제만, 상대에게 시간을 내준다")}
-  ${seg("수비 라인","line",null,
-    "블록이 서는 높이. 높으면 상대를 가두고 오프사이드를 잡지만 뒷공간이 열리고, 낮으면 뒷공간을 지운다 — 간격·성향과 합쳐 블록 압축을 정한다")}
-  ${seg("수비 폭","defGap",null,
-    "수비 시 줄 사이·선수 사이 간격. 매우 낮은 라인 + 매우 좁게면 톱까지 두 줄로 내려앉는 텐백 · 넓게 = 커버는 넓지만 라인 사이를 내준다")}
-  ${seg("수비 가담 인원","defCommit",null,
-    "수비 시 몇 명이 블록에 들어오는가. 올리면 윙백이 백라인까지 내려와 5백이 되고 앞선 한 명이 미드필드 줄에 합류한다(3-5-2 → 5-4-1) · 대신 이동 거리·체력 소모가 늘고 역습 시 앞에 사람이 없다")}
-  ${seg("마킹 방식","marking",null,
-    "지역 = 자기 구역을 지킨다(형태가 안 깨지지만 좋은 선수를 자유롭게 둔다) · 대인 = 상대를 따라간다(플레이메이커를 지우지만 끌려다니며 공간을 내준다)")}
-  ${seg("오프사이드 트랩","trap",null,
-    "라인을 밀어 올려 상대를 걸어낸다. 자주 쓰면 상대 침투를 지우지만 한 번 뚫리면 곧바로 1대1이다 · 낮은 라인에서는 값이 줄어든다")}
-  ${seg("공수전환 속도","transSpd",null,
-    "빠르게 = 탈취·상실 순간 전원이 뛰어서 새 형태로 간다(형태 회복 빠름 · 체력 소모↑) · 느리게 = 다리를 아끼지만 전환 순간이 취약하다")}
+    "빠름 = 잡자마자 처리, 기회↑ 실수↑ 체력 소모↑ · 느림 = 안정적이지만 상대가 자리 잡을 시간을 준다","ip")}
+  ${seg("빌드업 라인","line",null,
+    "공을 잡았을 때 백라인을 어디까지 밀어 올리나. 높으면 상대를 가두고 전진 패스 거리가 짧아지지만 뺏겼을 때 뒤가 넓다","ip")}
   ${seg("공격 폭","width",null,
-    "넓게 = 터치라인까지 벌려 측면·크로스 공격 · 좁게 = 중앙 밀집, 수비 시 블록이 볼 쪽으로 더 따라간다")}
+    "넓게 = 터치라인까지 벌려 측면·크로스 공격 · 좁게 = 중앙 밀집으로 좁은 공간을 파고든다","ip")}
   ${seg("중거리 슛","longShot",lsFits,
-    "자제 = 박스 밖에선 한 번 더 만든다 · 적극 = 각이 열리면 때린다. 중거리 능력이 낮으면 슈팅만 는다")}
-  ${seg("역습 강도","counter",null,
-    "탈취 즉시 전방으로. 셀수록 역습 창이 넓고 길게(최대 9초) 열려 전진·스루패스가 과감해진다. 내려앉은 상대에겐 손해")}
+    "자제 = 박스 밖에선 한 번 더 만든다 · 적극 = 각이 열리면 때린다. 중거리 능력이 낮으면 슈팅만 는다","ip")}
   ${seg("크로스 빈도","crossFq",null,
-    "적극 = 얕은 각에서도 박스로 올린다(헤딩 타깃이 있을 때 위력적) · 자제 = 크로스 대신 연결·컷백·슈팅을 찾는다")}
-  </table></div>
+    "적극 = 얕은 각에서도 박스로 올린다(헤딩 타깃이 있을 때 위력적) · 자제 = 크로스 대신 연결·컷백·슈팅을 찾는다","ip")}`;
+    const OOP=`
+  ${seg("압박 강도","press",pressFits,
+    "압박을 나가는 빈도와 범위(회랑 ±25%), 라인 사이 간격까지 죈다. 높으면 높은 위치 탈취·체력 소모, 낮으면 내려서서 저지","oop")}
+  ${seg("수비 라인","line",null,
+    "공이 없을 때 블록이 서는 높이. 높으면 상대를 가두고 오프사이드를 잡지만 뒷공간이 열리고, 낮으면 뒷공간을 지운다 — 간격·성향과 합쳐 블록 압축을 정한다","oop")}
+  ${seg("블록 폭","width",null,
+    "수비 블록을 좌우로 얼마나 벌려 서나. 좁게 = 중앙을 두껍게, 볼 쪽으로 더 따라간다(반대편 전환에 약하다) · 넓게 = 측면을 덮지만 중앙이 얇아진다","oop")}
+  ${seg("수비 간격","defGap",null,
+    "수비 시 줄 사이·선수 사이 간격. 매우 낮은 라인 + 매우 좁게면 톱까지 두 줄로 내려앉는 텐백 · 넓게 = 커버는 넓지만 라인 사이를 내준다","oop")}
+  ${seg("수비 가담 인원","defCommit",null,
+    "수비 시 몇 명이 블록에 들어오는가. 올리면 윙백이 백라인까지 내려와 5백이 되고 앞선 한 명이 미드필드 줄에 합류한다(3-5-2 → 5-4-1) · 대신 이동 거리·체력 소모가 늘고 역습 시 앞에 사람이 없다","oop")}
+  ${seg("수비 강도","tackle",null,
+    "거칠게 = 태클·슬라이딩을 아끼지 않는다(파울·카드·부상 위험↑) · 신중하게 = 붙어서 견제만, 상대에게 시간을 내준다","oop")}
+  ${seg("마킹 방식","marking",null,
+    "지역 = 자기 구역을 지킨다(형태가 안 깨지지만 좋은 선수를 자유롭게 둔다) · 대인 = 상대를 따라간다(플레이메이커를 지우지만 끌려다니며 공간을 내준다)","oop")}
+  ${seg("오프사이드 트랩","trap",null,
+    "라인을 밀어 올려 상대를 걸어낸다. 자주 쓰면 상대 침투를 지우지만 한 번 뚫리면 곧바로 1대1이다 · 낮은 라인에서는 값이 줄어든다","oop")}`;
+    const TR=`
+  ${seg("역습 강도","counter",null,
+    "탈취 즉시 전방으로. 셀수록 역습 창이 넓고 길게(최대 9초) 열려 전진·스루패스가 과감해진다. 내려앉은 상대에겐 손해","tr")}
+  ${seg("공수전환 속도","transSpd",null,
+    "빠르게 = 탈취·상실 순간 전원이 뛰어서 새 형태로 간다(형태 회복 빠름 · 체력 소모↑) · 느리게 = 다리를 아끼지만 전환 순간이 취약하다","tr")}`;
+    const H=(ic,ttl,sub)=>`<tr><th colspan="3" style="padding:13px 0 3px;border-bottom:1px solid var(--line)">
+      <span style="color:var(--gold);font-size:13.5px">${ic} ${ttl}</span>
+      <span class="small" style="font-weight:400;opacity:.7;margin-left:6px">${sub}</span></th></tr>`;
+    const ph=(function(){ try{ return TACPH; }catch(e){ return "both"; } })();
+    let body;
+    if(ph==="ip")       body = H("⚔️","공 소유 시","공을 잡았을 때의 지시입니다")+IP + H("⚡","전환","소유가 바뀌는 순간")+TR;
+    else if(ph==="oop") body = H("🛡️","공 미소유 시","공이 없을 때의 지시입니다 — 라인·폭은 소유 시와 따로 정할 수 있습니다")+OOP + H("⚡","전환","소유가 바뀌는 순간")+TR;
+    else                body = H("⚔️","공 소유 시","")+IP + H("🛡️","공 미소유 시","라인·폭은 소유 시와 따로 정할 수 있습니다")+OOP + H("⚡","전환","")+TR;
+    return `<div class="tblScroll"><table>${body}</table></div>`;
+  })()}
   ${scout?`<div class="msg info" style="margin-top:10px;margin-bottom:0">${scout}</div>`:""}</div>`;
 }
 /* 슬라이더를 끄는 동안에는 글자만 바꾼다.
@@ -47916,6 +48210,23 @@ function setTac(key,val){
   if(liveM) liveM.xiDirty=true;
   refreshTactics();
 }
+/* 🛡️ 공 미소유 전용 값 (line·width) — 안 정하면 소유 값을 그대로 쓴다 */
+function setTacD(key,val){
+  try{ pvpFormPackDirty(); }catch(e){}
+  const t=userTeam(); if(!t||!t.tactic) return;
+  if(TAC_SPLIT.indexOf(key)<0) return setTac(key,val);
+  t.tactic[key+"D"] = clamp(parseInt(val,10)||0, 0, TAC_STEPS-1);
+  noteTacticChange(t, liveM?0.35:1);
+  if(liveM) liveM.xiDirty=true;
+  refreshTactics();
+}
+function resetTacD(key){
+  const t=userTeam(); if(!t||!t.tactic) return;
+  delete t.tactic[key+"D"];
+  noteTacticChange(t, liveM?0.35:1);
+  if(liveM) liveM.xiDirty=true;
+  refreshTactics();
+}
 function applyPreset(k){
   const t=userTeam(); const T=t.tactic;
   // 중거리 슛 성향도 프리셋에 맞춘다 — 티키타카는 한 번 더 만들고, 롱볼·역습은 과감하게 때린다
@@ -47923,18 +48234,20 @@ function applyPreset(k){
   /* ⚠ 배선 감사 — crossFq 가 모든 프리셋에서 빠져 있어, 프리셋을 갈아타도 크로스 빈도만 남았다 */
   /* ⚠ 배선 감사 2 — transSpd·defCommit·marking·trap 도 빠져 있었다. 특히 park(선수비 후역습)에
      defCommit 이 없어 <b>텐백 프리셋인데 가담 인원이 보통</b>이었다. 다섯 개 모두 값을 박는다. */
+  /* 🛡️ 국면별 값(lineD·widthD)도 프리셋이 함께 박는다 (요청) — null 이면 「소유 값 그대로」다.
+     롱볼 역습이 대표적이다: 공격은 최대로 벌리고(width 4) 수비는 좁게 모인다(widthD 1). */
   const P={tiki: {pass:0,tempo:2,press:3,line:3,width:1,counter:0,mentality:2,tackle:1,longShot:0,defGap:2,crossFq:1,
-                  transSpd:3,defCommit:1,marking:1,trap:3},
+                  transSpd:3,defCommit:1,marking:1,trap:3, lineD:3, widthD:1},
            gegen:{pass:2,tempo:4,press:4,line:4,width:2,counter:1,mentality:4,tackle:4,longShot:3,defGap:2,crossFq:2,
-                  transSpd:4,defCommit:1,marking:3,trap:4},
+                  transSpd:4,defCommit:1,marking:3,trap:4, lineD:4, widthD:1},
            long: {pass:4,tempo:3,press:1,line:1,width:4,counter:3, mentality:2,tackle:2,longShot:4,defGap:2,crossFq:3,
-                  transSpd:2,defCommit:2,marking:2,trap:1},
+                  transSpd:2,defCommit:2,marking:2,trap:1, lineD:1, widthD:1},
            /* 🚌 park 의 press 0→2: 텐백 실측에서 press 0 은 블록 「안」의 슈터 도전까지 죽여 실점 17/3경기,
               press 2 는 10/3경기. 깊어진 앵커의 회랑이 전방 추격을 어차피 막아서 압박 2 여도 버스는 유지된다 */
            park: {pass:3,tempo:0,press:2,line:0,width:0,counter:4, mentality:0,tackle:2,longShot:2,defGap:0,crossFq:2,
-                  transSpd:1,defCommit:4,marking:0,trap:0},
+                  transSpd:1,defCommit:4,marking:0,trap:0, lineD:0, widthD:0},
            def:  {pass:2,tempo:2,press:2,line:2,width:2,counter:2,mentality:2,tackle:2,longShot:2,defGap:2,crossFq:2,
-                  transSpd:2,defCommit:2,marking:2,trap:2}}[k];
+                  transSpd:2,defCommit:2,marking:2,trap:2, lineD:null, widthD:null}}[k];
   Object.assign(T,P); noteTacticChange(t, liveM?0.35:1); if(liveM) liveM.xiDirty=true; refreshTactics();
 }
 /* 전술 탭 재렌더 통합 진입점 — 경기 중 전술 화면이면 renderLiveTactics, 아니면 평상시 tactics 탭 */
@@ -47960,6 +48273,7 @@ function tacticToObj(name){
   if(gk){ const rd=getRole(t, gk, "GK"); if(rd&&rd.r) roles.GK={r:rd.r, d:rd.d}; }
   const tac={};
   for(const k of TAC_KEYS) if(typeof T[k]==="number") tac[k]=T[k];
+  for(const k of TAC_SPLIT) if(typeof T[k+"D"]==="number") tac[k+"D"]=T[k+"D"];   // 🛡️ 국면별 값도 함께
   tac.counter=ctrLv(T);
   /* 포메이션 이름만으로는 부족하다 — 손으로 옮겨 둔 배치까지 그대로 넘기려면 자리 목록이 있어야 한다 */
   const slots=[];
@@ -48012,6 +48326,8 @@ function tacticApplyObj(o){
   if(!want.includes("GK")) want.unshift("GK");
   if(FORMATION_SHAPE[o.formation]) T.formation=o.formation;
   if(o.tac){ for(const k of TAC_KEYS) if(typeof o.tac[k]==="number") T[k]=clamp(o.tac[k],0,TAC_STEPS-1);
+             for(const k of TAC_SPLIT){ const dk=k+"D";
+               if(typeof o.tac[dk]==="number") T[dk]=clamp(o.tac[dk],0,TAC_STEPS-1); else delete T[dk]; }
              T.counter=ctrLv(o.tac); }
   const pool=t.players.filter(p=>avail(p));
   const gkSlots=want.filter(x=>x==="GK"), fieldSlots=want.filter(x=>x!=="GK");
@@ -48194,7 +48510,8 @@ function moveSelTo(slotName){
   const redraw=()=>{ if(inLiveTactics) renderLiveTactics(); else refreshTactics(); };
   if(!inXI){
     // 벤치 선수를 자리로 → 그 자리에 있던 선수와 교체 (경기 중이면 실제 교체 카드를 쓴다)
-    const slots=computeRenderSlots(t, xiPlayers);
+    /* 🛡️ 배선 점검 — 국면을 안 넘기면 🛡️ 판에서 «소유 판의 점유자»를 찾아 엉뚱한 선수와 맞바꾼다 */
+    const slots=computeRenderSlots(t, xiPlayers, tacEditPh());
     const occ=xiPlayers.find(x=>slots[x.id]===slotName);
     if(occ){ if(inLiveTactics) confirmLiveSwap(occ.id, pid); else confirmSwap(occ.id, pid); return; }
     /* 🚪 제보 — 감독이 '제외'로 비워 둔 칸이라면 그 자리에 그대로 세운다 */
@@ -48202,7 +48519,7 @@ function moveSelTo(slotName){
     flash("빈 자리에는 이미 뛰고 있는 선수만 옮길 수 있습니다. 먼저 선수끼리 맞바꾸세요.","warn");
     redraw(); return;
   }
-  const slots=computeRenderSlots(t, xiPlayers);
+  const slots=computeRenderSlots(t, xiPlayers, tacEditPh());
   const occupant=xiPlayers.find(x=>x.id!==pid && slots[x.id]===slotName);
   if(occupant) swapSlots(pid, occupant.id);
   else moveToZone(pid, slotName);
@@ -48227,6 +48544,7 @@ function dropZone(e, slotName){ e.preventDefault(); e.currentTarget.classList.re
    누군가 있는 칸이면 dropZone/swapSlots가 대신 처리한다. */
 function moveToZone(pid, slotName){
   const t=userTeam();
+  if(tacEditPh()==="ip") oopPinNow(t);      // 🛡️ 그려 둔 그림이 ⚔️ 이동에 끌려가지 않게 (제보)
   const p=t.players.find(x=>x.id===pid);
   const band=POS_ROW[slotName]||slotName; // slotName이 이미 대분류(DF/MF/FW/GK)로 넘어온 구버전 호출도 호환
   if(!p || p.pos==="GK" || band==="GK"){ refreshTactics(); return; } // GK는 항상 고정 — 이동도, GK 자리로의 편입도 불가
@@ -48241,20 +48559,27 @@ function moveToZone(pid, slotName){
    교환에 관여하지 않은 다른 선수들의 위치는 절대 건드리지 않는다(= "따라 밀리는" 현상 방지). */
 function swapSlots(pidA, pidB){
   const t=userTeam();
+  if(tacEditPh()==="ip") oopPinNow(t);      // 🛡️ 그려 둔 그림이 ⚔️ 맞바꾸기에 끌려가지 않게 (제보)
   const pA=t.players.find(x=>x.id===pidA), pB=t.players.find(x=>x.id===pidB);
   if(!pA || !pB || pA.pos==="GK" || pB.pos==="GK"){ refreshTactics(); return; }
   const xiPlayers=pitchPlayersForZoneEdit();
   if(!xiPlayers.some(x=>x.id===pidA) || !xiPlayers.some(x=>x.id===pidB)){ refreshTactics(); return; }
-  const slots=computeRenderSlots(t, xiPlayers, tacEditPh());
+  const _ph=tacEditPh();
+  const slots=computeRenderSlots(t, xiPlayers, _ph);
   const slotA=slots[pidA], slotB=slots[pidB];
   if(!slotA || !slotB || slotA==="GK" || slotB==="GK"){ refreshTactics(); return; }
-  setZone(t, pidA, POS_ROW[slotB]); setSlot(t, pidA, slotB);
-  setZone(t, pidB, POS_ROW[slotA]); setSlot(t, pidB, slotA);
+  /* 🛡️ ⚠ 배선 점검 — 라인(zone)은 소유 판의 개념이다(moveToZone 은 이미 그렇게 막아 뒀다).
+     여기서는 안 막혀 있어서, 🛡️ 판에서 둘을 맞바꾸면 <b>소유 판의 줄까지 함께 움직였다</b>. */
+  if(_ph==="ip"){ setZone(t, pidA, POS_ROW[slotB]); setZone(t, pidB, POS_ROW[slotA]); }
+  setSlot(t, pidA, slotB, _ph); setSlot(t, pidB, slotA, _ph);
   /* 역할은 "자리"에 대한 지시다 — 두 선수가 자리를 맞바꾸면 역할·임무도 자리를 따라간다.
-     새 자리에서 맡을 수 없는 역할이면 지워서 그 슬롯 기본 역할로 돌아가게 한다. */
+     새 자리에서 맡을 수 없는 역할이면 지워서 그 슬롯 기본 역할로 돌아가게 한다.
+     🛡️ ⚠ 배선 점검 — 이 블록도 늘 소유 판(T.slot·T.role)만 보고 있었다. 지금 판을 본다. */
   try{
-    const T=t.tactic, rMap=T.role||(T.role={});
-    const slotA=T.slot?T.slot[pidA]:null, slotB=T.slot?T.slot[pidB]:null;   // 이미 맞바꾼 뒤의 슬롯
+    const T=t.tactic;
+    const rMap = _ph==="oop" ? (T.roleD||(T.roleD={})) : (T.role||(T.role={}));
+    const sMap = _ph==="oop" ? (T.slotD||{}) : (T.slot||{});
+    const slotA=sMap[pidA], slotB=sMap[pidB];   // 이미 맞바꾼 뒤의 슬롯
     const rA=rMap[pidA], rB=rMap[pidB];
     const fit=(rd,sl)=>rd && ROLE_BY_KEY[rd.r] && (!sl || !ROLE_GRP[sl] || ROLE_BY_KEY[rd.r].grp.includes(ROLE_GRP[sl]));
     const nA = fit(rB, slotA) ? {r:rB.r, d:rB.d} : null;
@@ -48438,7 +48763,12 @@ function fmLiveTable(t, pitchAndGap, bench, slotOf, sd){
   for(const x of pitchAndGap) if(x!==gkX && !order.some(o=>o[0]===x)) order.push([x, prefSlotOf(x.p), prefSlotOf(x.p)]);
   const row=([x,lbl,sl])=>{
     const p=x.p, isGap=x.off!==null;
-    const rd=getRole(t,p,sl), R=ROLE_BY_KEY[rd.r], opts=rolesSortedFor(p, sl);   // 🎓 익숙한 역할이 위로
+    /* 🛡️ ⚠ 배선 점검 — 자리 칸은 🛡️ 판을 따라 바뀌는데 역할 칸만 늘 소유 역할을 보여 주고
+       고쳤다. 지금 보고 있는 판의 역할을 보여 주고, 그 판에 저장한다. */
+    const _rph=tacEditPh();   /* ⚠ 이 표는 renderLiveTactics 밖의 함수다 — 국면을 직접 읽는다 */
+    const rd=getRole(t,p,sl,_rph), R=ROLE_BY_KEY[rd.r], opts=rolesSortedFor(p, sl);   // 🎓 익숙한 역할이 위로
+    const _rSet=_rph==="oop"?"fmSetRoleD":"fmSetRole", _dSet=_rph==="oop"?"fmSetDutyD":"fmSetDuty";
+    const _rOwn=_rph==="oop" && !!((t.tactic.roleD||{})[p.id]);
     const fit=Math.round(x.fit||0);
 
     const card = x.y>=2||p.red ? '<span style="color:#f85149">🟥</span>' : x.y===1 ? '🟨' : '<span style="color:#3fb950">✓</span>';
@@ -48451,9 +48781,9 @@ function fmLiveTable(t, pitchAndGap, bench, slotOf, sd){
           onclick="event.stopPropagation();showPlayerInfoPopup(event,${p.id})">${nmF(p)}</b>
         ${isGap?' <span style="color:#f85149">🚑 공백</span>':''}</td>
       <td class="fmSlot">${lbl}</td>
-      <td onclick="event.stopPropagation()"><select class="fmRoleSel" onchange="fmSetRole(${p.id},this.value)">
+      <td onclick="event.stopPropagation()"><select class="fmRoleSel${_rOwn?" own":""}" title="${_rph==="oop"?(_rOwn?"따로 정한 공 미소유 역할":"소유 역할을 그대로 씁니다 — 여기서 바꾸면 따로 정해집니다"):"공 소유 시 역할"}" onchange="${_rSet}(${p.id},this.value)">
         ${opts.map(r=>`<option value="${r.k}" ${r.k===rd.r?"selected":""}>${r.k} · ${r.n}</option>`).join("")}</select></td>
-      <td onclick="event.stopPropagation()"><select class="fmRoleSel duty" onchange="fmSetDuty(${p.id},this.value)">
+      <td onclick="event.stopPropagation()"><select class="fmRoleSel duty${_rOwn?" own":""}" onchange="${_dSet}(${p.id},this.value)">
         ${(R?R.duty:["S"]).map(d=>`<option value="${d}" ${d===rd.d?"selected":""}>${DUTY_N[d]||d}</option>`).join("")}</select></td>
       <td class="fmStars">${roleStarsFor(t,p,sl).replace(/ title="[^"]*"/,"")}</td>
       <td class="fmPos pos-${p.pos}">${prefSlotOf(p)}</td>
@@ -48616,7 +48946,8 @@ function renderLiveTactics(){
   const pitchChip=(x,slot)=>{
     const isGap = x.off!==null;
     const sub = isGap ? '<span style="color:#f85149">🚑 공백</span>' : fmSubForLive(t, x, slot);
-    return `<div class="fmCardWrap${isGap?' gap':''}">${fmPlayerCard(t, x.p, slot, {picked:selSwap===x.p.id, sub})}</div>`;
+    /* 🛡️ 배선 점검 — 경기 중 판은 국면을 안 넘겨서, 🛡️ 탭에서도 카드가 «소유 역할»을 달고 있었다 */
+    return `<div class="fmCardWrap${isGap?' gap':''}">${fmPlayerCard(t, x.p, slot, {picked:selSwap===x.p.id, sub, ph:_lph})}</div>`;
   };
   const benchChipLive=(p)=>`<div class="pchip ${selSwap===p.id?'picked':''}" style="display:inline-block;margin:2px"
     draggable="true" ondragstart="dragP(event,${p.id})" ondragover="overP(event)" ondragleave="leaveP(event)" ondrop="dropP(event,${p.id})"
@@ -52092,11 +52423,22 @@ const SCOUT_REGIONS=[
    d:"기술과 개인기. K리그가 가장 많이 파 온 광산.",
    bias:{tec:7, dri:8, fla:7, agi:5, fir:4}, pos:["FW","FW","MF","DF"],
    names:["카이키","제르손","루안","윌리안","마테우스","페드리뉴","알리송","조엘손","히카르두","비니시우스","다닐로","에메르송"]},
-  {k:"jp", n:"일본·동아시아", ic:"🇯🇵", cost:1.4, feeK:1.10,
-   nats:["일본","중국","대만"],
-   d:"전술 이해와 성실함. 적응 실패가 드물다.",
+  /* 🇯🇵🇨🇳 ⚠ 요청 — 「스카우트로 선수를 데려오기까지 시간이 오래 걸린다. 일본과 중국은 좀 더
+       쉽게 데려올 수 있으면 좋겠다」. 둘을 갈라내고, 가깝다는 사실을 세 군데에 반영한다.
+       ① 파견·보고 주기가 짧다(scoutFar) ② 헛걸음이 적다(miss) ③ 보고서가 정확하다(clear).
+       이미 K리그 구단들이 상시로 보는 시장이라 «정보가 흔한» 것이 현실적이다. */
+  {k:"jp", n:"일본 J리그권", ic:"🇯🇵", cost:1.1, feeK:1.10, miss:0.12, clear:2,
+   nats:["일본"],
+   d:"비행기로 두 시간. 전술 이해와 성실함이 좋고 적응 실패가 드물다.",
    bias:{tea:8, wor:7, pas:6, dec:5, cnt:5}, pos:["MF","MF","DF","GK"],
-   names:["타나카","코바야시","사토","이토","야마다","와타나베","나카무라","후지타","오카다","모리"]},
+   names:["타나카","코바야시","사토","이토","야마다","와타나베","나카무라","후지타","오카다","모리",
+          "하시모토","키무라","시미즈","우에다","마츠모토","아오키"]},
+  {k:"cn", n:"중국·대만", ic:"🇨🇳", cost:1.2, feeK:1.05, miss:0.10, clear:2,
+   nats:["중국","대만"],
+   d:"가깝고 자료가 많다. 신체 조건이 좋은 자원이 꾸준히 나온다.",
+   bias:{str:7, jum:6, sta:6, wor:5, hea:4}, pos:["DF","MF","FW","GK"],
+   names:["우레이","장위닝","웨이스하오","가오한","린량밍","천쥔","황보원","리커","셰펑페이","쉬신",
+          "천하오","린쯔웨이"]},
   {k:"eu", n:"동유럽·발칸", ic:"🇷🇸", cost:1.5, feeK:1.20,
    nats:["세르비아","크로아티아","몬테네그로","보스니아","폴란드","북마케도니아"],
    d:"신체와 제공권. 큰 키의 공격수와 센터백.",
@@ -52133,8 +52475,10 @@ function scoutLv(t){ t=t||userTeam(); return clamp((t&&t.scoutLv)||1, 1, SCOUT_M
      · 지역을 추가하거나 철수해도 이미 올라온 보고서는 그대로다
      · 유지비는 창 단위가 아니라 매달 나간다 — 오래 깔아 두면 그만큼 든다
    ═══════════════════════════════════════════════════════════════════════════ */
-const SCOUT_LEAD=[0, 46, 39, 33, 28, 24];   // 등급별 첫 보고까지 걸리는 날
-const SCOUT_GAP =[0, 40, 34, 29, 25, 21];   // 그다음 보고까지의 간격
+/* ⚠ 요청 — 「스카우트로 한 선수를 데려오기까지 꽤 시간이 걸린다」. 전 지역을 한 단계 앞당긴다.
+   (직전 값 LEAD 46·39·33·28·24 / GAP 40·34·29·25·21) */
+const SCOUT_LEAD=[0, 38, 32, 27, 23, 19];   // 등급별 첫 보고까지 걸리는 날
+const SCOUT_GAP =[0, 34, 29, 25, 21, 18];   // 그다음 보고까지의 간격
 /* 보고서가 목록에 남아 있는 날수 — 그 지역의 보고 주기(SCOUT_GAP)의 네 배.
    ⚠ 제보 — 「나카무라라는 선수가 몇 년 내내 스카우트 목록에서 사라지지 않는다」.
      ① 유효기간(scUntil)이 「절대 일자」인데 시즌이 바뀌면 달력이 0으로 되감긴다.
@@ -52142,7 +52486,7 @@ const SCOUT_GAP =[0, 40, 34, 29, 25, 21];   // 그다음 보고까지의 간격
      ② 같은 이유로 관찰 일수(scAt)도 음수가 되어 「모든 선수에게 NEW 딱지」가 붙었다.
    ─ 시즌 전환 때 두 값을 함께 되감고(rebaseDayFields), 유효기간은 보고 주기의 배수로 잡는다.
      ⭐ 관심 목록에 넣어 둔 선수는 만료되지 않는다 — 이적시장까지 지켜보라는 뜻이니까. */
-function scoutKeepDays(lv){ return SCOUT_GAP[clamp(lv||3,1,5)]*4; }   // 보고 넷 번 분 (5등급 21일 → 84일 · 1등급 40일 → 160일)
+function scoutKeepDays(lv){ return SCOUT_GAP[clamp(lv||3,1,5)]*5; }   // 보고 다섯 번 분 (5등급 18일 → 90일 · 1등급 34일 → 170일)
 function scoutState(){
   if(!G.scout) G.scout={send:[], key:"", list:[], gone:[], bill:0, trip:{}, mon:""};
   if(!Array.isArray(G.scout.send)) G.scout.send=[];
@@ -52155,7 +52499,8 @@ function scoutState(){
   return G.scout;
 }
 /* 지역까지의 거리 — 남미·아프리카는 오래 걸리고 일본은 빠르다 */
-function scoutFar(k){ return ({jp:0.72, cn:0.78, th:0.85, eu:1.06, af:1.18, br:1.22})[k] || 1; }
+/* 지역까지의 거리 — 남미·아프리카는 오래 걸리고 일본·중국은 코앞이다 (요청) */
+function scoutFar(k){ return ({jp:0.50, cn:0.56, as:0.80, eu:1.02, we:1.10, af:1.15, br:1.20})[k] || 1; }
 function scoutLead(k){
   const lv=scoutLv();
   return Math.max(9, Math.round(SCOUT_LEAD[clamp(lv,1,5)]*scoutFar(k)*(0.85+Math.random()*0.3)));
@@ -52239,7 +52584,7 @@ function mkScouted(reg, lv){
   p.scJack=jack?1:0;
   /* 등급이 낮으면 보고서 자체가 부정확하다 — 화면에는 이 오차만큼 흔들린 값이 보인다.
      ⚠ 다만 계속 지켜보면 정확해진다 — scoutErrNow 가 관찰 일수만큼 오차를 깎는다. */
-  p.scErr0=Math.max(0, 7-lv);
+  p.scErr0=Math.max(0, 7-lv-(reg.clear||0));
   p.scErr=p.scErr0;
   p.scAt=G.day||0;                       // 처음 보고가 올라온 날
   p.scNewTil=(G.day||0)+3;               // 🆕 딱지는 사흘. 절대 일자라 시즌 전환 때 함께 되감긴다
@@ -52263,6 +52608,19 @@ function scoutTick(){
   const S=scoutState();
   if(t.id==="gimcheon"){ S.send=[]; S.trip={}; return; }      // 군경팀은 해당 없음
   const day=G.day||0;
+  /* 🩹 옛 세이브 구제 — 이미 어느 구단에 들어간 선수가 보고서에 남아 있으면 조용히 내린다.
+     (딜 완료가 목록을 안 지우던 시절의 찌꺼기 — 그대로 두면 같은 선수를 또 협상할 수 있다) */
+  try{
+    if(S.list.length){
+      const 소속=new Set();
+      for(const id in G.teams) for(const q of (G.teams[id].players||[])) 소속.add(q.id);
+      const 남길=S.list.filter(x=>!소속.has(x.id));
+      if(남길.length!==S.list.length){
+        for(const x of S.list) if(소속.has(x.id) && S.gone.indexOf(x.name)<0) S.gone.push(x.name);
+        S.list=남길;
+      }
+    }
+  }catch(e){}
   /* ① 유지비 — 매달 1일, 파견 중인 지역만큼 이적 예산에서 나간다 */
   try{
     const dt=dateOfDay(day), mk=`${G.season}-${dt.getMonth()+1}`;
@@ -52299,7 +52657,7 @@ function scoutTick(){
     tr.n=(tr.n||0)+1;
     tr.next=day+scoutGap(k);
     /* 헛걸음 — 등급이 낮을수록 자주 빈손으로 돌아온다 */
-    if(Math.random() < (0.34 - lv*0.045)){
+    if(Math.random() < Math.max(0.04, 0.34 - lv*0.045 - (reg.miss||0))){
       addNews(`🔎 ${reg.ic} <b>${reg.n}</b> 파견 보고 — 이번 관찰에서는 눈에 띄는 자원을 찾지 못했습니다.`, null, "club");
       continue;
     }
@@ -58648,6 +59006,31 @@ SOC.saudiKeep=[
  ["{p} 남았다 진짜 다행이다",1],
  ["감독님 믿습니다",1],
  ["이래야 우승 도전이라고 말할 자격이 있지",1]];
+/* 🌍 사우디가 아닌 리그에서 왔을 때 — {l} 은 리그 이름이다 */
+SOC.ovsIn=[
+ ["{c}에서 {p} 데려간다는데?? 이적료 {m}억이라고?",0],
+ ["{l} 정도면 갈 만하지 않나... 커리어에 나쁠 게 없는데",0],
+ ["연봉 {w}억이면 우리가 맞춰 줄 수 있는 돈이 아님",0],
+ ["제발 붙잡아 주세요 감독님 🙏",-1],
+ ["{m}억이면 그 돈으로 둘은 사 온다. 팔자 이건",1],
+ ["{p} 없는 우리 팀이 상상이 안 감",-1],
+ ["{l} 갈 거면 지금이 딱 좋은 나이긴 하다",0],
+ ["구단이 어떻게 나올지 그것만 보고 있다",0],
+ ["돈은 돈이고 성적은 성적이다. 지금 팔면 시즌 망함",-1],
+ ["{c}면 {l}에서 손꼽히는 팀 아님? 대우는 확실할 듯",0]];
+FMK.ovsIn=[
+ ["[속보] {c}, {t} {p}에 이적료 {m}억 제시",1],
+ ["{l} 구단이 K리그에 지갑 여는 거 오랜만이네",0],
+ ["{t} 입장에선 고민될 듯. 그 돈이면 스쿼드 갈아엎음",0],
+ ["부럽다 우리 팀은 이런 제안 오는 선수가 없음",-1],
+ ["연봉 {w}억이면 선수 마음 안 흔들리는 게 이상함",0],
+ ["팔면 욕먹고 안 팔면 선수 상함. 답 없는 상황",0]];
+FMK.ovsOut=[
+ ["{p} {c}행 확정 — {m}억",1],
+ ["{t} 이번에 제대로 챙겼네. 이적료 장사 잘함",1],
+ ["{l}에서 잘하면 K리그 위상도 같이 올라감",0],
+ ["그 돈 어디에 쓰는지가 진짜 관전 포인트",0],
+ ["솔직히 저 조건이면 안 갈 이유가 없음",0]];
 SOC.clinch=[
  ["확정이다 확정!!! 남은 경기 뭐가 됐든 우리가 1등이다",1],
  ["계산기 열 번은 두드려 봤는데 진짜네요... {n}경기 남기고 확정",1],
@@ -66340,6 +66723,18 @@ const BALL_MINBOUNCE = 0.032;       // 이보다 약한 낙하는 튀지 않고 
    launchLoose 에 넘기는 거리는 "최종적으로 멈추는 곳"이므로, 첫 비행은 그 일부만 담당한다. */
 const AERIAL_ROLLOUT = 2.9;
 /* 부심이 깃발을 늦게 드는 비율 — 이 경우 플레이가 흘러가고, 골이 들어가면 그때 취소된다 */
+/* ⚽ 이 골을 «오프사이드 · 빌드업 파울»로 되돌릴 수 있는가.
+   ⚠ 제보 — 「프리킥골 넣어도 오프사이드로 득점 취소된다」.
+     규칙상 정지된 공을 키커가 직접 차 넣은 골(직접 프리킥 · 페널티킥)에는
+     오프사이드가 성립하지 않는다 — 공을 마지막으로 만진 사람이 곧 득점자이고,
+     그 앞에 «패스»가 없기 때문이다. 데드볼에서 다시 시작한 플레이라
+     빌드업 파울도 성립하지 않는다. 자책골도 같다.
+     그런데 늦은 깃발(pendingOff)과 VAR 판독이 이 셋을 가려내지 않아,
+     감아 넣은 프리킥 골이 「오프사이드」로 취소되는 장면이 나왔다. */
+function goalVoidable(sh){
+  if(!sh) return true;
+  return !(sh.isPen || sh.isFK || sh.og || sh.isOG);
+}
 const OFFSIDE_LATE_P = 0.30;
 const OFFSIDE_LATE_WIN = 12;   // 깃발이 유효한 시간(초) — 이 안에 골이 나면 취소
 const CTRL_Z = 1.0/ISO_TO_M;        // 이보다 높이 뜬 공은 발로 잡을 수 없다
@@ -68767,7 +69162,8 @@ function _ancBin(T, phase, isHome){
   return isHome ? (T._ancD1||(T._ancD1={})) : (T._ancD0||(T._ancD0={}));
 }
 function tacticalAnchorXY(team, slot, phase, isHome){
-  const T=TAC(team);
+  /* 🛡️ 국면별 세부 전술 — 수비 국면 앵커는 미소유 라인·폭을 읽는다 (요청) */
+  const T=TACP(team, phase);
   /* 캐시는 TAC 결과 객체에 붙인다 — 전술이 바뀌면 그 객체가 새로 만들어지므로 저절로 무효화된다.
      ⚡ 국면·홈여부로 통을 네 개 나눠 둔다 — 예전엔 호출마다 "RCB"+"D"+1 같은 문자열을 새로 이어
      붙여 키를 만들었고, 그 한 줄이 전체의 1% 였다(실측). 이제 키는 슬롯 이름 그대로다. */
@@ -68829,7 +69225,7 @@ function tacticalAnchorXY(team, slot, phase, isHome){
 /* ⚡ 같은 값을 「고쳐 쓰지 않고 읽기만」 할 때 쓰는 참조판 — 캐시 객체를 그대로 준다.
    ⚠ 돌려받은 객체를 절대 고치지 말 것(캐시가 오염된다). 고쳐야 하면 tacticalAnchorXY 를 쓴다. */
 function tacticalAnchorRef(team, slot, phase, isHome){
-  const hit=_ancBin(TAC(team), phase, isHome)[slot];
+  const hit=_ancBin(TACP(team, phase), phase, isHome)[slot];
   return hit || tacticalAnchorXY(team, slot, phase, isHome);
 }
 /* 어떤 지점이 상대 선수들에게 받는 압박 강도. 가까울수록 급격히 커지고, 압박 전술이 높으면 가중된다. */
@@ -72819,7 +73215,14 @@ class MatchSim{
       if(!want) continue;
       // 이미 그 상태면 굳이 바꾸지 않는다 (같은 해설이 반복되는 것도 막는다)
       let changed=false;
+      const _b0={}; for(const k of TAC_SPLIT) _b0[k]=T[k]|0;
       for(const k in want) if(T[k]!==want[k]){ T[k]=want[k]; changed=true; }
+      /* 🛡️ 국면별 값이 따로 잡혀 있으면 같은 폭만큼 함께 민다 (요청) */
+      for(const k of TAC_SPLIT){
+        if(!(k in want)) continue;
+        const dk=k+"D"; if(T[dk]==null) continue;
+        T[dk]=clamp((T[dk]|0)+((T[k]|0)-_b0[k]), 0, TAC_STEPS-1);
+      }
       if(newForm && newForm!==T.formation){ T.formation=newForm; changed=true; this.resyncSquads(); }
       else newForm=null;
       if(!changed) continue;
@@ -73626,7 +74029,9 @@ class MatchSim{
       if(this._phK[key]===undefined || b.setPiece) this._phK[key]=(phase==="ATT"?1:0);
       else this._phK[key]+=((phase==="ATT"?1:0)-this._phK[key])*PHASE_BLEND_K;
       const phK=this._phK[key];
-      const T=TAC(mine[0].team);
+      /* 🛡️ 국면별 세부 전술 — 공이 없는 팀은 미소유 값으로 선다 (요청).
+         이 한 줄이 셰이프·압박 목적·블록 압축까지 전부 갈아 끼운다. */
+      const T=TACP(mine[0].team, phase);
       // 수비 시 볼에 가장 가까운 두 명이 압박을 나간다
       let pressers=[];
       const _zoneMk = zoneMarkOn(T);          // 🧷 마킹 방식 (세부 전술)
@@ -79500,16 +79905,18 @@ class MatchSim{
       }
       default: {                                       // 골 — 공은 그물에 걸려 흔들리다 멈춘다
         // 늦게 올라간 깃발 — 골이 들어간 뒤에야 오프사이드가 선언된다
-        if(this.pendingOff && this.pendingOff.by===side && this.t<=this.pendingOff.until){
+        // (직접 프리킥·PK·자책골은 오프사이드가 성립하지 않는다 — 제보)
+        if(goalVoidable(sh) && this.pendingOff && this.pendingOff.by===side && this.t<=this.pendingOff.until){
           this.disallowGoal(side, sh);
           return;
         }
+        if(!goalVoidable(sh)) this.pendingOff=null;   // 세트피스 득점 — 남아 있던 깃발도 여기서 내린다
         /* 📺 VAR 온필드 리뷰 — 실제 경기(emitEvents)에서만, 낮은 확률로.
            환호가 터진 직후 주심이 헤드셋에 손을 얹고, 몇 초 뒤 인정/취소가 갈린다.
            ⚠ 제보 — 페널티킥 골이 "빌드업 핸드볼"로 취소되던 문제. PK는 정지 상태에서
              키커와 골키퍼만 관여하는 재개라 빌드업 파울도 오프사이드도 성립하지 않는다.
              분 단위 엔진(scoreGoal)은 이미 !isPen && !isOG 로 빼 두었는데 이쪽만 빠져 있었다. */
-        const varSkip = sh.isPen || sh.isOG;
+        const varSkip = !goalVoidable(sh);
         if(this.emitEvents && !varSkip && Math.random()<VAR_CHECK_P){
           this.lastEvent={kind:"VAR", side, t:this.t};
           this.markHighlight("goal", side, HL_W.goal);
@@ -79556,8 +79963,9 @@ class MatchSim{
     /* 늦은 깃발 — 오프사이드 대기 중이었으면 취소 */
     const scorer= ogBy || (b.ownerId!=null?this.byId(b.ownerId):null)
               || (b._rollOwner!=null?this.byId(b._rollOwner):null);
-    const sh={shooterId:scorer?scorer.id:null, type:SHOT_TYPE.PLACED, isPen:false, og:!!ogBy};
-    if(this.pendingOff && this.pendingOff.by===side && this.t<=this.pendingOff.until){
+    const sh={shooterId:scorer?scorer.id:null, type:SHOT_TYPE.PLACED, isPen:false, og:!!ogBy,
+              isFK:!!(b.fkDirect || (b.shot&&b.shot.isFK))};
+    if(goalVoidable(sh) && this.pendingOff && this.pendingOff.by===side && this.t<=this.pendingOff.until){
       this.disallowGoal(side, sh); return;
     }
     this.stats[side].goal++;
@@ -83956,7 +84364,7 @@ function lineupReactionCardFor(M, which){
     ? (fmk.length ? `<div class="fmkList">${fmk.map(x=>`
         <div class="fmkRow ${mine?"":""}">
           <div class="fmkTitle">${x.txt}</div>
-          <div class="fmkMeta"><img class="fmkRk" src="${FMK_RANK[clamp(x.rk|0,0,FMK_RANK.length-1)]}" alt="${FMK_RANK_N[clamp(x.rk|0,0,FMK_RANK.length-1)]}" title="${FMK_RANK_N[clamp(x.rk|0,0,FMK_RANK.length-1)]}"><span>${x.u}</span>
+          <div class="fmkMeta"><img class="fmkRk" src="${FMK_RANK[fmkRankOf(x)]}" alt="${FMK_RANK_N[fmkRankOf(x)]}" title="${FMK_RANK_N[fmkRankOf(x)]}"><span>${x.u}</span>
             <span>조회 ${x.v}</span><span class="fmkUp">▲${x.up}</span><span class="fmkDn">▼${x.dn}</span></div>
         </div>`).join("")}</div>` : `<p class="small">아직 올라온 글이 없습니다.</p>`)
     : (soc.length ? soc.map(x=>`<div class="socPost${mine?"":" riv"}">
@@ -86561,7 +86969,7 @@ function stepDay(){
     tickSaudi();
     if(G.saOffer && G.saOffer!==_sa0){
       const _p=(userTeam().players||[]).find(x=>x.id===G.saOffer.pid);
-      prgPush(`🇸🇦 <b>${G.saOffer.club}</b>, <b>${_p?_p.name:"우리 선수"}</b> 영입 제안 — 이적료 <b>${G.saOffer.fee}억</b> · 연봉 ${G.saOffer.wage}억`, "prgStop");
+      prgPush(`${ovsLeagueOf(G.saOffer).ic} <b>${G.saOffer.club}</b>, <b>${_p?_p.name:"우리 선수"}</b> 영입 제안 — 이적료 <b>${G.saOffer.fee}억</b> · 연봉 ${G.saOffer.wage}억`, "prgStop");
       saveGame(); stopProgress({kind:"offers"}); return;
     }
   }catch(e){}
@@ -92578,7 +92986,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5180";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5187";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
