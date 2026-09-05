@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5187-->
+<!--B:20260913-5189-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -65536,7 +65536,7 @@ function paceMul(a){
   return clamp((SPD_A+v*SPD_B)*stamK(a,0.86), SPD_LO*0.86, SPD_HI);
 }
 /* 🌨️ 미끄러운 잔디 — 첫 발이 안 붙는다 (눈·언 땅에서 가장 크다) */
-function wxAccK(){ return 1 - clamp(WX_NOW.slip||0,0,1)*0.14 - Math.max(0, -(WX_NOW.heat||0))*0.05; }
+function wxAccK(){ return 1 - clamp(WX_NOW.slip||0,0,1)*0.10 - Math.max(0, -(WX_NOW.heat||0))*0.04; }
 function accMul(a){
   const v=(a && a.accelSkill!=null) ? a.accelSkill : ((a && a.paceSkill) || 0.6);
   /* 첫 몇 걸음이 안 나가는 게 지친 선수의 가장 뚜렷한 증상이다 */
@@ -66050,7 +66050,7 @@ function resolveFirstTouch(a, b, opps){
   /* 기준선을 올려 「쉬운 공은 누구나 받는다」를 확실히 한다.
      기울기(skill 계수)는 그대로라 잘하는 선수의 우위는 유지된다. */
   /* 🌧️ 젖은 공은 발에 안 붙는다 — 비 오는 날 터치가 길어지는 그 장면 (요청) */
-  const score = skill*1.28 - diff*1.02 + 0.26 - (WX_NOW.wet||0)*0.13 + (Math.random()-0.5)*0.44;
+  const score = skill*1.28 - diff*1.02 + 0.26 - (WX_NOW.wet||0)*0.08 + (Math.random()-0.5)*0.44;
   const q = score>0.62 ? "PERFECT" : score>0.44 ? "GOOD" : score>0.24 ? "NORMAL"
           : score>0.06 ? "HEAVY" : score>-0.14 ? "BAD" : "FAIL";
   const P=FT[q];
@@ -67026,7 +67026,7 @@ function stepBallPhysics(b){
         /* 🌀 스핀이 바운스를 바꾼다 — 백스핀은 튀면서 멈칫하고(혹은 되돌아오고),
            톱스핀은 튀면서 앞으로 튀어나간다. 골키퍼 앞에 떨어지는 공이 달라지는 이유. */
         /* 🌧️ 젖은 잔디는 바운스를 먹는다 — 튀지 않고 미끄러진다 */
-        const up = Math.abs(vHit)*BOUNCE*(1-(WX_NOW.wet||0)*0.30)*(sp ? (1 + Math.max(0,sp.back)*0.22) : 1);
+        const up = Math.abs(vHit)*BOUNCE*(1-(WX_NOW.wet||0)*0.22)*(sp ? (1 + Math.max(0,sp.back)*0.22) : 1);
         b.vz = up - GRAVITY*rest;
         b.z  = Math.max(0, up*rest - 0.5*GRAVITY*rest*rest);
         let grip=BOUNCE_GRIP;
@@ -67057,7 +67057,11 @@ function stepBallPhysics(b){
   } else {                                   // 잔디 위를 구른다
     b.z=0; b.vz=0;
     /* 🌧️ 젖은 잔디 — 공이 안 먹히고 쭉 나간다 (마찰이 1에 가까워질수록 덜 감속) */
-    const f = b.inNet ? NET_DRAG : (GRASS_FRICTION + (1-GRASS_FRICTION)*(WX_NOW.wet||0)*0.42);
+    /* 🌧️ ⚠ 제보 — 「날씨 때문에 제대로 된 게임플랜 자체가 사실상 힘들다」.
+       계측: 폭우에서 패스 성공률이 <b>85.9% → 72.8% (-13.1%p)</b>, 눈에서 -8.8%p.
+       실제 축구의 폭우는 그 정도가 아니다(대략 -3~5%p). 가장 큰 출처가 여기였다 —
+       젖은 잔디에서 마찰이 42%까지 줄어 <b>패스가 전부 오버런</b>했다. 절반 아래로 낮춘다. */
+    const f = b.inNet ? NET_DRAG : (GRASS_FRICTION + (1-GRASS_FRICTION)*(WX_NOW.wet||0)*0.20);
     b.vx *= f; b.vy *= f;
     /* 🌀 사이드스핀 — 굴러가는 공이 서서히 휜다 */
     if(b.spin && b.spin.side && (b.vx||b.vy)){
@@ -67727,7 +67731,14 @@ function decideDribble(a, b, opps, t){
   const press=clamp(1-nd/PRESS_R, 0, 1);
   /* ── 상태 결정 ── */
   let st=DRB.NORMAL;
-  const canKnock = spaceM>=KNOCK.SPACE_M && oppM>=KNOCK.OPP_M && spN>=KNOCK.MIN_SPD
+  /* 🏃 ⚠ 앞이 열렸는데도 «달리는 중»이 아니면 치달을 못 하게 막혀 있었다.
+     캐리어 목표 속도가 드리블(0.50)이라 spN 이 MIN_SPD 를 못 넘겼고, 치달을 해야 속도가
+     붙는데 속도가 붙어야 치달이 되는 <b>닫힌 고리</b>였다(계측: 열린 상황의 27%만 전력).
+     ─ 열림 계수(_runK)가 충분하면 «서 있다가도» 공을 차 놓고 달릴 수 있게 연다.
+       실제 윙어가 역습에서 하는 첫 동작이 바로 그것이다. */
+  const _rk=(a._runK||0);
+  const canKnock = spaceM>=KNOCK.SPACE_M && oppM>=KNOCK.OPP_M
+                && (spN>=KNOCK.MIN_SPD || _rk>=0.62)
                 && (t-(a._knockAt||-99))>KNOCK.COOL;
   if(press>0.60) st=DRB.PROTECT;          // 1.4m 안까지 붙었다 — 몸으로 가린다
   else if(press>0.34) st=DRB.SHORT;       // 3.5m 안 — 짧게 끊어 친다
@@ -67736,7 +67747,8 @@ function decideDribble(a, b, opps, t){
   else if(canKnock){
     /* 치달 판단 — 판단력·주력·가속이 좋을수록 자주, 그리고 상대와의 경합을 이겨야 한다 */
     const p=clamp(0.03 + (dec-0.55)*0.22 + (pace-0.55)*0.26 + (acc-0.55)*0.20
-                  + clamp((spaceM-KNOCK.SPACE_M)/18,0,1)*0.16, 0, 0.34);
+                  + clamp((spaceM-KNOCK.SPACE_M)/18,0,1)*0.16
+                  + _rk*0.40, 0, 0.62);        // 🏃 열려 있을수록 확실하게 차 놓고 달린다
     if(Math.random()<p) st=DRB.KNOCK;
     else st=(spN>0.72)?DRB.FAST:DRB.NORMAL;
   }
@@ -67845,9 +67857,10 @@ const DRB={
 const KNOCK={
   SPACE_M: 18,        // 앞에 이 정도(m) 공간이 있어야 치달을 생각한다
   OPP_M: 5.5,         // 가까운 상대가 이보다 멀어야 한다
-  MIN_SPD: 0.55,      // 이 속도(최고 속도 대비) 이상으로 달리고 있어야 한다
+  MIN_SPD: 0.50,      /* 이 속도(최고 속도 대비) 이상으로 달리고 있어야 한다
+                         ⚠ 예전 0.55 는 캐리어 목표 속도(드리블 0.50)보다 높아 «영영 못 닿는 문턱»이었다 */
   DIST_M: [3.0, 5.9], // 차 놓는 거리 (m) — 능력에 따라 (7.5→6.6→5.9, 제보 반영)
-  COOL: 5.0           // 연속으로 치달하지 않도록 쉬는 시간(초)
+  COOL: 3.2           // 연속으로 치달하지 않도록 쉬는 시간(초) — 5.0 은 역습 한 번에 한 번뿐이라 너무 길었다
 };
 /* 🏃‍♂️ 뒷걸음질(백페달) — ⚠ 요청 원문 「선수들이 공을 바라보면서 뒷걸음질 치는 무빙을
    구현해보자. 이게 사실 수비에 필요한 움직임이잖아?」 맞는 말이다. 수비는 공을 시야에서
@@ -68855,6 +68868,14 @@ function findBestPass(carrier, mates, opps, ctx){
      수비가 대형을 갖추기 전 몇 초가 역습 전술의 존재 이유다. */
   if(ctx.counter) { const cw=0.30+(ctx.counterK||0.75)*0.55;   // 1단계 0.34 → 4단계 0.85
     opts.sort((x,y)=>(y.score+(y.forward||0)*cw)-(x.score+(x.forward||0)*cw)); }
+  /* 🔁 돌리기만 한 횟수가 쌓이면 앞으로 붙인다 (제보 — 뒷키타카).
+     네 번째 «제자리 패스»부터 전진 가산이 붙기 시작해, 여덟 번이면 역습 수준으로 앞을 본다.
+     ─ 이건 «무조건 롱볼»이 아니다. 앞 옵션의 점수를 올릴 뿐이라, 앞이 정말 다 막혔으면
+       여전히 옆으로 돈다. 다만 그 상태가 오래 가지는 않는다. */
+  else if((ctx.recyc||0)>=4){
+    const rw=clamp(((ctx.recyc||0)-3)*0.15, 0, 0.60);
+    opts.sort((x,y)=>(y.score+(y.forward||0)*rw)-(x.score+(x.forward||0)*rw));
+  }
   const opt=ctx.pick ? ctx.pick(opts) : opts[0];
   if(!opt) return null;
 
@@ -73940,12 +73961,15 @@ class MatchSim{
     b.aerial=false; b.isThrow=false; b.isCross=false; b.offsideAt=null;
     b._rollOwner=null; b.ex=0; b.ey=0;
   }
+  /* 🔁 소유가 넘어가면 «돌리기» 카운터는 리셋된다 (제보 — 뒷키타카 밸브) */
   /* ⚡ 소유가 넘어간 순간을 잡아 카운터프레스 창을 연다 (공백 01).
      이 함수가 엔진에서 유일하게 「방금 뺏겼다」를 아는 곳이다.
      possSide 는 틱 도중에 뒤집히므로, 다음 틱 머리에서 직전 값과 견줘 알아챈다(0.2초 지연). */
   cpWatch(){
     const b=this.ball, now=this.possSide, prev=this._cpPrev;
     this._cpPrev=now;
+    /* 🔁 소유가 넘어가면 «제자리 돌리기» 카운터를 비운다 (제보 — 뒷키타카 밸브) */
+    if(prev && now && prev!==now){ this._recyc=this._recyc||{h:0,a:0}; this._recyc[prev]=0; this._recyc[now]=0; }
     if(this._cp && this.t>=this._cp.until) this._cp=null;
     if(this._bp && this.t>=this._bp.until) this._bp=null;
     if(this._ab && this.t>=this._ab.until) this._ab=null;
@@ -74781,7 +74805,59 @@ class MatchSim{
                 latY = inward*Math.min(pull*lead*PITCH_AR, Math.abs(off)*0.85);
               }
             }
-            tx=clamp01(a.x+a.dir*lead); ty=clamp01(a.y+latY); spd=SPD.DRIBBLE;
+            /* 🏃 ⚠ 제보 — 「사이드 윙어에게 역습으로 볼을 줘서 앞이 훤하게 뚫렸는데,
+                 상대 수비 올 때까지 아무것도 안 하고 기다리다가 뒤늦게 돌파」.
+               계측(flow.js · 3경기): 앞 18m 이상 비고 가까운 상대가 8m 밖에 있는 «열린» 상황에서도
+               캐리어 평균 속도가 최고 속도의 <b>0.47</b> — 드리블 속도(0.50) 그대로였고,
+               전진 속도는 <b>0.1 m/s</b>. 열린 채로 공을 받은 뒤 3초 평균도 0.43(오히려 감속).
+               원인은 이 한 줄이었다 — 상황과 무관하게 spd=SPD.DRIBBLE 로 못박혀 있었다.
+               게다가 치달(KNOCK)은 spN≥0.55 를 요구하는데 목표 속도가 0.50 이라
+               <b>영영 조건을 못 채우는 고리</b>였다(그래서 치달도 거의 안 나왔다).
+               ─ 이제 «앞이 열린 만큼 달린다». 열림은 두 가지로 잰다:
+                   ⓐ 진행 방향 ±35° 안의 가장 가까운 상대까지 / 골라인까지 — 짧은 쪽
+                   ⓑ 가장 가까운 상대와의 거리
+                 8m 부터 붙기 시작해 22m 면 완전히 열린 것으로 본다. 주력·판단력이 좋을수록
+                 확실히 밀고 나가고, 역습 창에서는 한 박자 더. 완전히 열리면 스퍼트를 건다. */
+            let _runK=0;
+            {
+              /* ⚠ «앞»은 «몸이 향한 쪽»이 아니라 «상대 골문 쪽»이다.
+                 처음엔 face 기준 원뿔로 쟀는데, 자기 골문을 보고 선 선수의 «뒤쪽 공간»까지
+                 열린 것으로 세어 계수가 엉뚱한 곳에서 붙었다(계측: 열린 구간의 전진 속도 0 m/s).
+                 골문 방향 원뿔로 재고, 몸이 그쪽을 향한 정도(cos)를 곱한다 —
+                 등지고 받았으면 먼저 돌아야 하고, 돌고 나면 저절로 계수가 붙는다. */
+              const _foes=this.side(this.opp(key));
+              let _front=9, _near=9;
+              const _gd=(a.dir>0)?0:Math.PI;            // 상대 골문을 향하는 각
+              for(const o of _foes){
+                if(o.slot==="GK") continue;
+                const _dx=(o.x-a.x)*PITCH_AR, _dy=o.y-a.y, _d=HYP(_dx,_dy);
+                if(_d<_near) _near=_d;
+                if(_d>1e-6){
+                  let _df=Math.atan2(_dy,_dx)-_gd;
+                  while(_df>Math.PI) _df-=Math.PI*2; while(_df<-Math.PI) _df+=Math.PI*2;
+                  if(Math.abs(_df)<0.70 && _d<_front) _front=_d;
+                }
+              }
+              const _toLine=(a.dir>0?(1-a.x):a.x)*PITCH_AR;
+              const _openM=Math.min(_front,_toLine)*67, _nearM=_near*67;
+              _runK = clamp((_openM-8)/14, 0, 1) * clamp((_nearM-4.5)/5.5, 0, 1);
+              /* 몸이 골문 쪽을 향한 정도 — 등지고 있으면 0 */
+              {
+                const _fc=(a.face===undefined)?_gd:a.face;
+                let _fd=_fc-_gd; while(_fd>Math.PI) _fd-=Math.PI*2; while(_fd<-Math.PI) _fd+=Math.PI*2;
+                _runK *= clamp(Math.cos(_fd), 0, 1);
+              }
+              const _pc=(a.paceSkill!=null?a.paceSkill:0.6);
+              const _dc=(a.decSkill!=null?a.decSkill:0.6);
+              _runK *= clamp(0.62 + _pc*0.55 + (_dc-0.5)*0.20, 0.55, 1.15);
+              try{ if(this.counterOn(key)) _runK*= (1.10+this.counterK(key)*0.22); }catch(e){}
+              _runK=clamp(_runK, 0, 1);
+              a._runK=_runK;
+            }
+            lead *= 1 + _runK*0.90;                                   // 열릴수록 더 멀리 본다
+            spd = SPD.DRIBBLE + (SPD.SPRINT-SPD.DRIBBLE)*_runK*0.86;  // 최대 ≈ 최고 속도의 93%
+            if(_runK>=0.78){ try{ this.tryBurst(a); }catch(e){} }     // 완전히 열렸다 — 치고 나간다
+            tx=clamp01(a.x+a.dir*lead); ty=clamp01(a.y+latY);
             /* 🛑 공을 「갈 방향 앞」에 놓고 출발한다 (제보 — 공이 뒤에 끌려다닌다).
                가려는 방향 기준으로 공이 뒤에 있으면 그대로 달려 봐야 공은 따라오지 않는다
                (아래 _follow 가 막는다). 그래서 몸만 앞서고 공은 뒤에 남아 「끌고 가는」 그림이 됐다.
@@ -74803,13 +74879,20 @@ class MatchSim{
                   겹침을 푸는 처리가 매 틱 서로를 밀어내 둘이 함께 떠는 그림이 됐다(제보).
                실제 선수도 이때 멈추지 않는다 — 걸음을 늦추고 공 쪽으로 몸을 돌려 발에 붙인다. */
             if(a._settle){ tx=b.x; ty=b.y; spd=Math.min(spd, SPD.JOG*0.55); }
-            else if(a._setBall && this.t-a._setBall<0.45) spd=Math.min(spd, SPD.JOG*0.62);
+            /* ⚠ 계측에서 드러난 «가장 센 브레이크» — 공이 진행 방향 뒤에 있으면 속도를 조깅의
+               62%(최고 속도의 0.17)까지 죽였다. 빨리 가려 할수록 공이 뒤로 처지고, 그러면 또 늦추는
+               <b>자기 강화 고리</b>가 된다. 이게 「앞이 뚫렸는데 제자리걸음」의 실체였다.
+               ─ 앞이 열려 있으면 그렇게까지 늦추지 않는다. 대신 아래에서 공을 «차 놓고» 달린다. */
+            else if(a._setBall && this.t-a._setBall<0.45)
+              spd=Math.min(spd, (_runK>0.45) ? SPD.DRIBBLE*0.95 : SPD.JOG*0.62);
             // 앞을 막은 수비수가 있으면 제치기를 시도한다 — 성공하면 그대로 뚫고 나간다
             // 특성(자주/드물게 드리블, 개인기 시도)이 드리블 빈도 자체를 바꾼다
             const dt = clamp(1 + FX(a,"dribble"), 0.25, 2.0);
             if(this.recording && Math.random()<0.014) this.cap(a.side, COMM.lvDrib, {p:this.nm(a)}, true);
             if(Math.random() < TAKEON_TRY*dt/TEMPO) this.tryTakeOn(a, this.side(this.opp(key)));
-            if((a.burstUntil||0)>this.t) spd=SPD.RUN;              // 제친 직후에는 속도가 붙는다
+            /* ⚠ 계측에서 드러난 두 번째 브레이크 — 여기가 <b>대입</b>이라, 공간이 열려 스퍼트를
+               걸면 오히려 위에서 정한 속도가 SPD.RUN 으로 «깎였다». 최소치로 바꾼다. */
+            if((a.burstUntil||0)>this.t) spd=Math.max(spd, SPD.RUN);   // 제친 직후에는 속도가 붙는다
           }
         } else if(phase==="DEF" && (a.defRole===DEF_ROLE.PRESS || a.defRole===DEF_ROLE.JOCKEY)){
           /* ⚠ phase 가드가 필수다. defRole 은 수비 국면에서만 새로 정해지므로,
@@ -75567,7 +75650,7 @@ class MatchSim{
           if((WX_NOW.slip||0)>0.18 && !_bpAng && Math.abs(df)>Math.PI*0.42
              && (a.spd||0)>SPD.RUN*0.75 && !(a._down&&a._down>this.t)){
             const bal=(a.p&&a.p.attr&&attr20(a.p.attr.bal)/20)||0.6;
-            const pSlip=WX_NOW.slip*0.011*(1.35-bal*0.70)*(Math.abs(df)/Math.PI);
+            const pSlip=WX_NOW.slip*0.0075*(1.35-bal*0.70)*(Math.abs(df)/Math.PI);
             if(Math.random()<pSlip){
               a._down=this.t+0.55+Math.random()*0.45; a.spd=0;
               if(this.emitEvents && Math.random()<0.22)
@@ -76047,6 +76130,11 @@ class MatchSim{
                 mates,
                 oneTwo:this.ball._oneTwo, now:this.t, presCirc:this._pcT||0,
                 counter:this.counterOn(key)?1:0, counterK:this.counterK(key),   // ⚡ 역습 창 — 패스 선택이 앞을 본다
+                /* 🔁 ⚠ 제보 — 「공격이 막히면 자기들끼리 뒷키타카하다가 실수로 골 먹힌다」.
+                   계측: 패스 방향이 앞 32% · 옆 51% · 뒤 17% 로 <b>옆으로 도는 공</b>이 절반이었다.
+                   실제 팀은 옆으로 몇 번 돌려 보고 길이 안 열리면 «앞으로 붙인다» — 그 밸브가 없었다.
+                   우리 진영에서 전진 없이 돌린 횟수를 세어, 쌓일수록 전진 옵션에 가산점을 준다. */
+                recyc:(this._recyc&&this._recyc[key])||0,
                 bu:this._bu};                                                   // 🔄 팀 단위 빌드업 상황
     const opts=evaluatePassOptions(carrier, mates, opps, pctx);
     pctx.opts=opts;                      // ⚡ 아래 findBestPass 들이 다시 재지 않게 실어 준다
@@ -76440,7 +76528,11 @@ class MatchSim{
           if(da>-0.16 && da<0.02){ _waitK=WING_WAIT_K; break; }
         }
       }
-      this.ball.hold=(0.6+Math.random()*0.7)*TEMPO*holdTr*carryK*_zoneK*_waitK*this.tempoK(key)*(this.counterOn(key)?(0.80-this.counterK(key)*0.35):1);
+      /* 🏃 앞이 열려 있으면 «생각하는 시간»도 짧아진다 (제보 — 받아 놓고 기다리다 뒤늦게 돌파).
+         hold 는 캐리어가 다음 판단을 하기까지의 시간이다. 뻥 뚫린 길을 두고 0.7초씩 서 있을 이유가 없다. */
+      this.ball.hold=(0.6+Math.random()*0.7)*TEMPO*holdTr*carryK*_zoneK*_waitK*this.tempoK(key)
+        *(this.counterOn(key)?(0.80-this.counterK(key)*0.35):1)
+        *clamp(1-(carrier._runK||0)*0.45, 0.55, 1);
       return;
     }
     // 압박이 극심하고 옵션도 나쁘면 걷어낸다(롱볼)
@@ -76546,6 +76638,17 @@ class MatchSim{
         press:this._bu?+(this._bu.press||0).toFixed(2):0, bu:this._bu?this._bu.state:null, air:pl.lofted?1:0, lg});
     }
     b.power=pl.power; b.toSpace=(pl.type===PASS_TYPE.THROUGH); b.passType=pl.type;
+    /* 🔁 «제자리 돌리기» 세기 (제보 — 뒷키타카). 우리 진영에서 전진이 3m 미만인 패스를 셈한다.
+       6m 이상 전진했거나 공이 상대 진영으로 넘어가면 0 으로 돌아간다. */
+    try{
+      const _k=carrier.side;
+      const _own=(v)=>carrier.dir>0?v:1-v;
+      const _gain=(opt.to.x-carrier.x)*carrier.dir*PITCH_AR*67;   // 전진 거리(m)
+      const _inOwn=_own(carrier.x)<0.52 && _own(opt.to.x)<0.55;
+      this._recyc=this._recyc||{h:0,a:0};
+      if(!_inOwn || _gain>=6) this._recyc[_k]=0;
+      else if(_gain<3) this._recyc[_k]=Math.min(12, (this._recyc[_k]||0)+1);
+    }catch(e){}
     this.bpWatch(carrier, opt, pl);          // ⏮️ 뒤로 돌렸다면 상대에게 압박 창이 열린다
     this.abWatch(carrier, opt, pl);          // 🪂 롱볼이면 떨어지는 순간에 맞춰 창을 예약한다
     b.aerial = pl.lofted;              // 띄운 공만 공중볼 — 지상 커트가 안 되고 낙하 지점에서 경합한다
@@ -79638,7 +79741,7 @@ class MatchSim{
         let hold = 0.02 + _a("han",62)*0.50 + _mg*0.42 - (power-1.0)*0.30 - nearPost*0.20;
         /* 🧤 특성 — 펀칭 선호는 덜 잡고, 「품에 안는다」는 더 잡는다 */
         if(gk) hold -= FX(gk,"gkFist")*0.28;
-        hold -= (WX_NOW.wet||0)*0.24;              // 🌧️ 젖은 공은 품에 안기지 않는다 (요청)
+        hold -= (WX_NOW.wet||0)*0.17;              // 🌧️ 젖은 공은 품에 안기지 않는다 (요청 · 폭우 체감 완화)
         if(deflected) hold -= 0.20;
         if(type===SHOT_TYPE.POWER) hold += 0.12;
         if(type===SHOT_TYPE.CHIP) hold += 0.10;   // 느리게 떠오는 공은 잡기 쉽다
@@ -92986,7 +93089,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5187";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5189";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
