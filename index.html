@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5195-->
+<!--B:20260913-5199-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -2812,6 +2812,13 @@ function teamByUid(uid){
   return null;
 }
 const PERS_N=["프로페셔널","야심가","온화함","다혈질"];
+/* 🧠 에디터에서 성격을 고를 때 «무엇이 달라지는가» 를 옆에 적어 준다 (요청) */
+const PERS_IC=["🎯","🔥","🕊️","💢"];
+const PERS_DESC=[
+  "면담·이적에 담담하다 · 태업이 가장 드물다",
+  "출전·대우에 민감하다 · 더 큰 무대를 원한다",
+  "상처를 오래 간직한다 · 냉정한 통보에 크게 흔들린다",
+  "쉽게 폭발한다 · 태업·항의 카드 위험이 가장 높다"];
 /* ── 연봉 (억/년) ────────────────────────────────────────────
    K리그 실제 규모에 맞춘 곡선. K리그1 선수 1인 평균 약 3.1억, 최고 연봉 20억 안쪽,
    구단 연봉 총액은 1부 100억대 / 2부 40억대가 되도록 잡았다.
@@ -4604,6 +4611,9 @@ function applyTweakObj(p, k){
   // famOnly — 딱 그 자리만 소화하는 선수. 이웃 자리 보너스를 통째로 지운다.
   if(k.famOnly) for(const f of FAM_POS) p.posFam[f]=0;
   if(k.fam) for(const f in k.fam) p.posFam[f]=Math.max(p.posFam[f]||0, k.fam[f]);
+  /* 🔗 요청 1·2 — 실존 선수 자료로 「LB 80」 같은 값을 덮어쓴 뒤에도 쌍둥이 짝(LB↔LWB)을
+     맞춰 준다. 이 줄이 없으면 첫 시즌에 LB 80 / LWB 30 처럼 갈라진 채 시작한다(실측 221건). */
+  if(p.pos!=="GK") famPairUp(p.posFam);
   syncPosBand(p);   // 손으로 새긴 능숙도를 반영해 대분류를 다시 읽는다(_posLock 이면 그대로 둔다)
   if(typeof k.pers==="number") p.pers=clamp(k.pers,0,3);
   if(typeof k.ovr==="number"){
@@ -4661,16 +4671,42 @@ const FAM_NEAR={
 };
 /* 능숙도 눈금 — 위 세 칸이 전부 초록 계열이라 화면에서 구분이 안 갔다.
    초록 → 연두 → 노랑 → 주황 → 빨강으로 색상환을 따라 내려가게 다시 짰다. */
-const FAM_LV=[
-  {min:96,n:"자연스러움",c:"#00d26a"},   // 원래 자리
-  {min:85,n:"매우 능숙", c:"#5ce65c"},
-  {min:70,n:"능숙함",   c:"#a8e04a"},   // 연두
-  {min:55,n:"무난함",   c:"#e3d34a"},   // 노란빛
-  {min:40,n:"미숙함",   c:"#e8a33a"},   // 주황
-  {min:20,n:"어색함",   c:"#e8683a"},
-  {min:0, n:"못함",     c:"#f85149"}
+/* ═══ 🎚️ 숙련도 눈금 — 포지션과 역할이 «같은 자» 를 쓴다 ══════════════════
+   ⚠ 요청 4 — 「'역할 능숙도' 단계 명칭과 수치, 종합 능력 감소 수치를 '포지션 친숙도' 에도
+     그대로 통일해야 한다」. 예전에는 포지션이 7단계(못함~자연스러움, 감소 최대 90%),
+     역할이 6단계(처음 맡는다~완전히 체화, 감소 최대 45%)로 눈금도 벌칙도 따로 놀았다.
+     감독이 화면에서 본 숫자와 그라운드에서 실제로 깎이는 양이 서로 달랐다는 뜻이다.
+   ⚠ 요청 3 — 「'포지션 친숙도' 와 '역할 능숙도' 를 합연산 한다」.
+     해본 적 없는 자리(-29%) + 처음 맡는 역할(-29%) = -58%.
+   ⚠ 요청 5 — 「'자연스러움' 에서 종합 능력이 +% 로 오르면 안 된다」. 맨 위 칸은 감소 0,
+     배수는 어떤 경우에도 1.00 을 넘지 않는다. 수치 자체도 100 에서 멈춘다.
+   ─ 단계는 포지션과 역할이 각각 «따로» 오르내린다(요청 4 단서). 같은 자 를 쓸 뿐이다. */
+const XFAM_LV=[
+  {min:96, n:"자연스러움",  pen:0.00, c:"#00d26a"},
+  {min:85, n:"매우 능숙",   pen:0.06, c:"#5ce65c"},
+  {min:70, n:"능숙함",     pen:0.12, c:"#a8e04a"},
+  {min:55, n:"익히는 중",   pen:0.18, c:"#e3d34a"},
+  {min:40, n:"서투름",     pen:0.22, c:"#e8a33a"},
+  {min:0,  n:"처음 맡는다", pen:0.29, c:"#f85149"}
 ];
-function famLevel(v){ for(const l of FAM_LV) if(v>=l.min) return l; return FAM_LV[FAM_LV.length-1]; }
+function xfamLv(v){ const x=clamp(v||0,0,100); for(const l of XFAM_LV) if(x>=l.min) return l; return XFAM_LV[XFAM_LV.length-1]; }
+function xfamPen(v){ return xfamLv(v).pen; }
+function xfamMul(v){ return 1 - xfamPen(v); }      // 최대 1.00 — 보너스는 없다
+/* 포지션 + 역할 합연산 — 화면에 적는 숫자와 그라운드에서 깎이는 양이 같은 값이다 */
+function famCombo(fam, rfam){
+  const a=xfamPen(fam), b=xfamPen(rfam);
+  const pen=clamp(a+b, 0, 0.58);
+  return {pos:a, role:b, pen, mul:clamp(1-pen, 0.42, 1)};
+}
+/* 한 단계 아래로 (요청 7 — 한 시즌 그 자리에서 한 번도 안 뛰면 1단계 강등) */
+function xfamStepDown(v){
+  const x=clamp(v||0,0,100);
+  const i=XFAM_LV.findIndex(l=>x>=l.min);
+  if(i<0 || i>=XFAM_LV.length-1) return x;          // 이미 맨 아래 칸
+  return Math.max(0, XFAM_LV[i].min - 1);           // 지금 칸의 바로 아래 = 한 칸 강등
+}
+const FAM_LV=XFAM_LV;
+function famLevel(v){ return xfamLv(v); }
 /* ═══ 🎓 역할 능숙도 (Role Familiarity) ══════════════════════════════════
    포지션 능숙도가 「이 자리를 아는가」라면, 이건 「이 자리에서 이 역할을 아는가」다.
    같은 중앙 미드필더라도 앵커와 전진형 플레이메이커는 하는 일이 전혀 다르다 —
@@ -4687,23 +4723,17 @@ const RFAM_SEED_GRP=30;     // 같은 자리의 나머지 역할 — 개념은 �
 const RFAM_SEED_LO=26, RFAM_SEED_HI=52;   // 나머지는 적합도에 비례해 이 구간에 깔린다
 const RFAM_MIN=0.55;        // 능숙도 0 일 때 남는 비율 (포지션은 0.10 — 딱 절반 무게)
 const RFAM_POW=0.75;
-const RFAM_LV=[
-  {min:92,n:"완전히 체화", c:"#00d26a"},
-  {min:78,n:"매우 능숙",   c:"#5ce65c"},
-  {min:62,n:"능숙함",     c:"#a8e04a"},
-  {min:45,n:"익히는 중",   c:"#e3d34a"},
-  {min:28,n:"서투름",     c:"#e8a33a"},
-  {min:0, n:"처음 맡는다", c:"#f85149"}
-];
-function roleFamLevel(v){ for(const l of RFAM_LV) if(v>=l.min) return l; return RFAM_LV[RFAM_LV.length-1]; }
+const RFAM_LV=XFAM_LV;                 // 🎚️ 포지션과 같은 자를 쓴다 (요청 4)
+function roleFamLevel(v){ return xfamLv(v); }
 /* 기본값은 「저장하지 않고」 그때그때 계산한다 — 구세이브도 불러오는 즉시 자기 주 역할을 갖고
    시작하고, 세이브에는 실제로 뛰어서 바뀐 값만 남는다(선수 1,000명 × 16역할을 통째로 저장하면
    세이브가 100KB 넘게 불어난다). 캐시는 열거되지 않는 속성이라 JSON 에 딸려 나가지 않는다. */
 function seedRoleFam(p){
   if(p._rfSeed) return p._rfSeed;
   const f={};
-  try{
-    const all=rolesForSlot(prefSlotOf(p));
+  /* 한 자리의 역할들을 «주 역할 88 · 두 번째 68 · 나머지는 적합도 비례» 로 깐다 */
+  const seedSlot=(sl)=>{
+    const all=rolesForSlot(sl); if(!all || !all.length) return;
     const fitOf={}; for(const R of all) fitOf[R.k]=roleFit(p, R.k);
     const list=all.slice().sort((a,b)=>fitOf[b.k]-fitOf[a.k]);
     const top=Math.max(0.5, fitOf[list[0].k]||0.5);
@@ -4711,9 +4741,19 @@ function seedRoleFam(p){
        비슷한 결의 역할이면 조금 덜 낯설다 — 앵커를 보던 선수가 수비형 미드필더를 처음 맡는 것과,
        포처가 트레콰르티스타를 맡는 것은 같은 낯섦이 아니다. */
     list.forEach((R,i)=>{
-      f[R.k] = i===0 ? RFAM_SEED_MAIN : i===1 ? RFAM_SEED_SUB
+      const v = i===0 ? RFAM_SEED_MAIN : i===1 ? RFAM_SEED_SUB
              : Math.round(clamp(RFAM_SEED_LO + (fitOf[R.k]/top)*(RFAM_SEED_HI-RFAM_SEED_LO), RFAM_SEED_LO, RFAM_SEED_HI));
+      f[R.k]=Math.max(f[R.k]||0, v);
     });
+  };
+  try{
+    const home=prefSlotOf(p);
+    seedSlot(home);
+    /* 🔗 요청 1·2 — 같은 쪽 쌍둥이 자리(LW↔LM · LB↔LWB)의 역할도 같은 무게로 깔아 준다.
+       역할 이름과 개수가 완전히 같지는 않으므로 «같은 방식으로» 깐다 = 결과적으로 비슷해진다.
+       반대쪽 라인은 손대지 않는다. */
+    const tw=SLOT_TWIN[canonSlot(home)||home];
+    if(tw) seedSlot(tw);
   }catch(e){}
   try{ Object.defineProperty(p, "_rfSeed", {value:f, enumerable:false, writable:true, configurable:true}); }
   catch(e){ p._rfSeed=f; }
@@ -4726,22 +4766,129 @@ function getRoleFam(p, rk){
   const s=seedRoleFam(p)[rk];
   return clamp(Math.round(s==null?RFAM_SEED_LO:s), 0, 100);
 }
-function gainRoleFam(p, rk, mins){
-  if(!p || !rk || !(mins>=15)) return;          // 15분 미만은 배우는 게 없다
+/* mins: 실제 이 역할로 보낸 시간. gate: 최소 출전 판정에 쓸 «총» 출전 시간(나눠 적립할 때).
+   ⚠ 요청 8 — 점유율로 나누면 한쪽은 90분의 42% = 38분이 된다. 15분 문턱을 «나눈 값» 에
+     걸면 짧게 뛴 선수는 양쪽 다 0이 되어 아무것도 못 배운다. 문턱은 총 출전 시간으로 본다. */
+function gainRoleFam(p, rk, mins, gate){
+  if(!p || !rk) return;
+  if(!((gate!=null?gate:mins)>=15)) return;     // 15분 미만은 배우는 게 없다
+  if(!(mins>0)) return;
   if(!p.roleFam) p.roleFam={};
   const cur=getRoleFam(p, rk);
   if(cur<100) p.roleFam[rk]=Math.round(clamp(cur + RFAM_GAIN*Math.min(1, mins/90), 0, 100)*10)/10;
   else p.roleFam[rk]=100;
-  /* 쓰지 않는 역할은 아주 천천히 잊는다 — 실제로 뛰어 본 역할만 해당한다 */
+  /* 쓰지 않는 역할은 아주 천천히 잊는다 — 실제로 뛰어 본 역할만 해당한다.
+     ⚠ 소유/미소유로 나눠 두 번 부르므로 잊는 양도 그 몫만큼만 — 한 경기에 두 번 잊지 않는다 */
+  const _dk=(gate!=null && gate>0) ? clamp(mins/gate, 0, 1) : 1;
   for(const k in p.roleFam){
     if(k===rk) continue;
-    if(p.roleFam[k]>RFAM_FLOOR) p.roleFam[k]=Math.round(Math.max(RFAM_FLOOR, p.roleFam[k]-RFAM_DECAY)*10)/10;
+    if(p.roleFam[k]>RFAM_FLOOR) p.roleFam[k]=Math.round(Math.max(RFAM_FLOOR, p.roleFam[k]-RFAM_DECAY*_dk)*10)/10;
   }
 }
 /* 별점·엔진에 곱하는 배수 */
-function roleFamMul(v){
-  const f=clamp(v/100, 0, 1);
-  return RFAM_MIN + (1-RFAM_MIN)*Math.pow(f, RFAM_POW);
+function roleFamMul(v){ return xfamMul(v); }
+
+/* ═══ 🗓️ 시즌 마감 — 포지션 숙련도의 강등과 «포지션 전환» ═════════════════
+   ⚠ 요청 7 — 「한 시즌 동안 그 자리에서 한 번도(선발이든 교체든, 소유든 미소유든)
+     뛴 적이 없으면 포지션 단계를 1단계 강등」.
+   ⚠ 요청 11 — 「오래 다른 자리로 내보내 숙련도가 역전되면 그 선수의 대분류·세부 포지션이
+     실제로 바뀌고, 어디에 표기되든 바뀐 자리로 나와야 한다. 프로필에 언제 무엇에서
+     무엇으로 바뀌었는지 남고, 팝업으로 알려 준다. AI 구단도 똑같이.」
+   ⚠ 요청 12 — 유저 구단만이 아니라 모든 구단에 같은 규칙을 적용한다. */
+const FAM_SLOT={ GK:"GK", SW:"SW", DC:"CB", DL:"LB", DR:"RB", WBL:"LWB", WBR:"RWB",
+  DM:"DM", MC:"CM", ML:"LM", MR:"RM", AMC:"CAM", AML:"LAM", AMR:"RAM",
+  LW:"LW", RW:"RW", ST:"ST" };
+const POSFLIP_EDGE=6;      // 새 자리가 이만큼은 앞서야 «전환» 으로 본다 (깜빡임 방지)
+const POSFLIP_MIN=70;      // 그 자리를 이 정도는 익혔어야 한다
+const POSDROP_APPS=5;      // 이 정도는 뛴 시즌이어야 «안 선 자리» 를 강등한다 (부상 시즌 보호)
+/* 한 선수의 시즌 마감 처리 — 강등 → 전환 판정 → 기록 */
+function posFamSeasonEnd(p, t){
+  if(!p || !p.posFam || p.pos==="GK") return null;
+  const seen=(p.posSeenS===G.season && p.posSeen) ? p.posSeen : {};
+  const apps=(p.apps||0)+(p.career?0:0);
+  /* ① 한 번도 안 선 자리는 한 단계 내려간다 */
+  if(apps>=POSDROP_APPS){
+    for(const k of FAM_POS){
+      if(k==="GK" || seen[k]) continue;
+      const v=p.posFam[k]||0;
+      if(v<=FAM_FLOOR) continue;
+      p.posFam[k]=Math.max(FAM_FLOOR, xfamStepDown(v));
+    }
+  }
+  /* ② 가장 익숙한 자리가 바뀌었는가 */
+  const homeK=SLOT_FAM[prefSlotOf(p)];
+  let bk=null, bv=-1;
+  for(const k of FAM_POS){ if(k==="GK") continue; const v=p.posFam[k]||0; if(v>bv){ bv=v; bk=k; } }
+  delete p.posSeen; delete p.posSeenS;
+  if(!bk || bk===homeK) return null;
+  if(bv<POSFLIP_MIN) return null;
+  if(bv < (p.posFam[homeK]||0) + POSFLIP_EDGE) return null;
+  const from=prefSlotOf(p), to=FAM_SLOT[bk];
+  if(!to || to===from) return null;
+  const bandFrom=p.pos;
+  p.prefPos=to;
+  try{ delete p._rfSeed; }catch(e){}    // 새 자리의 역할 시드를 다시 깐다
+  try{ syncPosBand(p); }catch(e){}
+  p.posHist=Array.isArray(p.posHist)?p.posHist:[];
+  p.posHist.push({s:G.season, from, to, bf:bandFrom, bt:p.pos, tid:t?t.id:""});
+  if(p.posHist.length>12) p.posHist=p.posHist.slice(-12);
+  return {p, t, from, to, bf:bandFrom, bt:p.pos};
+}
+/* 모든 구단 — 유저·AI 가리지 않는다 (요청 12) */
+function posFamSeasonSweep(){
+  const flips=[];
+  try{
+    for(const id in (G.teams||{})){
+      const t=G.teams[id]; if(!t || !t.players) continue;
+      for(const p of t.players){ const r=posFamSeasonEnd(p, t); if(r) flips.push(r); }
+    }
+    for(const arr of [G.freeAgents, G.overseas, G.youth]){
+      for(const p of (arr||[])){ const r=posFamSeasonEnd(p, null); if(r) flips.push(r); }
+    }
+  }catch(e){}
+  /* 내 선수의 전환은 감독에게 알린다 (요청 11) */
+  try{
+    const ut=userTeam();
+    const mine=flips.filter(x=>x.t && ut && x.t.id===ut.id);
+    if(mine.length){
+      const rows=mine.map(x=>`<b>${nmF(x.p)}</b> ${x.from} → <b style="color:var(--acc)">${x.to}</b>`
+        +(x.bf!==x.bt?` <span class="small">(${x.bf}→${x.bt})</span>`:""));
+      notify(`🧭 <b>포지션 전환 ${mine.length}명</b> — 한 시즌 동안 뛴 자리가 원래 자리를 앞질렀습니다.<br>`
+        +`<span class="small">${rows.join(" · ")}</span>`, "info");
+      /* 요청 11 — 팝업으로도 알린다. 시즌 넘김 화면 흐름을 끊지 않도록 한 박자 뒤에 띄운다. */
+      try{ const _txt=`<b>🧭 포지션 전환 ${mine.length}명</b>\n\n`
+          +mine.map(x=>`· ${x.p.name} — ${x.from} → ${x.to}${x.bf!==x.bt?`  (${x.bf} → ${x.bt})`:""}`).join("\n")
+          +`\n\n한 시즌 동안 실제로 뛴 자리의 숙련도가 원래 자리를 앞질렀습니다.\n스쿼드·순위표·이적 시장 등 모든 화면의 포지션 표기가 바뀐 자리로 나옵니다.`;
+        setTimeout(()=>{ try{ gameAlert(_txt); }catch(e){} }, 0); }catch(e){}
+      addNews(`🧭 ${ut.short} 포지션 전환 — ${mine.map(x=>`${x.p.name} ${x.from}→${x.to}`).join(", ")}`, "info", "club");
+      for(const x of mine) try{ staffLog(`🧭 ${x.p.name} 포지션 전환 ${x.from} → ${x.to}`); }catch(e){}
+    }
+    /* 다른 구단의 눈에 띄는 전환도 한 줄 */
+    const others=flips.filter(x=>x.t && (!ut || x.t.id!==ut.id) && (x.p.ovr||0)>=76).slice(0,4);
+    if(others.length) addNews(`🧭 <b>포지션을 바꾼 선수들</b> — `
+      +others.map(x=>`${x.p.name}(${x.t.short}) ${x.from}→${x.to}`).join(" · "), null, "league");
+  }catch(e){}
+  return flips;
+}
+/* ═══ 🔗 같은 쪽 «쌍둥이 자리» ══════════════════════════════════════════
+   ⚠ 요청 1·2 — 「첫 시즌 시작 시점에 LW 와 LM 의 포지션 친숙도가 같아야 하고,
+     LB 와 LWB 도 같아야 한다. 단 «같은 라인 안에서만» — 왼쪽이 뚫렸다고 오른쪽까지
+     같아지는 건 버그이므로 무조건 막는다.」
+   ─ 능숙도 표(FAM_POS)는 애초에 좌우가 다른 칸이다(ML/MR, LW/RW, DL/DR, WBL/WBR).
+     그래서 쌍을 «같은 쪽끼리만» 묶으면 반대쪽으로 새는 길 자체가 없다.
+   ─ 이건 처음 깔 때만이다. 그 뒤로는 실제로 뛴 자리만 오르고 안 뛴 자리는 내려가므로
+     시간이 지나면 두 값은 자연히 갈라진다. */
+const FAM_TWIN={ LW:"ML", ML:"LW", RW:"MR", MR:"RW",
+                 DL:"WBL", WBL:"DL", DR:"WBR", WBR:"DR" };
+const SLOT_TWIN={ LW:"LM", LM:"LW", RW:"RM", RM:"RW",
+                  LB:"LWB", LWB:"LB", RB:"RWB", RWB:"RB" };
+function famPairUp(f){
+  /* 쌍끼리 높은 쪽에 맞춘다 — 반드시 같은 쪽(L↔L, R↔R)끼리만 */
+  for(const [a,b] of [["LW","ML"],["RW","MR"],["DL","WBL"],["DR","WBR"]]){
+    const m=Math.max(f[a]||0, f[b]||0);
+    if(m>0){ f[a]=m; f[b]=m; }
+  }
+  return f;
 }
 /* 선호 포지션을 기준으로 초기 능숙도를 만든다 */
 function initPosFam(p){
@@ -4754,6 +4901,7 @@ function initPosFam(p){
     f[home]=100;
     const near=FAM_NEAR[home]||{};
     for(const k in near) f[k]=Math.max(f[k], near[k]);
+    famPairUp(f);
   }
   return f;
 }
@@ -4853,16 +5001,20 @@ function getPosFam(p, slot){
 }
 /* 경기를 뛰면 그 자리 능숙도가 오른다 — 어릴수록, 팀워크·판단력이 좋을수록 빨리 배운다.
    FM처럼 100(자연스러움)에 가까워질수록 느려지고, 안 뛴 자리는 아주 천천히 잊는다. */
-function gainPosFam(p, slot, mins){
+function gainPosFam(p, slot, mins, gate){
   if(!p || p.pos==="GK" || !slot) return;
   if(!p.posFam) p.posFam=initPosFam(p);
   const k=SLOT_FAM[canonSlot(slot)]||SLOT_FAM[slot];
   if(!k) return;
+  /* 🗓️ 요청 7 — 「이 시즌 그 자리에서 한 번이라도 뛰었는가」. 안 뛴 자리는 시즌이 끝날 때
+     한 단계 강등된다. 소유/미소유, 선발/교체를 가리지 않고 «섰으면» 기록한다. */
+  try{ if(mins>0){ if(!p.posSeen || p.posSeenS!==G.season){ p.posSeen={}; p.posSeenS=G.season; } p.posSeen[k]=1; } }catch(e){}
   /* 한 경기를 소화하면 그 자리 능숙도 +2.
      · 출전 시간 비례 — 풀타임 +2, 후반 교체 45분이면 +1
      · 15분 미만 출전은 배우는 게 없다 (막판 시간 끌기 투입)
      · 100에서 멈춘다. 나이·재능 페널티 없음 — 뛰면 는다, 단순하고 예측 가능하게 */
-  if(mins<15) return;
+  if(!((gate!=null?gate:mins)>=15)) return;
+  if(!(mins>0)) return;
   const cur=p.posFam[k]||0;
   if(cur>=100) return;
   /* 🧑‍🏫 멘토가 붙은 유망주는 그 자리를 더 빨리 익힌다 — 옆에서 계속 잡아 주기 때문이다.
@@ -4877,10 +5029,12 @@ function gainPosFam(p, slot, mins){
     }
   }catch(e){}
   p.posFam[k]=clamp(cur + FAM_GAIN*tk*Math.min(1, mins/90), 0, 100);
-  /* 오래 안 선 자리를 조금씩 잊는 건 유지 — 대신 아주 완만하게, 바닥(FAM_FLOOR) 아래로는 안 내려간다 */
+  /* 오래 안 선 자리를 조금씩 잊는 건 유지 — 대신 아주 완만하게, 바닥(FAM_FLOOR) 아래로는 안 내려간다.
+     ⚠ 소유/미소유로 나눠 부르므로 잊는 양도 그 몫만큼만 (한 경기에 두 번 잊지 않는다) */
+  const _dk=(gate!=null && gate>0) ? clamp(mins/gate, 0, 1) : 1;
   for(const q of FAM_POS){
     if(q===k || q==="GK") continue;
-    if(p.posFam[q]>FAM_FLOOR) p.posFam[q]=Math.max(FAM_FLOOR, p.posFam[q]-FAM_DECAY);
+    if(p.posFam[q]>FAM_FLOOR) p.posFam[q]=Math.max(FAM_FLOOR, p.posFam[q]-FAM_DECAY*_dk);
   }
 }
 const FAM_GAIN=2;      // 한 경기 풀타임으로 오르는 능숙도 — 시즌 풀타임이면 +76
@@ -5676,7 +5830,8 @@ function confirmCaptains(){
     for(const q of t.players) q.morale=clamp(q.morale+2,20,99);
     t.morale=clamp((t.morale||70)+1.5,40,99);
     react=`<div class="msg good" style="border-width:2px">✅ <b>선수단이 고개를 끄덕였습니다.</b><br>
-      ${pick([`"${cap.name}이면 다들 인정하죠."`,`"진작에 완장 줬어야 했습니다."`,`"라커룸에서 제일 말이 통하는 형입니다."`])}
+      ${fixJosa(pick([`"${cap.name}이면/면 다들 인정하죠."`,`"진작에 완장 줬어야 했습니다."`,
+        `"라커룸에서 제일 말이 통하는 형입니다."`,`"${cap.name}이라면/라면 두말할 것 없죠."`]))}
       <span class="small"> — 팀 사기 +1.5</span></div>`;
     socialFill(SOC.capOk, 3+R(2), 1, V);
   } else if(ap>=0.45){
@@ -7229,12 +7384,8 @@ function slotRatingCalc(p, slot){
    포지션 적합도만 보여주면 역할을 바꿔도 별이 그대로라 무엇이 바뀌었는지 알 수 없다. */
 /* 포지션 능숙도가 별에 미치는 영향.
    FM처럼 능력치가 좋아도 그 자리를 못 하면 별이 확 줄어든다 — 빨간색(0)이면 반 개까지. */
-function famStarMul(fam){
-  const f=clamp(fam/100, 0, 1);
-  return FAMSTAR_MIN + (1-FAMSTAR_MIN)*Math.pow(f, FAMSTAR_POW);
-}
-const FAMSTAR_MIN=0.10;   // 능숙도 0 일 때 남는 비율
-const FAMSTAR_POW=0.75;   // 곡선 — 낮은 구간에서 더 가파르게 떨어진다
+function famStarMul(fam){ return xfamMul(fam); }
+const FAMSTAR_MIN=0.71, FAMSTAR_POW=1;   // (옛 이름 — 지금은 XFAM_LV 가 정한다)
 function roleStarsFor(t, p, slot){
   if(!p || !slot) return "";
   if(slot==="GK" && p.pos!=="GK") return slotStars(p, slot);
@@ -7334,8 +7485,7 @@ function prefStars(p){
 }
 /* 우클릭 팝업에 띄울 "포지션별 별 개수" — 능숙도 0인 자리는 애초에 소화할 수 없으니 빼고,
    해본 적 있는 자리만 별점이 높은 순으로 보여준다. */
-const FAM_SLOT={GK:"GK",SW:"SW",DC:"CB",DL:"LB",DR:"RB",WBL:"LWB",WBR:"RWB",DM:"DM",MC:"CM",
-  ML:"LM",MR:"RM",AMC:"CAM",AML:"LAM",AMR:"RAM",LW:"LW",RW:"RW",ST:"ST"};
+/* (FAM_SLOT 은 위 «시즌 마감» 블록에서 한 번만 정의한다 — 같은 표가 두 벌이면 갈라진다) */
 function positionStarRows(p){
   if(!p) return [];
   if(!p.posFam) p.posFam=initPosFam(p); else migratePosFam(p);
@@ -8068,20 +8218,44 @@ const COMM={
    "🏆 <b>{t}이/가 11m 승부를 이겨냈습니다.</b> 반대편은 그라운드에 주저앉았습니다."]
 };
 /* 받침이 있는 글자인가 — 조사(이/가, 은/는, 을/를)를 고르는 기준 */
+/* ⚠ 조사 판정 — 마지막 «글자»에 받침이 있는가.
+   숫자·로마자는 한국어로 읽었을 때의 받침을 본다.
+     0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔  → 받침 있음  (2 이 · 4 사 · 5 오 · 9 구 → 없음)
+     l 엘 · m 엠 · n 엔 · r 알                → 받침 있음  (나머지 알파벳은 없음)
+   ⚠ 예전 문자열은 /[lmnr1360-9]/ 였다 — 뒤의 «0-9» 범위가 앞의 1·3·6 을 삼켜
+     «모든 숫자에 받침이 있다»가 됐다. 그래서 「2이 아니라 2가」·「4이 아니라 4가」가
+     리그 전체 문구에서 틀리고 있었다 (조사 제보를 보다 함께 잡았다). */
+const JONG_NUM="013678";
 function hasJong(ch){
   if(!ch) return false;
   const c=ch.charCodeAt(0);
-  if(c<0xAC00 || c>0xD7A3) return /[0-9a-zA-Z]/.test(ch) ? /[lmnr1360-9]/i.test(ch) : false;
+  if(c<0xAC00 || c>0xD7A3){
+    if(/[0-9]/.test(ch)) return JONG_NUM.indexOf(ch)>=0;
+    if(/[a-zA-Z]/.test(ch)) return /[lmnr]/i.test(ch);
+    return false;
+  }
   return ((c-0xAC00)%28)!==0;
 }
 /* 해설 문장 만들기.
    {p}{q}{a}{t}{g} 를 채우고, 바로 뒤에 오는 조사를 이름의 받침에 맞춰 고른다.
    ("맹성웅가" → "맹성웅이", "야고이" → "야고가") */
+/* ⚠ 제보 — 「주장 정하고 나면 «OOO이면 다들 인정하죠» 라고 뜨는데, 받침이 붙으면 ~이면,
+   안 붙으면 ~면 이 자연스럽다」. 맞다 — «석현우면» 이 아니라 «석현우면»… 아니 «구영빈이면 /
+   석현우면» 이 옳다. 조사 표를 넓힌다. 서술격 조사(이다) 계열이 전부 같은 규칙이다.
+   ⚠ 「이/가」가 앞에 오면 「이/가」로 먼저 잡혀 「이면/면」이 안 걸린다 —
+     긴 표기부터 검사하도록 정규식 순서를 길이 내림차순으로 둔다. */
 const JOSA={"이/가":["이","가"], "은/는":["은","는"], "을/를":["을","를"],
-            "과/와":["과","와"], "와/과":["과","와"], "으로/로":["으로","로"]};
+            "과/와":["과","와"], "와/과":["과","와"], "으로/로":["으로","로"],
+            "이면/면":["이면","면"], "이라/라":["이라","라"], "이라면/라면":["이라면","라면"],
+            "이나/나":["이나","나"], "이랑/랑":["이랑","랑"], "이며/며":["이며","며"],
+            "이다/다":["이다","다"], "이었/였":["이었","였"], "이야/야":["이야","야"],
+            "아/야":["아","야"]};
+const JOSA_RE=new RegExp("(.)("+Object.keys(JOSA)
+  .sort((a,b)=>b.length-a.length)
+  .map(k=>k.replace(/\//g,"\\/"))
+  .join("|")+")","g");
 function fixJosa(s){
-  return s.replace(/(.)(이\/가|은\/는|을\/를|과\/와|와\/과|으로\/로)/g,
-    (m,ch,j)=> ch + JOSA[j][hasJong(ch)?0:1]);
+  return String(s).replace(JOSA_RE, (m,ch,j)=> ch + JOSA[j][hasJong(ch)?0:1]);
 }
 const F_=(a,o)=>{
   o=o||{};
@@ -9711,9 +9885,33 @@ function applyMatchResult(M){
          ─ 시뮬이 경기마다 기록하는 실제 슬롯 점유(team._slotOcc, 6600 빌드)를 먼저 본다. */
       const _sl = x.slot || (sd.slotOf&&sd.slotOf[p.id])
                 || (sd.team&&sd.team._slotOcc&&sd.team._slotOcc[p.id]) || p.prefPos;
-      gainPosFam(p, _sl, mins);   // 그 자리에서 뛴 만큼 익숙해진다
+      /* ═══ ⚔️🛡️ 요청 8·9 — 공 소유 / 미소유를 «따로» 적립한다 ══════════════════
+         예전에는 소유 시 자리·역할만 쌓였다. 그래서 미소유 판에만 세워 둔 자리와 역할은
+         영원히 「처음 맡는다」에 머물러, 감독이 미소유 전술을 아무리 짜도 그대로 굴러가지
+         않았다(제보 그대로).
+         ─ 한 경기에서 선수가 그 자리·역할로 «실제로 보낸 시간» 은 점유율이 가른다.
+           우리 팀이 58% 를 쥐고 있었다면 그 선수는 출전 시간의 58% 를 소유 판에서,
+           42% 를 미소유 판에서 보낸 것이다. 그 비율 그대로 나눠 적립한다.
+         ─ 소유 자리와 미소유 자리가 같으면 두 몫이 같은 칸에 더해져 결국 100% 가 된다.
+           예전과 같은 속도다 — 나뉜다고 손해 보지 않는다.
+         ─ 문턱(15분)은 «총» 출전 시간으로 본다. */
+      let _poss=0.5;
+      try{
+        const _hp=(M.st&&M.st.hP)||0, _ap=(M.st&&M.st.aP)||0;
+        if(_hp+_ap>0) _poss=clamp((sd===M.h?_hp:_ap)/(_hp+_ap), 0.15, 0.85);
+      }catch(e){}
+      const _slD = (sd.team&&sd.team._slotOccD&&sd.team._slotOccD[p.id]) || _sl;
+      const _mIP=mins*_poss, _mOOP=mins*(1-_poss);
+      gainPosFam(p, _sl,  _mIP,  mins);          // ⚔️ 공 소유 시 자리
+      if(_slD!==_sl) gainPosFam(p, _slD, _mOOP, mins);   // 🛡️ 공 미소유 시 자리
+      else           gainPosFam(p, _sl,  _mOOP, mins);   // 같은 자리면 두 몫이 합쳐진다
       /* 🎓 그 자리에서 「맡은 역할」도 함께 익힌다 — 앵커로 뛴 시간은 앵커에만 쌓인다 */
-      try{ const _rd=getRole(t, p, canonSlot(_sl)||_sl); if(_rd && _rd.r) gainRoleFam(p, _rd.r, mins); }catch(e){}
+      try{
+        const _rd =getRole(t, p, canonSlot(_sl)||_sl, "ip");
+        const _rdD=getRole(t, p, canonSlot(_slD)||_slD, "oop");
+        if(_rd && _rd.r)  gainRoleFam(p, _rd.r,  _mIP,  mins);
+        if(_rdD && _rdD.r) gainRoleFam(p, _rdD.r, _mOOP, mins);
+      }catch(e){}
       // 경기 피로. 달력이 생기면서 회복이 하루 단위로 들어오므로 종전보다 살짝 낮췄다 —
       //   기본 루틴으로 매 경기 풀타임을 뛰면 시즌 중반에 80대 초반까지 내려간다.
       /* 경기 뒤 컨디션 소모 — 여기에도 지구력이 빠져 있었다(제보).
@@ -9752,7 +9950,7 @@ function applyMatchResult(M){
    퇴장당한 선수는 뽑히지 않는다 — 아무리 잘했어도.
 ═══════════════════════════════════════════════════════════════ */
 const MOM_SOC={
- our:["{p} 오늘 진짜 미쳤다 MOM 인정","{p} 평점 {r}이면 말 다 했지",
+ our:["{p} 오늘 진짜 미쳤다 MOM 인정","{p} 평점 {r}이면/면 말 다 했지",
    "오늘 경기 {p} 혼자 다 했다","{p} 이 선수 요즘 폼 실화냐",
    "MOM 당연히 {p}지. 다른 선택지가 없었음","{p} 오늘 하이라이트만 열 번 봤다",
    "{p} 계약 연장 언제 합니까 구단아","우리 팀에 {p} 있어서 다행이다 진심",
@@ -13090,9 +13288,25 @@ function eaclRecord(m, hg, ag, byEngine){
   }
 }
 /* 해당 차전에 유저가 뛸 경기가 아직 남아 있는가 — 남아 있으면 그 차전은 시뮬하지 않는다 */
+/* 🌏 내가 이 구단 벤치에 앉은 날 — 그전 날짜의 대회 경기는 «전임 체제의 경기»다.
+   ⚠ 제보 — 5월에 부임했는데 3~4월 아챔을 지금 치르고 있다. 지나간 남의 경기까지 떠안으면
+     달력이 엉키고 이틀에 한 번씩 대회를 치르게 된다. 부임 이전 일정은 대행이 마무리한다. */
+function eaclMineFrom(){
+  try{ return G.jobless ? Infinity : (G.mgrSinceD!=null ? G.mgrSinceD : 0); }
+  catch(e){ return 0; }
+}
+const EACL_STALE=10;          // 예정일에서 이만큼 지난 경기는 더 기다리지 않는다 (옛 세이브 구제)
+function eaclMdStale(d){
+  try{ const day=eaclMdDay(d);
+    if(day < eaclMineFrom()) return true;                 // 부임 전 일정
+    if((G.day||0) > day + EACL_STALE) return true;        // 한참 밀린 일정
+  }catch(e){}
+  return false;
+}
 function eaclUserPendingMD(d){
   const me=G.userTeamId;
   if(G.jobless || !eaclOn() || G.eacl.teams.indexOf(me)<0) return false;
+  if(eaclMdStale(d)) return false;                        // 내 경기가 아니다 — 대행이 치른다
   return G.eacl.fix.some(m=>m.d===d && !m.done && (m.h===me||m.a===me));
 }
 function eaclPlayMD(d){
@@ -14141,6 +14355,7 @@ function eaclUserDue(){
   const day=G.day||0;
   for(let d=0; d<8; d++){
     if(day < eaclMdDay(d)) break;
+    if(eaclMdStale(d)) continue;      // 부임 전이거나 한참 밀린 차수 — 대행이 치른다
     const m=G.eacl.fix.find(x=>x.d===d && !x.done && (x.h===me||x.a===me));
     if(m) return {kind:"md", d, m, tag:`${eaclShort()} 리그 스테이지 ${d+1}차전`};
   }
@@ -22481,6 +22696,12 @@ function tryPreExpirySale(from, p){
   }catch(e){ return false; }
 }
 function startNewSeason(){
+  /* 🌏 새 시즌은 날짜가 0부터다 — 지난 시즌 부임일을 그대로 두면 새 시즌 초반 대회 일정이
+     통째로 «부임 이전»으로 잘못 읽힌다 */
+  try{ G.mgrSinceD=0; }catch(e){}
+  /* 🧭 포지션 숙련도 시즌 마감 — 안 선 자리 1단계 강등 + 포지션 전환 판정 (요청 7·11·12).
+     ⚠ p.apps 가 아직 초기화되기 «전» 이어야 한다 — 그 값으로 「뛴 시즌인가」를 가른다. */
+  try{ posFamSeasonSweep(); }catch(e){}
   /* 🇰🇷 소집은 시즌을 넘기지 않는다 — 도장이 남으면 avail 이 그 선수를 영영 막는다 */
   try{ G.natl=null; for(const id in (G.teams||{})){ const _t=G.teams[id];
     for(const _p of ((_t&&_t.players)||[])) delete _p.natl; } }catch(e){}
@@ -26503,7 +26724,7 @@ function osAiSign(p, t){
   addNews(`🌍 <b>${t.name}</b>, ${p.name} 영입 확정 — ${p.osClub} → ${t.short} (이적료 ${fee}억 · 연봉 ${wage}억)`, "warn", "club",
     {cat:"transfer", ic:"✍️", tone:-1, tid:t.id,
      head:`${t.name}, ${p.name} 영입 완료`,
-     sub:`${p.osClub}에서 뛰던 ${p.name}이 ${t.name} 유니폼을 입는다. 이적료는 ${fee}억 규모로 알려졌다.`, src:"K리그 공식"});
+     sub:fixJosa(`${p.osClub}에서 뛰던 ${p.name}이/가 ${t.name} 유니폼을 입는다.`)+` 이적료는 ${fee}억 규모로 알려졌다.`, src:"K리그 공식"});
   /* 구단 전용 이스터에그가 있으면 그 소식이 먼저 나간다 (예: 친정 복귀) */
   const eg=p.osEggs && p.osEggs[t.id];
   if(eg && eg.news) addNews(eg.news, "warn", "club");
@@ -27590,6 +27811,22 @@ function migrateLoadedG(){
     }
   });
   step("A매치 소집 정리", ()=>{ natlSweep(); });
+  /* 🌏 ⚠ 제보 — 무직 기간에 멈춰 있던 아챔 일정이 부임 뒤 한꺼번에 몰린다.
+     불러오는 시점에 「예정일을 한참 넘긴 차수」를 대행이 정리해 둔다. */
+  step("아챔 밀린 일정 정리", ()=>{
+    try{
+      if(G.mgrSinceD==null) G.mgrSinceD=0;
+      if(!eaclOn()) return;
+      const before=(G.eacl.fix||[]).filter(m=>!m.done).length;
+      playACLIfDue();
+      const after=(G.eacl.fix||[]).filter(m=>!m.done).length;
+      if(before>after){
+        const n=before-after;
+        try{ notify(`🌏 <b>${eaclShort()} 일정 정리</b> — 예정일을 넘긴 ${n}경기를 대행 체제에서 마무리했습니다.`,"warn"); }catch(e){}
+        try{ addNews(`🌏 ${eaclShort()} — 밀려 있던 ${n}경기가 정리됐습니다.`, "warn", "club"); }catch(e){}
+      }
+    }catch(e){}
+  });
   /* 🆔 번호부터 맞춘다 — 마이그레이션 도중에 선수가 새로 만들어지는 단계(긴급 등록·스쿼드 보강)가
      있어서, 여기서 PID 를 올려 두지 않으면 그 선수들이 기존 번호를 물고 나온다. */
   step("선수 번호 선점", ()=>{ PID=nextPid(); });
@@ -29743,6 +29980,11 @@ function edSetPlayerQ(p, field, v){
     try{ if(n>0){ if(!p.injT){ p.injT=injTypeForWeeks(n); p.injC=p.injC||"train"; } }
          else { delete p.injT; delete p.injC; } }catch(e){}
   } }
+  /* 🧠 ⚠ 요청 — 「에디터에서 선수 생성 말고 기존 선수들 성격도 바꿀 수 있게. 김태환이 온화함인 건 좀…」.
+     성격은 지금까지 생성기(pgInit)에서만 정할 수 있었다. 실존 선수의 성격을 손대는 길이 없었다.
+     ─ 성격은 라커룸·면담·이적 반응·작별 인사·태업 확률까지 두루 읽는 값이라, 여기 한 줄이면
+       그 선수의 «결»이 통째로 바뀐다. 패치 파일에도 그대로 실린다(edSetPlayer 가 기록한다). */
+  else if(field==="pers"){ const n=edNum(v,0,PERS_N.length-1,0); if(n!=null) p.pers=n; }
   else if(field==="ban"){ const n=edNum(v,0,10,0); if(n!=null) p.ban=n; }
   else if(field==="tpt"){ const n=edNum(v,0,99,0); if(n!=null) p.tpt=n; }
 }
@@ -30013,24 +30255,27 @@ const ED_PATCH_KIND="klm2026-editor-patch";
 const ED_NAMES_KIND="klm2026-names";
 function edExportPatch(){
   const list=(G.edits||[]);
-  if(!list.length){ flash("아직 에디터로 수정한 내역이 없습니다.","warn"); show("editor"); return; }
+  const _sN=edStaffCount();
+  if(!list.length && !_sN){ flash("아직 에디터로 수정한 내역이 없습니다.","warn"); show("editor"); return; }
   const t=userTeam();
   const obj={kind:ED_PATCH_KIND, v:1, from:t?t.short:"", season:G.season,
              made:new Date().toISOString().slice(0,10),
              edits:list.map(e=>({tid:e.tid, pn:e.pn, k:e.k, f:e.f, v:e.v}))};
+  /* 🎩 스태프 수정본 — 고친·만든·지운 사람을 통째로 싣는다 (요청) */
+  try{ const SB=edStaffBook(); const sl=Object.values(SB); if(sl.length) obj.staff=sl; }catch(e){}
   /* 🌏 해외 구단은 G.teams 에 없어 수정 기록만으로는 옮겨지지 않는다 — 표를 통째로 싣는다 */
   Object.assign(obj, edOvrTake());
   const _ovN=edOvrCount(obj);
   try{
     const txt=JSON.stringify(obj);
-    const name=`klm2026_patch_${obj.made.replace(/-/g,"")}_${list.length}건.json`;
+    const name=`klm2026_patch_${obj.made.replace(/-/g,"")}_${list.length+_sN}건.json`;
     const blob=new Blob([txt],{type:"application/json"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
     a.href=url; a.download=name; a.style.display="none";
     document.body.appendChild(a); a.click();
     setTimeout(()=>{ try{ URL.revokeObjectURL(url); a.remove(); }catch(e){} }, 800);
-    showConfirm(`<b>📤 수정본 패치를 내보냈습니다.</b>\n\n· 수정 ${list.length}건${_ovN?` · 🌏 해외 구단 ${_ovN}곳`:""} · ${Math.round(txt.length/102.4)/10}KB\n· 파일명: ${name}\n\n<span class="small">전체 데이터가 아니라 "무엇을 어떻게 바꿨는가"만 담깁니다.\n받은 사람은 자기 게임 위에 이 수정만 얹습니다 — 나머지는 그대로 둔 채로.${_ovN?"\n🌏 해외 구단은 대회 참가 여부와 상관없이 적용됩니다 — 그 구단이 만들어질 때 씌워집니다.":""}</span>`,
+    showConfirm(`<b>📤 수정본 패치를 내보냈습니다.</b>\n\n· 수정 ${list.length}건${_sN?` · 🎩 스태프 ${_sN}명`:""}${_ovN?` · 🌏 해외 구단 ${_ovN}곳`:""} · ${Math.round(txt.length/102.4)/10}KB\n· 파일명: ${name}\n\n<span class="small">전체 데이터가 아니라 "무엇을 어떻게 바꿨는가"만 담깁니다.\n받은 사람은 자기 게임 위에 이 수정만 얹습니다 — 나머지는 그대로 둔 채로.${_ovN?"\n🌏 해외 구단은 대회 참가 여부와 상관없이 적용됩니다 — 그 구단이 만들어질 때 씌워집니다.":""}</span>`,
       ()=>{}, {okLabel:"확인", cancelLabel:""});
   }catch(e){ flash("내보내기에 실패했습니다.","warn"); show("editor"); }
 }
@@ -30153,20 +30398,22 @@ function edApplyOne(e){
 function edApplyPatch(obj){
   /* ⚠ 점검 — obj 가 null/undefined 면 여기서 그대로 죽었다(JSON.parse("null") 하나면 재현).
      파일에서 들어오는 값이므로 방어한다. */
-  if(!obj || typeof obj!=="object" || !Array.isArray(obj.edits)){
+  if(!obj || typeof obj!=="object" || (!Array.isArray(obj.edits) && !Array.isArray(obj.staff))){
     try{ flash("패치 파일 형식이 아닙니다.","warn"); }catch(e){}
     return;
   }
   let ok=0, miss=0;
   for(const e of (obj.edits||[])){ try{ if(edApplyOne(e)) ok++; else miss++; }catch(err){ miss++; } }
+  let SR={ok:0,made:0,gone:0};
+  try{ if(Array.isArray(obj.staff)) SR=edStaffApply(obj.staff); }catch(err){}
   let ovN=0; try{ ovN=edOvrCount(obj); if(ovN) edOvrPut(obj); }catch(err){}
   saveGame();
-  showConfirm(`<b>✅ 수정본 패치를 적용했습니다.</b>\n\n· 적용 ${ok}건${miss?` · <span style="color:var(--gold)">건너뜀 ${miss}건</span>`:""}${ovN?`\n· 🌏 해외 구단 ${ovN}곳 — 대회에 나가면 이 이름·구장으로 나옵니다`:""}\n${miss?`<span class="small">건너뛴 항목은 이 세이브에 없는 팀·선수입니다 (이적·개명·시즌 차이 등).</span>\n`:""}\n<span class="small">제작: ${obj.from||"?"} · ${obj.made||""} · 시즌 ${obj.season||"?"} 기준</span>`,
+  showConfirm(`<b>✅ 수정본 패치를 적용했습니다.</b>\n\n· 적용 ${ok}건${miss?` · <span style="color:var(--gold)">건너뜀 ${miss}건</span>`:""}${(SR.ok+SR.made+SR.gone)?`\n· 🎩 스태프 ${SR.made?`새로 ${SR.made}명 `:""}${SR.ok?`수정 ${SR.ok}명 `:""}${SR.gone?`삭제 ${SR.gone}명`:""}`.trimEnd():""}${ovN?`\n· 🌏 해외 구단 ${ovN}곳 — 대회에 나가면 이 이름·구장으로 나옵니다`:""}\n${miss?`<span class="small">건너뛴 항목은 이 세이브에 없는 팀·선수입니다 (이적·개명·시즌 차이 등).</span>\n`:""}\n<span class="small">제작: ${obj.from||"?"} · ${obj.made||""} · 시즌 ${obj.season||"?"} 기준</span>`,
     ()=>show("editor"), {okLabel:"확인", cancelLabel:""});
 }
 function edClearLog(){
-  showConfirm(`<b>🧹 수정 내역을 비웁니다.</b>\n\n이미 적용된 수정은 게임에 그대로 남고,\n"수정본만 내보내기" 목록만 비워집니다. (${(G.edits||[]).length}건)`,
-    ()=>{ G.edits=[]; saveGame(); show("editor"); }, {okLabel:"비운다", cancelLabel:"취소"});
+  showConfirm(`<b>🧹 수정 내역을 비웁니다.</b>\n\n이미 적용된 수정은 게임에 그대로 남고,\n"수정본만 내보내기" 목록만 비워집니다. (${(G.edits||[]).length}건${edStaffCount()?` · 🎩 스태프 ${edStaffCount()}명`:""})`,
+    ()=>{ G.edits=[]; G.edStaff={}; saveGame(); show("editor"); }, {okLabel:"비운다", cancelLabel:"취소"});
 }
 function edSnapPlayer(p){
   const o={uid:p.uid, name:p.name, pos:p.pos, prefPos:p.prefPos||null, by:p.by, frn:p.frn?1:0, h:p.h||0, w:p.w||0,
@@ -30423,9 +30670,9 @@ function edImport(input){
   r.onload=()=>{
     try{
       const obj=JSON.parse(String(r.result||""));
-      if(obj && obj.kind===ED_PATCH_KIND && Array.isArray(obj.edits)){
+      if(obj && obj.kind===ED_PATCH_KIND && (Array.isArray(obj.edits)||Array.isArray(obj.staff))){
         /* 수정본 패치 — 확인 후 적용 */
-        showConfirm(`<b>📥 수정본 패치를 적용합니다.</b>\n\n· 수정 ${obj.edits.length}건 · 제작 ${obj.from||"?"} (${obj.made||""})\n· 파일에 담긴 항목만 바뀌고 나머지는 그대로 유지됩니다\n\n<span class="small">⚠ 되돌릴 수 없습니다. 적용 전에 세이브파일을 내보내 두세요.</span>`,
+        showConfirm(`<b>📥 수정본 패치를 적용합니다.</b>\n\n· 수정 ${(obj.edits||[]).length}건${(obj.staff||[]).length?` · 🎩 스태프 ${obj.staff.length}명`:""} · 제작 ${obj.from||"?"} (${obj.made||""})\n· 파일에 담긴 항목만 바뀌고 나머지는 그대로 유지됩니다\n\n<span class="small">⚠ 되돌릴 수 없습니다. 적용 전에 세이브파일을 내보내 두세요.</span>`,
           ()=>edApplyPatch(obj), {okLabel:"적용한다", cancelLabel:"취소", danger:true});
         try{ input.value=""; }catch(e2){}
         return;
@@ -31257,10 +31504,119 @@ function edsSet(field, v){
   /* ⚠ 종합(acOvr)은 «파생된 최상위 키»(c.gkc 등)를 읽는다 — c.a 만 고치면 종합이 안 움직인다.
      실측에서 능력치를 20 으로 올려도 종합이 그대로였다. 한 번 동기화해 준다. */
   try{ acSync(c); }catch(e){}
+  try{ edStaffNote(c); }catch(e){}      // 🎩 이 수정이 패치 파일에 실린다 (요청)
+  try{ edStaffNote(c); }catch(e){}      // 🎩 수정본 패치에 실린다 (요청)
   try{ saveGame(); }catch(e){}
   show(edsView());
 }
 /* 새 스태프를 만든다 — 무직 시장 또는 우리 코치진으로 */
+
+/* ═══ 🎩 스태프 수정본 — 패치 파일로 주고받기 ══════════════════════════════
+   ⚠ 요청 — 「코치진에 이운재나 이하라 코치 같은 걸 여러 개 만들어서 추후에 패치 형식으로
+     만들어 볼까 한다. 스태프들도 수정할 수 있게 하자」.
+   ─ 화면에서 고치는 길은 이미 있었지만, 그 수정이 «수정본 패치»에는 하나도 실리지 않았다.
+     선수·팀 수정은 G.edits 에 기록되어 파일로 나가는데 스태프(edsSet/edsMake/edsMove/edsDelete)는
+     기록하는 곳이 없었다 — 만들어 둔 코치진을 남에게 줄 방법이 없었다는 뜻이다.
+   ─ 스태프는 선수와 달리 항목이 서로 얽혀 있어(직책이 종합을 정하고, 능력치 표가 두 벌이다)
+     «무엇을 바꿨는가»보다 «지금 이 사람» 통째를 싣는 편이 안전하다. 고유번호로 짝을 짓고,
+     받는 쪽에 그 번호가 없으면 새로 만들어 넣는다. 지운 사람은 지운 기록만 남는다. */
+function edStaffBook(){ if(!G.edStaff || typeof G.edStaff!=="object") G.edStaff={}; return G.edStaff; }
+const ED_STAFF_KEYS=["id","uid","n","fullN","role","trait","age","sex","natl","frn","career",
+                     "h","w","club","hired","assign","made","since","ct","wage","a"];
+function edStaffSnap(c){
+  const o={};
+  try{
+    for(const k of ED_STAFF_KEYS) if(c[k]!==undefined && c[k]!==null) o[k]=c[k];
+    if(c.a){ o.a={}; for(const k in c.a) if(typeof c.a[k]==="number") o.a[k]=Math.round(c.a[k]); }
+  }catch(e){}
+  return o;
+}
+/* 스태프 한 명의 «지금 상태»를 수정본 장부에 남긴다 */
+function edStaffNote(c, gone){
+  try{
+    if(!c) return;
+    if(c.uid==null){ try{ c.uid=nextStaffUid(); }catch(e){} }
+    const key=String(c.uid!=null?c.uid:c.id);
+    if(!key) return;
+    edStaffBook()[key] = gone ? {uid:c.uid, id:c.id, n:c.n, gone:1} : edStaffSnap(c);
+  }catch(e){}
+}
+function edStaffCount(){ try{ return Object.keys(edStaffBook()).length; }catch(e){ return 0; } }
+/* 세이브 안에서 그 스태프를 찾는다 — 고유번호가 먼저, 없으면 이름+직책 */
+function edStaffFind(o){
+  try{
+    const all=[].concat(crew()||[], acPool()||[]);
+    if(o.uid!=null){ const a=all.find(x=>x && +x.uid===+o.uid); if(a) return a; }
+    if(o.id){ const b=all.find(x=>x && x.id===o.id); if(b) return b; }
+    if(o.n){ const c2=all.filter(x=>x && x.n===o.n && (!o.role || x.role===o.role));
+      if(c2.length===1) return c2[0]; }
+  }catch(e){}
+  return null;
+}
+/* 패치에 담긴 스태프를 얹는다 — 있으면 고치고, 없으면 만들어 넣는다 */
+function edStaffApply(list){
+  let ok=0, made=0, gone=0;
+  for(const o of (list||[])){
+    try{
+      if(!o || typeof o!=="object") continue;
+      const cur=edStaffFind(o);
+      if(o.gone){
+        if(cur){
+          const P=acPool()||[], C=crew()||[];
+          let i=C.indexOf(cur); if(i>=0) C.splice(i,1);
+          i=P.indexOf(cur); if(i>=0) P.splice(i,1);
+          gone++;
+        }
+        continue;
+      }
+      /* 값을 살균해서 받는다 — 남이 만든 파일이다 */
+      const clean={};
+      clean.n=edName(o.n,12)||"코치";
+      clean.role=AC_ROLE[o.role]?o.role:"ac";
+      clean.trait=(clean.role==="ac" && AC_TRAIT[o.trait])?o.trait:(clean.role==="ac"?"bal":null);
+      clean.age=clamp(Math.round(+o.age||45),20,78);
+      clean.sex=STAFF_SEX[o.sex]?o.sex:"m";
+      clean.natl=edName(o.natl,14)||"대한민국";
+      clean.frn=(clean.natl==="대한민국")?0:1;
+      if(clean.frn && o.fullN) clean.fullN=edName(o.fullN,24);
+      if(o.career) clean.career=edName(o.career,40);
+      if(+o.h) clean.h=clamp(+o.h,140,215);
+      if(+o.w) clean.w=clamp(+o.w,35,160);
+      if(o.ct!=null) clean.ct=clamp(Math.round(+o.ct||0),0,6);
+      if(o.wage!=null) clean.wage=Math.max(0, Math.round((+o.wage||0)*10)/10);
+      const A={}; if(o.a) for(const k of SA_KEYS) if(typeof o.a[k]==="number") A[k]=clamp(Math.round(o.a[k]),1,20);
+      const tgtClub=(o.club && G.teams[o.club]) ? o.club : null;
+      let c=cur;
+      if(!c){
+        c={id:"ac"+Math.floor(Math.random()*1e9).toString(36)+Date.now().toString(36).slice(-4)};
+        try{ c.uid=(o.uid!=null && !edStaffFind({uid:o.uid})) ? o.uid : nextStaffUid(); }catch(e){}
+        c.made=1;
+        try{ acPool().push(c); }catch(e){}
+        made++;
+      } else ok++;
+      Object.assign(c, clean);
+      if(Object.keys(A).length){ c.a=Object.assign(c.a||{}, A); }
+      try{ acSync(c); }catch(e){}
+      /* 소속 — 내 구단이면 코치진, 아니면 그 구단 소속, 없으면 무직 시장 */
+      try{ edsMoveQ(c, tgtClub); }catch(e){}
+    }catch(e){}
+  }
+  return {ok, made, gone};
+}
+/* 화면을 다시 그리지 않는 소속 이동 (패치 적용용) */
+function edsMoveQ(c, tid){
+  if(!c) return;
+  try{
+    const P=acPool(), C=crew();
+    const rmP=()=>{ const i=P.indexOf(c); if(i>=0) P.splice(i,1); };
+    const rmC=()=>{ const i=C.indexOf(c); if(i>=0) C.splice(i,1); };
+    if(!tid){ rmC(); delete c.club; delete c.hired; delete c.assign; if(!P.includes(c)) P.push(c); }
+    else if(typeof G!=="undefined" && G.userTeamId===tid && !G.jobless && !roleFull(c.role)){
+      rmP(); c.club=tid; c.hired=1; if(!C.includes(c)) C.push(c);
+    }
+    else { rmC(); delete c.hired; delete c.assign; c.club=tid; if(!P.includes(c)) P.push(c); }
+  }catch(e){}
+}
 function edsMake(){
   const M=EDS.mk;
   /* 🧬 게임 시작 전에는 «우리 코치진»이 없다 — 시장/구단 소속으로만 만든다 (요청) */
@@ -31303,6 +31659,7 @@ function edsMake(){
   EDS.src = landed==="crew" ? "crew" : landed==="club" ? "club" : "pool";
   EDS.id=c.id;
   EDS.mk.n=""; EDS.mk.fullN="";
+  try{ edStaffNote(c); }catch(e){}             // 🎩 만든 사람도 패치에 실린다
   edsDraft(true);                              // 다음 사람을 위해 초안을 새로 굴려 둔다
   try{ saveGame(); }catch(e){}
   try{
@@ -31324,6 +31681,7 @@ function edsMove(c, tid){
       else { rmP(); c.club=tid; c.hired=1; if(!C.includes(c)) C.push(c); EDS.src="crew"; }
     }
     else { rmC(); delete c.hired; delete c.assign; c.club=tid; if(!P.includes(c)) P.push(c); EDS.src="club"; }
+    try{ edStaffNote(c); }catch(e){}
     saveGame();
   }catch(e){}
   show(edsView());
@@ -31333,6 +31691,7 @@ function edsDelete(){
   showConfirm(`<b>🗑️ ${c.n} 을(를) 목록에서 지웁니다</b>\n\n되돌릴 수 없습니다.`, ()=>{
     try{
       const L=edsList(); const i=L.findIndex(x=>x&&x.id===c.id); if(i>=0) L.splice(i,1);
+      try{ edStaffNote(c, true); }catch(e){}    // 🎩 지운 것도 패치에 남긴다
       EDS.id=null; saveGame();
     }catch(e){}
     show(edsView());
@@ -31571,6 +31930,10 @@ function editorView(){
         ${ED_ROW(`잠재력 (90~200) <span class="small">현재 능력 ${dispOvr(p)} 기준</span>`, ED_IN("edSetPlayer","pot",dispPot(p),60))}
         ${ED_ROW("컨디션 (55~100)", ED_IN("edSetPlayer","cond",Math.round(p.cond||90),60))}
         ${ED_ROW("사기 (30~99)", ED_IN("edSetPlayer","morale",Math.round(p.morale||70),60))}
+        ${ED_ROW(`성격 <span class="small">라커룸 반응·면담·이적 태도·태업 확률이 여기서 갈립니다</span>`,
+          `<select onchange="edSetPlayer('pers', this.value)">
+            ${PERS_N.map((n,i)=>`<option value="${i}" ${(p.pers||0)===i?"selected":""}>${PERS_IC[i]||""} ${n}</option>`).join("")}
+          </select> <span class="small" style="opacity:.75">${PERS_DESC[p.pers||0]||""}</span>`)}
         ${ED_ROW("감독 호감도 (0~100)", ED_IN("edSetPlayer","aff",Math.round(aff(p)),60))}
         ${ED_ROW("부상 (주)", ED_IN("edSetPlayer","inj",p.inj||0,50))}
         ${ED_ROW("출장 정지 (경기)", ED_IN("edSetPlayer","ban",p.ban||0,50))}
@@ -31795,7 +32158,7 @@ function editorView(){
       선수는 이름으로 찾되, 성씨가 다른 버전의 파일(업데이트 전 실명 데이터 등)도 동일 인물로 알아봅니다. 받은 세이브에 없는 선수만 건너뜁니다.</p>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button class="mini" onclick="edExport()">📤 전체 내보내기 <span class="small">(리그 통째)</span></button>
-      <button class="mini" onclick="edExportPatch()" ${(G.edits||[]).length?"":"disabled"}>✂️ 수정본만 내보내기 <span class="small">(${(G.edits||[]).length}건)</span></button>
+      <button class="mini" onclick="edExportPatch()" ${((G.edits||[]).length+edStaffCount())?"":"disabled"}>✂️ 수정본만 내보내기 <span class="small">(${(G.edits||[]).length}건${edStaffCount()?` · 🎩 ${edStaffCount()}명`:""})</span></button>
       <button class="mini" onclick="edExportNames()">📛 이름만 내보내기 <span class="small">(선수명·구단명·모기업명)</span></button>
       <label class="mini" style="cursor:pointer">📥 불러오기 <span class="small">(자동 판별)</span>
         <input type="file" accept="application/json,.json" style="display:none" onchange="edImport(this)"></label>
@@ -32309,8 +32672,8 @@ function renderRoleMenu(){
   }).join("");
   const curR=ROLE_BY_KEY[cur.r];
   const fam=getPosFam(p, slot);
-  const famCol = fam>=90?"#3fb950" : fam>=60?"#56d364" : fam>=30?"#d29922" : "#f85149";
-  const famTxt = fam>=90?"자연스러움" : fam>=60?"능숙함" : fam>=30?"어색함" : "해본 적 없음";
+  const famL=xfamLv(fam);
+  const famCol=famL.c, famTxt=famL.n;
   // 왼쪽 = 역할 목록, 오른쪽 = 임무 선택 + 설명 + 지시 사항
   /* 🎓 역할마다 「얼마나 해봤는가」를 함께 보여 준다 — 별(적합도)은 능력치, 막대는 경험이다 */
   const roleList=list.map(R=>{
@@ -32339,8 +32702,9 @@ function renderRoleMenu(){
   if(!hints.length) hints.push("포지션을 지켜라");
   el.innerHTML=`<div class="rpHead">
       <span class="rpTag">포지션</span><b>${SLOT_LABEL[slot]||slot}</b>
-      <span class="rpFam">${SLOT_LABEL[slot]||slot} 친숙도:
-        <span class="fmDot" style="background:${famCol}"></span> <b style="color:${famCol}">${famTxt}</b></span>
+      <span class="rpFam">포지션 친숙도:
+        <span class="fmDot" style="background:${famCol}"></span> <b style="color:${famCol}">${fam} · ${famTxt}</b>
+        <span style="opacity:.75">${xfamPen(fam)>0?`−${Math.round(xfamPen(fam)*100)}%`:"감소 없음"}</span></span>
       <button class="mini" onclick="closeRoleMenu()">✕</button></div>
     <div class="rpSay">${p.name} 선수는 이 자리에서 아래 역할을 맡습니다.</div>
     <div class="rpBody">
@@ -32350,11 +32714,26 @@ function renderRoleMenu(){
         <div class="rpDesc"><b>${curR?curR.n:"-"}</b> <span class="small">${curR?curR.e:""}</span>
           <div class="small" style="margin-top:4px">적합도 ${roleFit(p,cur.r).toFixed(1)} / 5 — 능력치가 이 역할에 얼마나 맞는지입니다.</div>
           ${(()=>{ const rv=getRoleFam(p,cur.r), rl=roleFamLevel(rv);
-            const lose=Math.round((1-roleFamMul(rv))*100);
-            return `<div class="small" style="margin-top:3px">역할 능숙도 <b class="rfTag" style="color:${rl.c}">${rv} · ${rl.n}</b>
-              <span class="rfBar" style="display:inline-block;vertical-align:middle;margin:0 0 1px 5px"><i style="width:${rv}%;background:${rl.c}"></i></span>
-              ${lose>2?` — 아직 손에 익지 않아 <b style="color:${rl.c}">약 ${lose}%</b>를 못 냅니다. 이 역할로 뛸수록 오릅니다.`
-                      :" — 몸에 배어 있습니다. 능력치를 그대로 씁니다."}</div>`; })()}</div>
+            /* 🎚️ 요청 3 — 포지션 친숙도와 역할 능숙도를 «각각», 그리고 «합연산 한 값» 까지 적는다.
+               여기 적힌 숫자가 그라운드에서 실제로 깎이는 양이다. */
+            const C=famCombo(fam, rv);
+            const row=(ic,ttl,v,L,pen)=>`<div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+              <span style="width:80px;flex:none">${ic} ${ttl}</span>
+              <b style="color:${L.c};width:34px;text-align:right">${v}</b>
+              <span class="rfBar" style="flex:1;min-width:40px"><i style="width:${v}%;background:${L.c}"></i></span>
+              <b style="color:${L.c};width:64px;text-align:right">${L.n}</b>
+              <b style="width:44px;text-align:right;color:${pen>0?L.c:"var(--green)"}">${pen>0?`−${Math.round(pen*100)}%`:"0%"}</b></div>`;
+            return `<div class="small" style="margin-top:6px;padding:6px 7px;background:#0d1117;border:1px solid #21262d;border-radius:7px">
+              ${row("🧭","포지션", fam, famL, C.pos)}
+              ${row("🎓","역할",   rv,  rl,   C.role)}
+              <div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding-top:5px;border-top:1px solid #21262d">
+                <span style="width:80px;flex:none"><b>합계</b></span>
+                <span style="flex:1">${C.pen>0
+                  ? `이 자리·이 역할로 내보내면 종합 능력의 <b style="color:${C.pen>=0.30?"#f85149":C.pen>=0.15?"#e8a33a":"#e3d34a"}">약 ${Math.round(C.pen*100)}%</b>를 못 냅니다.`
+                  : `종합 능력을 <b style="color:var(--green)">그대로</b> 발휘합니다.`}</span>
+                <b style="width:44px;text-align:right;color:${C.pen>0?"#f85149":"var(--green)"}">−${Math.round(C.pen*100)}%</b></div>
+              <div style="opacity:.6;margin-top:3px">포지션은 그 자리에서 뛴 만큼 오르고 안 뛰면 내려갑니다 · 역할은 그 역할로 뛴 만큼 오릅니다 · 둘은 따로 움직입니다.</div>
+            </div>`; })()}</div>
         <div class="rpHint"><span class="small">지시 사항</span><div>${hints.map(h=>`<span class="rpH">${h}</span>`).join("")}</div></div>
         <div class="rpFoot">
           ${dirty?`<span class="rpChg">${ROLE_BY_KEY[RMENU.base.r]?ROLE_BY_KEY[RMENU.base.r].n:"-"} · ${DUTY_N[RMENU.base.d]||""}
@@ -46281,6 +46660,13 @@ function profileCard(p){
     ${(p.momN&&p.momS===G.season)?`<span style="color:var(--gold)">🏅 이번 시즌 MOM <b>${p.momN}회</b>${(p.momCareer||0)>p.momN?` <span class="small" style="opacity:.7">(통산 ${p.momCareer}회)</span>`:""}</span><br>`:""}
     ${(p.eacl&&p.eacl.s===G.season&&p.eacl.apps>0)
       ? `<span style="color:#79c0ff">🌏 ${eaclShort()}: ${p.eacl.apps}경기 ${p.eacl.goals}골 ${p.eacl.assists}도움${p.eacl.rn?` · 평점 ${(p.eacl.rate/p.eacl.rn).toFixed(2)}`:""}</span><br>` : ""}
+    ${(()=>{ /* 🧭 요청 11 — 포지션이 바뀐 이력 */
+      try{ const H=p.posHist; if(!Array.isArray(H)||!H.length) return "";
+        const seg=[]; let prev=H[0].from;
+        for(const h of H) seg.push(`<b>${h.s}</b> ${h.from} → <b style="color:var(--acc)">${h.to}</b>`);
+        return `<span style="color:#d2a8ff">🧭 <b>포지션 전환</b> — ${seg.join(" · ")}
+          <span class="small" style="opacity:.7">(뛴 자리 숙련도가 원래 자리를 앞질렀습니다)</span></span><br>`;
+      }catch(e){ return ""; } })()}
     ${(p.caps||0)>0
       ? `<span style="color:#ff7b72">🇰🇷 <b>A대표팀</b> ${p.caps}경기${(p.natlG||0)?` ${p.natlG}골`:""}${(p.natlA||0)?` ${p.natlA}도움`:""}${p.natl?` <span class="small" style="opacity:.8">· 소집 중</span>`:""}</span><br>` : (p.natl?`<span style="color:#ff7b72">🇰🇷 <b>A대표팀 소집 중</b></span><br>`:"")}
     연봉: ${p.wage}억 <span class="small">(적정 ${we}억)</span> · 계약 ${p.ct||1}년 남음 · 시장가치 ${marketValue(p)}억<br>
@@ -56356,7 +56742,11 @@ function finance(){
 ═══════════════════════════════════════════════════════════════ */
 const REQ_COOL=28;              // 승인된 뒤 같은 종류를 다시 요청하기까지 필요한 날
 const REQ_COOL_NO=30;           // 거절당하면 최소 30일은 다시 못 올린다
-const REQ_MAX_SEASON=3;         // 한 시즌에 올릴 수 있는 안건 수
+/* ⚠ 요청 — 「기업구단이어서 모기업에 제안하든 시민구단이어서 시의회에 제안하든
+   횟수를 조금 더 늘려 달라. 3번은 너무 적다」. 5회로 올린다.
+   ─ 같은 안건을 연달아 올리는 것은 여전히 막힌다(REQ_COOL / REQ_COOL_NO) — 늘어난 건
+     「한 시즌에 꺼낼 수 있는 카드 수」이지 도배 허용이 아니다. */
+const REQ_MAX_SEASON=5;         // 한 시즌에 올릴 수 있는 안건 수
 const REQ_KIND={
   budget:{n:"이적 예산 증액", ic:"💰", d:"선수를 사고팔 현금을 늘립니다."},
   youth: {n:"유스·훈련 시설 투자", ic:"🌱", d:"당장 쓸 돈은 아니지만, 매 시즌 올라오는 유망주의 질이 달라집니다."},
@@ -62074,6 +62464,16 @@ function takeJob(tid){
   }
   G.goal=null;                                     // 중도 부임 — 이번 시즌 공식 목표는 없다
   G.midHireS=G.season;                             // 🎯 그래서 이번 시즌은 목표를 묻지 않는다 (goalNeeded)
+  G.mgrSinceD=G.day||0;                            // 🌏 이 날짜 이전의 대회 일정은 전임 체제의 몫이다
+  /* 밀려 있던 대회 일정을 그 자리에서 대행이 정리한다 — 부임하자마자 3~4월 경기를 치우지 않게 */
+  try{
+    if(eaclOn()){
+      const before=(G.eacl.fix||[]).filter(m=>!m.done).length;
+      playACLIfDue();
+      const after=(G.eacl.fix||[]).filter(m=>!m.done).length;
+      if(before>after) addNews(`🌏 ${eaclShort()} — 부임 이전 일정 ${before-after}경기는 대행 체제에서 마무리됐습니다.`, null, "club");
+    }
+  }catch(e){}
   G.userXI=null;
   if(t.tactic){ t.tactic.benchSel=[]; t.tactic.benchExcl=[]; t.tactic.benchManual=false; }
   for(const p of t.players){ affSet(p, 48+R(12)); p.talkR=-9; }
@@ -73061,17 +73461,20 @@ function W(a, spec, fb){        // 가중 평균 (spec: {key:weight})
 /* 능숙도가 낮으면 그 자리에서 제 기량이 안 나온다 — FM처럼 "능력치가 깎이는" 게 아니라
    판단·위치선정처럼 자리 이해가 필요한 쪽이 크게, 순수 신체 능력은 거의 안 깎인다. */
 function applyFamiliarity(sk, fam, p, slot){
+  /* 🎚️ 감소량은 XFAM_LV 한 곳에서만 정한다 — 화면의 「-N%」와 그라운드가 같은 값을 쓴다.
+     자리 이해가 필요한 항목이 더 깎이고 몸으로 하는 항목은 덜 깎이되, 평균이 표의 값이 되게
+     무게를 나눈다(무거운 쪽 7항목 ×1.5 · 가벼운 쪽 6항목 ×0.5 → 평균 ≈ 1.0). */
+  const pen=xfamPen(fam);
   const f=clamp(fam/100, 0, 1);
-  const g=Math.pow(f, 1/FAM_CURVE);        // 능숙도가 낮은 구간에서 훨씬 빠르게 나빠진다
   const band=(p&&slot)?bandGapPenalty(p, slot):1;
-  const heavy=(1 - (1-g)*FAM_PEN_HEAVY)*band;   // 자리 이해가 필요한 것
-  const light=(1 - (1-g)*FAM_PEN_LIGHT)*(0.55+band*0.45);  // 몸으로 하는 것 — 덜하지만 영향은 받는다
+  const heavy=famHeavy(pen)*band;   // 자리 이해가 필요한 것
+  const light=famLight(pen)*(0.55+band*0.45);  // 몸으로 하는 것 — 덜하지만 영향은 받는다
   for(const k of ["posSkill","decSkill","offTiming","markSkill","passSkill","crossSkill","teamwork"]) if(sk[k]!==undefined) sk[k]*=heavy;
   for(const k of ["finSkill","lngSkill","dribSkill","firstTouch","headSkill","tackleSkill"]) if(sk[k]!==undefined) sk[k]*=light;
   // 어색한 자리에 선 선수는 있어야 할 곳에 없다 — 활동량·대담성도 흔들린다
-  if(sk.workRate!==undefined) sk.workRate*=(0.7+heavy*0.3);
+  if(sk.workRate!==undefined) sk.workRate*=(1-pen*0.8);
   if(sk.bravery!==undefined)  sk.bravery *=(0.75+band*0.25);
-  sk.familiarity=f; sk.bandK=band;
+  sk.familiarity=f; sk.bandK=band; sk.posPen=pen;
   return sk;
 }
 /* 팀 전술 적응도(조직력)를 경기용 능력치에 얹는다.
@@ -73113,24 +73516,35 @@ function bodyFx(p){
    전원을 엉뚱한 자리에 놓아도 경기가 비슷하게 흘러갔다. FM에서는 그러면 경기가 무너진다.
    지금은 (1) 능숙도 자체의 페널티를 크게 키우고,
         (2) 원래 라인(수비/미드/공격/골키퍼)과 다른 자리에 세우면 별도 페널티를 한 겹 더 얹는다. */
-const FAM_PEN_HEAVY=0.58;   // 능숙도 0 일 때 판단·위치선정이 58% 깎인다
-const FAM_PEN_LIGHT=0.26;
-const FAM_CURVE=1.45;       // 낮은 구간일수록 급격히 나빠진다 (50이면 절반이 아니라 그 이상 손해)
+/* 🎚️ 감소량을 항목에 나눠 싣는다 — 자리 이해가 필요한 쪽이 더, 몸으로 하는 쪽이 덜.
+   두 무게의 평균이 1 이라 «전체 평균 감소량 = 표의 값» 이 된다. */
+const FAM_PEN_HEAVY=1.2, FAM_PEN_LIGHT=0.8;
+function famHeavy(pen){ return clamp(1 - pen*FAM_PEN_HEAVY, 0.10, 1); }
+function famLight(pen){ return clamp(1 - pen*FAM_PEN_LIGHT, 0.20, 1); }
+const FAM_CURVE=1.45;       // (옛 이름 — 지금은 XFAM_LV 가 정한다)
 /* 🎓 역할 능숙도 — 포지션 능숙도의 절반 무게로 같은 곳을 건드린다.
    「자리는 아는데 이 역할은 처음」인 선수는 몸으로 하는 건 그대로지만,
    언제 올라가고 언제 남을지를 몰라 판단·위치선정·연계가 흔들린다. */
-const RFAM_PEN_HEAVY=0.29, RFAM_PEN_LIGHT=0.13, RFAM_CURVE=1.45;
+const RFAM_CURVE=1.45;      // (옛 이름 — 지금은 XFAM_LV 가 정한다)
 function applyRoleFam(sk, p, slot, t){
   try{
     if(!p || p.pos==="GK" || !slot) return sk;
     const rd=getRole(t, p, slot); if(!rd || !rd.r) return sk;
     const v=getRoleFam(p, rd.r);
-    const g=Math.pow(clamp(v/100,0,1), 1/RFAM_CURVE);
-    const heavy=1-(1-g)*RFAM_PEN_HEAVY;
-    const light=1-(1-g)*RFAM_PEN_LIGHT;
+    /* 🎚️ 요청 3 — 포지션과 역할은 «합연산» 이다. 두 층을 그냥 곱하면 합보다 덜 깎여
+       (실측 표시 −58% / 실제 −51.9%) 화면에 적은 숫자가 거짓말이 된다.
+       ─ 여기서는 「합계만큼 깎인 상태」가 되도록 남은 몫만 곱한다.
+         이미 포지션 층이 famHeavy(posPen) 을 곱해 뒀으므로, 그 나머지를 곱하면
+         결과는 정확히 famHeavy(posPen + rolePen) 이 된다. */
+    const pen=xfamPen(v);
+    const p0=clamp(sk.posPen||0, 0, 0.29);
+    const tot=clamp(p0+pen, 0, 0.58);
+    const heavy=famHeavy(tot)/Math.max(1e-6, famHeavy(p0));
+    const light=famLight(tot)/Math.max(1e-6, famLight(p0));
     for(const k of ["posSkill","decSkill","offTiming","markSkill","passSkill","teamwork"]) if(sk[k]!==undefined) sk[k]*=heavy;
     for(const k of ["crossSkill","finSkill","dribSkill","firstTouch","tackleSkill"]) if(sk[k]!==undefined) sk[k]*=light;
-    sk.roleFam=v/100; sk.roleKey=rd.r;
+    sk.roleFam=v/100; sk.roleKey=rd.r; sk.rolePen=pen;
+    sk.famPen=clamp((sk.posPen||0)+pen, 0, 0.58);
   }catch(e){}
   return sk;
 }
@@ -73758,6 +74172,7 @@ class MatchSim{
       /* 🎓 교체로 빠진 선수도 정산 때 「그 경기에서 뛴 자리」가 남아야 한다 — 덮지 않고 병합 */
       sd.team._slotOcc=Object.assign({}, sd.team._slotOcc||{}, slotOf);
       const slotOfD=computeRenderSlots(sd.team, xi, "oop");   // 🛡️ 공 미소유 시 자리
+      sd.team._slotOccD=Object.assign({}, sd.team._slotOccD||{}, slotOfD);
       for(const x of onPitch(sd)){
         const slot = x.p.pos==="GK" ? "GK" : (slotOf[x.p.id]||"CM");
         /* ⚠ 여기서 isHome 을 홈/원정 키로만 다시 계산해서, 후반에 교체를 하면
@@ -74065,6 +74480,7 @@ class MatchSim{
          경기 시점 점유를 팀에 실어 준다. */
       sd.team._slotOcc=slotOf;
       const slotOfD=computeRenderSlots(sd.team, xi, "oop");   // 🛡️ 공 미소유 시 자리
+      sd.team._slotOccD=slotOfD;   // 🛡️ 요청 8 — 미소유 자리도 남겨야 그쪽 숙련도가 큰다
       for(const x of onPitch(sd)){
         const slot = x.p.pos==="GK" ? "GK" : (slotOf[x.p.id]||"CM");
         const slotD = x.p.pos==="GK" ? "GK" : (slotOfD[x.p.id]||slot);
@@ -87588,6 +88004,13 @@ function stepDay(){
   try{ gamDayTick(); }catch(e){}     // 🎰 도박 — 소문(열기)은 하루마다 식는다
   try{ scoutTick(); }catch(e){}     // 🔎 스카우트 — 파견 기간이 차면 보고가 한 건씩 올라온다
   try{ natlTick(); }catch(e){}      // 🇰🇷 A매치 — 루머·소집명단·대표팀 경기·복귀 (요청)
+  /* 🌏 ⚠ 제보 — 「1월 1일에 자진 사임하고 5월 초에 부임했더니, 3~4월에 예정됐던 아챔 경기를
+     이틀에 한 번씩 치른다」. 원인 : 대회 진행(playACLIfDue)이 «내가 리그 경기를 치른 뒤»
+     (completeRound) 에서만 불렸다. 무직이면 리그는 tickOtherDivRounds 가 굴리는데 그 길에는
+     이 호출이 없어서, 감독이 없는 동안 대회가 통째로 멈춰 있었다(실측 3개 차수 미소화).
+     그러다 부임하는 순간 지난 날짜의 경기가 한꺼번에 «지금 치를 경기»가 되어 몰렸다.
+     ─ 날짜가 지난 대회 경기는 매일 알아서 굴러간다. 내 경기는 eaclUserPendingMD 가 지켜 준다. */
+  try{ playACLIfDue(); }catch(e){}
   try{ acMonthTick(); }catch(e){}   // 🎩 코치진 월 급여 — 매달 1일, 이적 예산에서
   try{ acNegoRivalTick(); }catch(e){} // 🏃 협상 중인 스태프를 타 구단이 채 간다 (우수 이상)
   try{ tickOtherDivRounds(); }catch(e){}  // 🗓️ 내 일정이 먼저 끝났으면 남은 부는 날짜에 맞춰 진행된다
@@ -93785,7 +94208,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5195";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5199";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
