@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5200-->
+<!--B:20260913-5202-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -6427,9 +6427,13 @@ function banNow(p){
   if(BAN_CTX==="friendly") return 0;
   return (p && p._banAct!=null) ? p._banAct : ((p&&p.ban)||0);
 }
-/* 🇰🇷 p.natl — 대표팀에 가 있는 선수는 소속팀 경기에 못 나선다.
-   A매치 창에도 EACL·CWC 는 열리므로 여기서 한 번에 막는다. */
-function avail(p){ return p.inj<=0 && !(banNow(p)>0) && !(p.sulk>0) && !p._loanBlk && !p.natl; }
+/* 🇰🇷 p.natlCall — 대표팀에 가 있는 선수는 소속팀 경기에 못 나선다.
+   ⚠ 이 표식은 처음에 p.natl 이라는 이름을 썼는데, 그 칸은 이미 «선수의 출신 국가»가
+     쓰고 있었다(선수 생성기의 «출신 국가»). 그래서 국적을 넣어 만든 외국인은
+     avail() 이 «대표팀에 가 있다»로 읽어 <b>영영 경기에 못 나섰고</b>, 세이브를 열면
+     natlSweep 이 그 국적 문자열을 지워 버렸다(실측 — 브라질 국적이 사라짐).
+     이름을 갈라 둔다. 국적은 p.natl, 소집은 p.natlCall 이다. */
+function avail(p){ return p.inj<=0 && !(banNow(p)>0) && !(p.sulk>0) && !p._loanBlk && !p.natlCall; }
 /* 🔁 임대 선수는 원소속 구단과의 경기에 나설 수 없다 (K리그 규정).
    경기를 만들기 직전에 표식을 달고, 끝나면 지운다 — avail() 을 쓰는 모든 경로가 한 번에 따른다. */
 function loanBlockSet(home, away){
@@ -14889,7 +14893,7 @@ function completeRound(M){
         const why = p.inj>0 ? `부상(${p.inj}주)`
                   : p.ban>0 ? `출장정지(${p.ban}경기)`
                   : p.banE>0 ? `${eaclShort()} 출전정지(${p.banE}경기)`
-                  : p.natl ? "🇰🇷 대표팀 차출"
+                  : p.natlCall ? "🇰🇷 대표팀 차출"
                   : (p.army && p.army.out) ? "군 복무"
                   : (p.loan && p.loan.own===ut.id && p.loan.to!==ut.id) ? "타 구단 임대"
                   : null;
@@ -18184,7 +18188,7 @@ function applyDayToTeam(t, pl){
   if(pl.t==="rest"){
     for(const p of t.players){
       if(p.loan){ trainLoanee(t, p); continue; }
-      if(p.natl){ natlAwayDay(p); continue; }   // 🇰🇷 대표팀에 가 있다 — 우리 훈련장에 없다
+      if(p.natlCall){ natlAwayDay(p); continue; }   // 🇰🇷 대표팀에 가 있다 — 우리 훈련장에 없다
       developPlayer(t, p, null);                              // 쉬는 날에도 몸은 아주 조금 변한다
       const rmR=dayRecMul(p)*aiManK(t); mFatDecay(p);         // 👔 AI 감독의 선수 관리가 회복 속도를 가른다
       const _sk=(p.sulk>0)?SULK_REC:1;                        // 😤 태업 중이면 더디게 (예전엔 0)
@@ -18205,7 +18209,7 @@ function applyDayToTeam(t, pl){
   let hurt=null;
   for(const p of t.players){
     if(p.loan){ trainLoanee(t, p); continue; }
-    if(p.natl){ natlAwayDay(p); continue; }     // 🇰🇷 대표팀에 가 있다 — 우리 훈련장에 없다
+    if(p.natlCall){ natlAwayDay(p); continue; }     // 🇰🇷 대표팀에 가 있다 — 우리 훈련장에 없다
     const onFoc = (FOC.k==="pos") ? inTrainLine(p, line) : true;
     /* 🎯 개인 훈련 — 팀 주제 위에 자기 과제를 얹는다. 두 배 무게로 뽑히므로 그 항목이 빨리 는다 */
     const _ind=indKeysOf(p);
@@ -22725,7 +22729,7 @@ function startNewSeason(){
   try{ posFamSeasonSweep(); }catch(e){}
   /* 🇰🇷 소집은 시즌을 넘기지 않는다 — 도장이 남으면 avail 이 그 선수를 영영 막는다 */
   try{ G.natl=null; for(const id in (G.teams||{})){ const _t=G.teams[id];
-    for(const _p of ((_t&&_t.players)||[])) delete _p.natl; } }catch(e){}
+    for(const _p of ((_t&&_t.players)||[])) delete _p.natlCall; } }catch(e){}
   /* 🕐 진행 중이던 이적은 시즌을 넘기지 않는다 — 마감과 함께 이미 무산됐어야 한다.
      📅 다만 «이월 계약»은 다음 시즌 겨울 창 첫날까지 살아 있다 (요청). */
   try{
@@ -27770,12 +27774,21 @@ function purgePlayerFrom(t, pred){
 function natlSweep(){
   try{
     let n=0;
+    /* 🧯 옛 세이브 구제 — 이름이 갈리기 전 빌드에서는 소집 표식이 p.natl 에 들어갔다.
+       객체면 소집 표식이므로 새 칸으로 옮기고(그 뒤 아래 규칙이 정리한다),
+       문자열이면 «출신 국가»이므로 그대로 둔다. */
     for(const id in (G.teams||{})){
       const t=G.teams[id]; if(!t||!t.players) continue;
       for(const p of t.players){
-        if(!p.natl) continue;
-        if((G.day||0) <= (p.natl.ret||0) && natlWindowNow()) continue;
-        delete p.natl; n++;
+        if(p.natl && typeof p.natl==="object"){ if(!p.natlCall) p.natlCall=p.natl; delete p.natl; }
+      }
+    }
+    for(const id in (G.teams||{})){
+      const t=G.teams[id]; if(!t||!t.players) continue;
+      for(const p of t.players){
+        if(!p.natlCall) continue;
+        if((G.day||0) <= (p.natlCall.ret||0) && natlWindowNow()) continue;
+        delete p.natlCall; n++;
       }
     }
     return n;
@@ -30818,7 +30831,7 @@ const PG_NATIONS=["브라질","아르헨티나","콜롬비아","우루과이","�
   "말레이시아","중국","미국","캐나다","코스타리카","나이지리아","가나","코트디부아르","세네갈",
   "카메룬","이집트","튀니지","모로코"];
 function pgInit(){
-  PG={ name:"", pos:"FW", pref:"ST", by:G.season-24, h:180, w:74, frn:0, pers:0,
+  PG={ name:"", pos:"FW", pref:"ST", by:G.season-24, h:180, w:74, frn:0, hg:0, pers:0,
        ovr:70, pot:78, stars:3, wage:2.0, ct:3, dest:"team", tid:G.userTeamId,
        osClub:"", osNat:"", mv:0, traits:[], attr:null, gkA:null, fam:null,
        knm:"", natl:"", armyDone:0 };   /* 🌐 외국인 — K리그 등록명·국적 · 🎖️ 병역 (요청) */
@@ -30903,7 +30916,13 @@ function pgSet(k, v){
   else if(k==="by"){ const n=edNum(v,1900,(G.season||2026)-1,0); if(n!=null) PG.by=n; }   // ⚠ 요청 — 나이 작성 한도 해제 (1900년~작년생까지 전부 허용)
   else if(k==="h"){ const n=edNum(v,160,205,0); if(n!=null) PG.h=n; }
   else if(k==="w"){ const n=edNum(v,52,105,0); if(n!=null) PG.w=n; }
-  else if(k==="frn") PG.frn=v?1:0;
+  /* ⚠ 선택 상자는 문자열을 넘긴다 — "0" 은 참이라 v?1:0 이면 «내국인»을 골라도 외국인으로
+     굳었다(되돌릴 방법이 없었다). 숫자로 바꿔서 본다. */
+  else if(k==="frn"){ PG.frn=(+v)?1:0; if(!PG.frn){ PG.hg=0; PG.knm=""; PG.natl=""; } }
+  /* 🌱 ⚠ 요청 — 「선수 생성에서 외국인 국적을 고르면 홈그로운인지 아닌지 정하는 기능이
+     있으면 좋겠다」. 홈그로운은 «국내 유스를 거친 외국인» — 외국인 쿼터를 먹지 않는다.
+     에디터에는 이미 있던 항목인데 생성기에는 없었다. */
+  else if(k==="hg") PG.hg=(+v)?1:0;
   else if(k==="armyDone") PG.armyDone=+v?1:0;   // 🎖️ 병역 (요청)
   else if(k==="pers"){ const n=edNum(v,0,3,0); if(n!=null) PG.pers=n; }
   else if(k==="ovr"){ const n=edNum(v,45,92,0); if(n!=null){ PG.ovr=n; if(PG.pot<n) PG.pot=n; pgGenAttrs(); } }
@@ -30944,7 +30963,8 @@ function pgCreate(toList){
     tmp.traits=PG.traits.slice(0,TRAIT_MAX);
     if(PG.frn){ const _k=(PG.knm||"").trim();
       if(_k && _k!==PG.name){ tmp.realName=PG.name; tmp.name=_k; }
-      if((PG.natl||"").trim()) tmp.natl=PG.natl.trim(); }   /* 🌐 K리그 등록명·국적 (요청) */
+      if((PG.natl||"").trim()) tmp.natl=PG.natl.trim();
+      if(PG.hg) tmp.hg=1; else delete tmp.hg; }   /* 🌐 등록명·국적 · 🌱 홈그로운 (요청) */
     if(PG.mv>0) tmp.mvFix=PG.mv;
     if(!PG.frn && +PG.armyDone) tmp.armyDone=1;      // 🎖️ 병역 완료 (외국인은 해당 없음)
     if(PG.dest==="os"){ tmp.osClub=PG.osClub; tmp.osNat=PG.osNat||(PG.frn?"해외":"대한민국"); }
@@ -30981,7 +31001,8 @@ function pgCreate(toList){
   p.traits=PG.traits.slice(0,TRAIT_MAX);
   if(PG.frn){ const _k=(PG.knm||"").trim();
     if(_k && _k!==PG.name){ p.realName=PG.name; p.name=_k; }   /* 🌐 표시는 K리그 등록명, 본명은 보존 (요청) */
-    if((PG.natl||"").trim()) p.natl=PG.natl.trim(); }
+    if((PG.natl||"").trim()) p.natl=PG.natl.trim();
+    if(PG.hg) p.hg=1; else delete p.hg; }                      /* 🌱 홈그로운 — 외국인 쿼터 미적용 (요청) */
   p.gen=1;                                    // 생성 선수 표시
   if(!PG.frn && +PG.armyDone) p.armyDone=1;   // 🎖️ 병역 완료 — 상무 차출 대상에서 빠진다
   if(PG.mv>0) p.mvFix=PG.mv;
@@ -31323,7 +31344,9 @@ function playerGenView(){
       +ED_ROW("출신 국가", `<select onchange="pgSet('natl', this.value)" style="max-width:170px">
         <option value="">— 선택 —</option>
         ${PG_NATIONS.map(n2=>`<option value="${n2}" ${PG.natl===n2?"selected":""}>${n2}</option>`).join("")}
-      </select>`):""}
+      </select>`)
+      +ED_ROW(`🌱 홈그로운 <span class="small">— 국내 유스를 거친 외국인. 외국인 쿼터를 먹지 않고 명단에 초록으로 표시됩니다</span>`,
+        SEL("hg",[["0","아니오 — 일반 외국인 (쿼터 차지)"],["1","예 🌱 — 홈그로운 (쿼터 미적용)"]],String(PG.hg||0))):""}
     ${PG.frn?"":ED_ROW(`🎖️ 병역 <span class="small">— 군필이면 상무 차출 대상에서 빠집니다</span>`,
       SEL("armyDone",[["0","미필"],["1","군 복무 완료"]],String(PG.armyDone||0)))}
     ${ED_ROW("성격", SEL("pers",[["0","프로페셔널"],["1","야심가"],["2","온화"],["3","다혈질"]],String(PG.pers)))}
@@ -45282,7 +45305,7 @@ function natlPick(){
   return out;
 }
 /* ⚠ 배선 — 소집 기간에도 이적·방출은 일어난다. 옛 소속만 뒤지면 그 선수를 못 찾고,
-   그러면 p.natl 도장이 영영 안 풀려 그 선수는 다시는 경기에 못 나선다(avail 이 막는다).
+   그러면 p.natlCall 도장이 영영 안 풀려 그 선수는 다시는 경기에 못 나선다(avail 이 막는다).
    ─ 옛 소속 → 전 구단 → FA/해외 순으로 찾는다. */
 function natlPlayerOf(e){
   try{
@@ -45365,7 +45388,7 @@ function natlAnnounce(C){
   for(const e of C.list){
     const p=natlPlayerOf(e); if(!p) continue;
     const t=G.teams[e.tid];
-    p.natl={d0:G.day||0, ret:C.ret, mn:0, g:0, a:0, ap:0};
+    p.natlCall={d0:G.day||0, ret:C.ret, mn:0, g:0, a:0, ap:0};
     e.nm=nmF(p); e.tn=t?t.short:"";
     rows.push(`${POS_KO[e.pos]||e.pos} <b>${nmF(p)}</b>(${t?t.short:"?"})`);
   }
@@ -45397,12 +45420,12 @@ function natlAnnounce(C){
 /* ── ③ 대표팀 경기 — 뛴 만큼 몸이 갈린다 ── */
 function natlMatch(C, leg){
   for(const e of C.list){
-    const p=natlPlayerOf(e); if(!p || !p.natl) continue;
+    const p=natlPlayerOf(e); if(!p || !p.natlCall) continue;
     const ov=p.ovr||70;
     const start = Math.random() < clamp(0.34 + (ov-72)*0.055, 0.15, 0.90);
     const mn = start ? (62+R(29)) : (Math.random()<0.55 ? 8+R(24) : 0);
     if(mn<=0){ e[`l${leg}`]="벤치"; continue; }
-    p.natl.mn+=mn; p.natl.ap++;
+    p.natlCall.mn+=mn; p.natlCall.ap++;
     p.caps=(p.caps||0)+1;
     /* 득점·도움 — 자리에 따라 다르다 */
     const gk={GK:0, DF:0.05, MF:0.12, FW:0.24}[e.pos]||0.1;
@@ -45410,7 +45433,7 @@ function natlMatch(C, leg){
     let g=0, a=0;
     if(Math.random() < gk*(mn/90)*(0.7+(ov-70)*0.03)){ g=1; if(Math.random()<0.14) g=2; }
     if(Math.random() < ak*(mn/90)*(0.7+(ov-70)*0.03)) a=1;
-    p.natl.g+=g; p.natl.a+=a;
+    p.natlCall.g+=g; p.natlCall.a+=a;
     p.natlG=(p.natlG||0)+g; p.natlA=(p.natlA||0)+a;
     e[`l${leg}`]=`${mn}분${g?` ${g}골`:""}${a?` ${a}도움`:""}`;
     /* 🔋 체력 — 90분이면 두 자릿수로 빠진다. 이동·시차까지 더해 다음 며칠 회복도 늦다 */
@@ -45430,13 +45453,13 @@ function natlReturn(C){
   const played=[], hurt=[];
   for(const e of C.list){
     const p=natlPlayerOf(e); if(!p) continue;
-    const N=p.natl||{};
+    const N=p.natlCall||{};
     if((N.ap||0)>0) played.push({e, p, N});
     if(e.inj) hurt.push(nmF(p));
     /* ✈️ 장거리 이동 — 뛰지 않았어도 몸은 무겁다 */
     p.cond=Math.round(clamp((p.cond||90) - (N.mn>=100?4.5:N.ap?3:1.2), 55, 100)*10)/10;
     p.mFat=Math.round(clamp((p.mFat||0)+(N.ap?0.24:0.08), 0, 1.30)*100)/100;
-    delete p.natl;
+    delete p.natlCall;
   }
   const best=played.slice().sort((a,b)=>(b.N.g*3+b.N.a*2+b.N.mn/90)-(a.N.g*3+a.N.a*2+a.N.mn/90))[0];
   const gTot=played.reduce((s,x)=>s+(x.N.g||0),0);
@@ -45471,7 +45494,7 @@ function natlAwayDay(p){
     mFatDecay(p);
     if((p.inj||0)>0){ p.cond=Math.round(clamp((p.cond||90)+1.5, 55, 100)*10)/10; return; }
     /* 이미 한 경기를 뛴 뒤라면 회복할 틈이 없다 — 캠프는 쉬는 곳이 아니다 */
-    const ran=((p.natl&&p.natl.mn)||0)>0;
+    const ran=((p.natlCall&&p.natlCall.mn)||0)>0;
     p.cond=Math.round(clamp((p.cond||90)+(ran?0.25:0.8), 55, 100)*10)/10;
   }catch(e){}
 }
@@ -46717,7 +46740,7 @@ function profileCard(p){
           <span class="small" style="opacity:.7">(뛴 자리 숙련도가 원래 자리를 앞질렀습니다)</span></span><br>`;
       }catch(e){ return ""; } })()}
     ${(p.caps||0)>0
-      ? `<span style="color:#ff7b72">🇰🇷 <b>A대표팀</b> ${p.caps}경기${(p.natlG||0)?` ${p.natlG}골`:""}${(p.natlA||0)?` ${p.natlA}도움`:""}${p.natl?` <span class="small" style="opacity:.8">· 소집 중</span>`:""}</span><br>` : (p.natl?`<span style="color:#ff7b72">🇰🇷 <b>A대표팀 소집 중</b></span><br>`:"")}
+      ? `<span style="color:#ff7b72">🇰🇷 <b>A대표팀</b> ${p.caps}경기${(p.natlG||0)?` ${p.natlG}골`:""}${(p.natlA||0)?` ${p.natlA}도움`:""}${p.natlCall?` <span class="small" style="opacity:.8">· 소집 중</span>`:""}</span><br>` : (p.natlCall?`<span style="color:#ff7b72">🇰🇷 <b>A대표팀 소집 중</b></span><br>`:"")}
     연봉: ${p.wage}억 <span class="small">(적정 ${we}억)</span> · 계약 ${p.ct||1}년 남음 · 시장가치 ${marketValue(p)}억<br>
     ${careerTable(p, tm)}
     ${owned&&p.unhappy>0?`<div class="msg warn" style="margin-top:8px">💢 불만 단계 ${p.unhappy}/3 — 사유: <b>${p.uWhy}</b>${p.unhappy>=3?" (공개 이적 요청 상태!)":""}</div>`:""}
@@ -48825,7 +48848,7 @@ function fmSquadTable(t, xi, slotOf, mb, rest, sulking, injured){
        onclick="event.stopPropagation();benchPin(${p.id})">⬆ 벤치</button>`, "rest")).join("");
   const restNav = `<span class="small" style="margin-left:auto">${restAll.length}명${restAll.length>7?" · 스크롤":""}</span>`;
   const outRows=[...(sulking||[]), ...(injured||[]).filter(p=>!(p.sulk>0))]
-    .map(p=>subRow(p, "✕", p.natl?`🇰🇷 대표팀 차출`:(p.sulk>0?`태업 ${p.sulk}R`:(p.inj>0?`부상 ${p.inj}주`:(banLabel(p)||"출장정지"))), "out")).join("");
+    .map(p=>subRow(p, "✕", p.natlCall?`🇰🇷 대표팀 차출`:(p.sulk>0?`태업 ${p.sulk}R`:(p.inj>0?`부상 ${p.inj}주`:(banLabel(p)||"출장정지"))), "out")).join("");
   return `<div class="fmTableWrap">
     <div class="fmTabs">
       <span class="fmTab ${FMTAB==="kick"?"":"on"} clickable" onclick="FMTAB='info';refreshTactics()">👁 선발 정보</span>
@@ -51787,12 +51810,12 @@ function situationCard(){
   const items=[];
   for(const p of t.players){
     if(p.sulk>0) items.push(`🤬 <b class="clickable" onclick="openPlayerMenu(event,${p.id})">${p.name}</b> — <b>태업 중</b> (${p.sulk}R 남음, 선발 불가 · 이적명단 철회 시 즉시 복귀)`);
-    if(p.natl) items.push(`🇰🇷 <b class="clickable" onclick="openPlayerMenu(event,${p.id})">${p.name}</b> — <b>A대표팀 소집 중</b> (복귀까지 ${Math.max(0,(p.natl.ret||0)-(G.day||0))}일 · 소속팀 경기 출전 불가)`);
+    if(p.natlCall) items.push(`🇰🇷 <b class="clickable" onclick="openPlayerMenu(event,${p.id})">${p.name}</b> — <b>A대표팀 소집 중</b> (복귀까지 ${Math.max(0,(p.natlCall.ret||0)-(G.day||0))}일 · 소속팀 경기 출전 불가)`);
     if(p.noMove) items.push(`🙅 <b class="clickable" onclick="openPlayerMenu(event,${p.id})">${p.name}</b> — <b>잔류 선언</b>: 어떤 이적 제안도 본인이 거부합니다 (명단 철회로 해제)`);
     if(p.unhappy>=3) items.push(`🚨 <b class="clickable" onclick="openPlayerMenu(event,${p.id})">${p.name}</b> — <b>공개 이적 요청</b> (사유: ${p.uWhy}) — 면담·이적 허용·연봉 인상으로 해결`);
     else if(p.unhappy>0) items.push(`😠 <b class="clickable" onclick="openPlayerMenu(event,${p.id})">${p.name}</b> — 불만 ${p.unhappy}/3 (${p.uWhy})`);
     if(p.promise){ const left=Math.max(0,p.promise.need-(p.apps-p.promise.apps0));
-      const hold = p.natl?"🇰🇷 대표팀 차출" : p.inj>0?`부상(${p.inj}주)` : p.ban>0?`출장정지(${p.ban}경기)` : p.banE>0?`출전정지(${p.banE}경기)` : null;
+      const hold = p.natlCall?"🇰🇷 대표팀 차출" : p.inj>0?`부상(${p.inj}주)` : p.ban>0?`출장정지(${p.ban}경기)` : p.banE>0?`출전정지(${p.banE}경기)` : null;
       items.push(`🤝 <b class="clickable" onclick="openPlayerMenu(event,${p.id})">${p.name}</b> — 출전 약속: ${p.promise.rounds}R 내 <b>${left}경기</b> 더 출전 필요`
         +(hold?` <b style="color:var(--gold)">· ⏸ ${hold}으로 카운트 보류</b>`:"")); }
   }
@@ -63562,7 +63585,30 @@ function brewGrievances(){
   const tAvg=teamOVR(t);
   const last5=t.form.slice(-5), losses=last5.filter(f=>f==="L").length;
   const xi=bestXI(t), slots=computeRenderSlots(t, xi);
+  /* ═══ 🧭 자리 불만이 «풀리는» 길 ══════════════════════════════════════
+     ⚠ 제보 — 「공 소유 시에는 본인 자리인 CAM 인데, 미소유 시에 CM 으로 내려서 뛴다.
+       그런데 본인 자리에서 뛰고 싶다고 계속 불만이 뜬다」.
+     ─ 확인 : 미소유 자리는 이 발생기가 아예 보지 않는다(소유 판만 본다). 공을 잃었을 때
+       한 칸 내려서는 건 축구에서 당연한 일이라 불만 거리가 아니다 — 그건 맞게 돼 있었다.
+     ─ 진짜 원인 : 한 번 뜬 「전술 역할」 불만이 <b>영영 안 풀렸다</b>. 감독이 자리를 되돌려
+       놓아도 그대로 남았다(실측 10라운드 내내 2단계 유지). 아래 루프가 «불만이 있는 선수»를
+       통째로 건너뛰기만 했지, 사유가 사라졌는지는 아무도 확인하지 않았다.
+     ─ 이제 자리를 되돌리면 스스로 풀린다. 감독이 고친 것은 고쳐진 것으로 친다. */
   for(const p of t.players){
+    if(p.uWhy==="전술 역할" && p.unhappy>0){
+      const sl0=slots[p.id];
+      const 제자리 = !sl0 || sl0===prefSlotOf(p) || SLOT_BAND[sl0]===SLOT_BAND[prefSlotOf(p)];
+      if(제자리){
+        p.unhappy=Math.max(0, (p.unhappy|0)-1);
+        if(p.unhappy<=0){
+          p.unhappy=0; p.uWhy="";
+          p.morale=clamp((p.morale||70)+3, 30, 99);
+          try{ affAdd(p, +3, "본래 자리 복귀"); }catch(e){}
+          addMood(`🧭 ${p.name}이(가) 본래 자리로 돌아와 불만을 거뒀습니다.`, "good");
+        }
+        continue;
+      }
+    }
     if(p.unhappy>0 || p.promise || p.inj>0) continue;
     const key=(p.pers||0);
     let bold = key===1 ? 1.6 : key===3 ? 1.3 : key===2 ? 0.6 : 1;     // 야심가·다혈질이 먼저 목소리를 낸다
@@ -63580,11 +63626,24 @@ function brewGrievances(){
       p.unhappy=1; p.uWhy="핵심 선수 이적";
       addMood(`💔 ${p.name}이(가) 구단의 방향에 의문을 품고 있습니다. (스태프 회의에서 처리)`); continue;
     }
-    // 전술 내 역할 — 선발이지만 선호 포지션이 아닌 자리에서 계속 뛴다
+    /* 전술 내 역할 — 선발이지만 선호 포지션이 아닌 자리에서 계속 뛴다.
+       ⚠ 여기서 보는 것은 «공 소유 시» 자리뿐이다. 공을 잃었을 때 한 칸 내려서는 것은
+         전술이지 홀대가 아니다 (CAM 이 미소유에서 CM 으로 내려오는 것 — 제보).
+       ⚠ 한 칸 차이(AM↔MF, MF↔DM, DF↔WB)는 실제로도 흔한 기용이라 훨씬 덜 불평한다.
+         센터백을 최전방에 세우는 것과 같은 무게로 다룰 수는 없다. */
     const sl=slots[p.id];
-    if(sl && prefSlotOf(p)!==sl && SLOT_BAND[sl]!==SLOT_BAND[prefSlotOf(p)] && Math.random()<0.05*bold){
-      p.unhappy=1; p.uWhy="전술 역할";
-      addMood(`🧭 ${p.name}이(가) 맡은 자리에 대해 불만을 표합니다. (스태프 회의에서 처리)`); continue;
+    if(sl && prefSlotOf(p)!==sl && SLOT_BAND[sl]!==SLOT_BAND[prefSlotOf(p)]){
+      let gap=1.2;
+      try{
+        const a2=BAND_ORDER[SLOT_BAND[sl]], b2=BAND_ORDER[SLOT_BAND[prefSlotOf(p)]];
+        if(a2!=null && b2!=null) gap=Math.abs(a2-b2);
+      }catch(e){}
+      /* 한 칸(≈0.6) 차이면 4분의 1로, 두 칸을 넘어가면 그대로 */
+      const gk = gap<=0.7 ? 0.25 : gap<=1.3 ? 0.6 : 1;
+      if(Math.random()<0.05*bold*gk){
+        p.unhappy=1; p.uWhy="전술 역할";
+        addMood(`🧭 ${p.name}이(가) 맡은 자리에 대해 불만을 표합니다. <span class="small">(본래 ${prefSlotOf(p)} · 지금 ${sl} — 자리를 되돌리면 스스로 풀립니다)</span>`); continue;
+      }
     }
   }
   if(G.starGone>0) G.starGone--;
@@ -94257,7 +94316,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5200";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5202";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
