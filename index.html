@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5199-->
+<!--B:20260913-5200-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -4800,6 +4800,17 @@ const FAM_SLOT={ GK:"GK", SW:"SW", DC:"CB", DL:"LB", DR:"RB", WBL:"LWB", WBR:"RW
   LW:"LW", RW:"RW", ST:"ST" };
 const POSFLIP_EDGE=6;      // 새 자리가 이만큼은 앞서야 «전환» 으로 본다 (깜빡임 방지)
 const POSFLIP_MIN=70;      // 그 자리를 이 정도는 익혔어야 한다
+/* ⚠ 제보 — 「어떤 선수의 GK/DF/MF/FW 구분이 갑자기 바뀌면서 오버롤이 200에서 166으로 떨어졌다」.
+   화면 오버롤(dispOvr)은 «대분류별 가중치»로 계산한다 — 같은 능력치라도 DF로 보면 151,
+   MF로 보면 167, FW로 보면 148 이 되는 식이다(실측 편차 19). 그래서 대분류가 바뀌는 순간
+   선수는 그대로인데 숫자만 크게 내려앉는다.
+   ─ 뒤집어 보면, 새 자리에서 «훨씬 낮게» 평가되는 사람은 애초에 그 자리 선수가 아니다.
+     그냥 그 자리로 오래 «기용됐을» 뿐이다. 그런 경우는 전환하지 않는다.
+     자리 숙련도만으로 대분류를 갈아치우면 안 된다는 뜻이다. */
+const POSFLIP_OVR_DROP=20; // 새 대분류에서 오버롤이 이보다 크게 떨어지면 전환하지 않는다
+   /* 20 인 이유 — 대분류만 바꿔도 오버롤은 자연히 10 안팎 움직인다(가중치가 다르니 당연하다).
+      그 정도는 «재평가»이므로 받아들이고, 30~50씩 무너지는 경우만 막는다.
+      그건 그 자리 선수가 된 게 아니라 그 자리로 «기용됐을» 뿐이라는 뜻이다. */
 const POSDROP_APPS=5;      // 이 정도는 뛴 시즌이어야 «안 선 자리» 를 강등한다 (부상 시즌 보호)
 /* 한 선수의 시즌 마감 처리 — 강등 → 전환 판정 → 기록 */
 function posFamSeasonEnd(p, t){
@@ -4826,13 +4837,22 @@ function posFamSeasonEnd(p, t){
   const from=prefSlotOf(p), to=FAM_SLOT[bk];
   if(!to || to===from) return null;
   const bandFrom=p.pos;
+  /* 🧭 새 대분류에서 확 낮게 평가되는 선수는 «그 자리 선수»가 아니다 — 되돌린다 (제보) */
+  const bandTo=FAM_LINE[bk]||p.pos;
+  let _o0=0; try{ _o0=dispOvr(p); }catch(e){}
+  if(bandTo!==bandFrom){
+    try{
+      const bk0=p.pos; p.pos=bandTo; const o1=dispOvr(p); p.pos=bk0;
+      if(o1 < _o0 - POSFLIP_OVR_DROP){ return null; }
+    }catch(e){}
+  }
   p.prefPos=to;
   try{ delete p._rfSeed; }catch(e){}    // 새 자리의 역할 시드를 다시 깐다
   try{ syncPosBand(p); }catch(e){}
   p.posHist=Array.isArray(p.posHist)?p.posHist:[];
-  p.posHist.push({s:G.season, from, to, bf:bandFrom, bt:p.pos, tid:t?t.id:""});
+  p.posHist.push({s:G.season, from, to, bf:bandFrom, bt:p.pos, tid:t?t.id:"", o0:_o0, o1:dispOvr(p)});
   if(p.posHist.length>12) p.posHist=p.posHist.slice(-12);
-  return {p, t, from, to, bf:bandFrom, bt:p.pos};
+  return {p, t, from, to, bf:bandFrom, bt:p.pos, o0:_o0, o1:dispOvr(p)};
 }
 /* 모든 구단 — 유저·AI 가리지 않는다 (요청 12) */
 function posFamSeasonSweep(){
@@ -4852,13 +4872,14 @@ function posFamSeasonSweep(){
     const mine=flips.filter(x=>x.t && ut && x.t.id===ut.id);
     if(mine.length){
       const rows=mine.map(x=>`<b>${nmF(x.p)}</b> ${x.from} → <b style="color:var(--acc)">${x.to}</b>`
-        +(x.bf!==x.bt?` <span class="small">(${x.bf}→${x.bt})</span>`:""));
+        +(x.bf!==x.bt?` <span class="small">(${x.bf}→${x.bt} · 종합 ${x.o0}→${x.o1})</span>`:""));
       notify(`🧭 <b>포지션 전환 ${mine.length}명</b> — 한 시즌 동안 뛴 자리가 원래 자리를 앞질렀습니다.<br>`
         +`<span class="small">${rows.join(" · ")}</span>`, "info");
       /* 요청 11 — 팝업으로도 알린다. 시즌 넘김 화면 흐름을 끊지 않도록 한 박자 뒤에 띄운다. */
       try{ const _txt=`<b>🧭 포지션 전환 ${mine.length}명</b>\n\n`
           +mine.map(x=>`· ${x.p.name} — ${x.from} → ${x.to}${x.bf!==x.bt?`  (${x.bf} → ${x.bt})`:""}`).join("\n")
-          +`\n\n한 시즌 동안 실제로 뛴 자리의 숙련도가 원래 자리를 앞질렀습니다.\n스쿼드·순위표·이적 시장 등 모든 화면의 포지션 표기가 바뀐 자리로 나옵니다.`;
+          +`\n\n한 시즌 동안 실제로 뛴 자리의 숙련도가 원래 자리를 앞질렀습니다.\n스쿼드·순위표·이적 시장 등 모든 화면의 포지션 표기가 바뀐 자리로 나옵니다.`
+          +`\n\n※ 종합(오버롤)은 «대분류별 가중치»로 계산합니다. 자리가 바뀌면 보는 잣대가 바뀌므로 숫자도 함께 움직입니다 — 선수의 능력치가 깎인 것이 아닙니다.`;
         setTimeout(()=>{ try{ gameAlert(_txt); }catch(e){} }, 0); }catch(e){}
       addNews(`🧭 ${ut.short} 포지션 전환 — ${mine.map(x=>`${x.p.name} ${x.from}→${x.to}`).join(", ")}`, "info", "club");
       for(const x of mine) try{ staffLog(`🧭 ${x.p.name} 포지션 전환 ${x.from} → ${x.to}`); }catch(e){}
@@ -35938,6 +35959,28 @@ const STK_TIER={
   junk :{n:"잡주",   c:"#f85149", vol:0.115, dr: 0.00045, sp:0.00230, dl:0.175}
 };
 const SPLIT_HI=400000;    // 이 값을 넘으면 액면분할 검토 (실제 시장에서도 이쯤에서 쪼갠다)
+/* ═══ 🐘 시가총액 브레이크 ══════════════════════════════════════════════
+   ⚠ 제보 — 「주식시장에 기업들이 갑자기 시총이 몇만 조가 된다」.
+   ─ 방치하면 시장은 오히려 줄어든다(실측 10시즌 630조 → 71조 · 상장폐지·악재).
+     폭주는 «감독이 계속 사서 밀어 올릴 때» 일어나고, 그 통로가 액면분할이었다.
+       주가가 40만 원을 넘으면 1:k 로 쪼갠다 → 주식 수 k배 · 주가 1/k → 시총은 그대로.
+       그런데 다시 밀어 올려 40만 원에 닿으면 시총은 «k배»가 된다. 한 바퀴마다 계단을
+       오르는 구조라, 다섯 바퀴면 3,000배다(실측 1:5 한 바퀴 = 40조 → 200조).
+   ─ 두 겹으로 막는다.
+       ① 시총이 커질수록 «더 오르기 어려워진다» — 코끼리는 춤추지 않는다.
+       ② 시총이 터무니없어지면 액면분할을 멈춘다 — 주식 수를 더 불리지 않는다.
+         (주가가 몇백만 원인 채로 남는 것 자체가 실제 시장의 제동이다)
+   ─ 실제 눈금 참고: 코스피 전체가 2,000조 남짓, 최대 기업이 500조 안팎이다. */
+const STK_CAP_SOFT=5.0e14;   // 500조 — 이 위로는 상승이 점점 무거워진다
+const STK_CAP_HARD=2.0e15;   // 2,000조 — 이 위로는 액면분할을 멈춘다
+function stkCapK(s){
+  try{
+    const c=stkCap(s);
+    if(!(c>STK_CAP_SOFT)) return 1;
+    if(c>=STK_CAP_HARD) return 0;      // 여기가 천장이다 — 위로는 더 못 간다 (내려가는 건 그대로)
+    return clamp(1 - Math.log10(c/STK_CAP_SOFT)/Math.log10(STK_CAP_HARD/STK_CAP_SOFT), 0, 1);
+  }catch(e){ return 1; }
+}
 const VAL_PULL=0.0055;    // 하루치 밸류에이션 되돌림 — 고평가는 눌리고 저평가는 밀린다
 const VAL_MAX=0.0022;     // 되돌림이 하루에 줄 수 있는 최대 추세 (±0.22%)
 const STK_HIST=90;        // 종가를 며칠치 들고 있을지 (세이브 크기 때문에 넉넉히 자른다)
@@ -36145,9 +36188,13 @@ function stkTick(){
     /* 바닥을 뚫으면 관리종목을 거쳐 정리된다 — 잡주에 물리면 실제로 돈이 사라진다 */
     if(T.dl>0 && s.p < (s.tier==="penny"?90:400) && Math.random()<T.dl*0.06){ stkDelist(s); continue; }
     if(T.dl>0 && Math.random()<T.dl/900){ stkDelist(s); continue; }
-    const drift = (s.dr!=null?s.dr:T.dr) + S.mood + (S.sec[s.sec]?S.sec[s.sec].v:0) + s.mom + stkValPull(s);
+    /* 🐘 시총이 커질수록 «위로»만 무거워진다 — 내려가는 힘은 그대로 둔다 (제보) */
+    const capK=stkCapK(s);
+    let drift = (s.dr!=null?s.dr:T.dr) + S.mood + (S.sec[s.sec]?S.sec[s.sec].v:0) + s.mom + stkValPull(s);
+    if(drift>0) drift*=capK;
     const shock = stkRand()*T.vol;
     let r = drift + shock;
+    if(r>0) r*=capK;                   // 천장에 닿으면 위로 가는 힘이 사라진다
     r = clamp(r, -0.29, 0.29);                       // 상·하한가
     s.pc = s.p;
     const np = Math.max(1, s.p*(1+r));
@@ -36161,11 +36208,12 @@ function stkTick(){
     s.hi = Math.max(s.hi, s.p);
     /* 거래량 — 많이 움직인 날 많이 터진다 */
     s.vol = Math.round(s.sh * (0.0008 + Math.abs(r)*0.06) * (0.5+Math.random()));
-    s.mom *= 0.82;                                   // 모멘텀은 하루하루 식는다
+    s.mom *= (0.82*capK);                            // 모멘텀은 하루하루 식는다 (거대 기업은 더 빨리)
     /* ✂️ 자릿수가 커지면 액면을 쪼갠다 — 실제 시장의 관행이자, 4억짜리 주식을 막는 장치 */
     /* 급등주는 며칠 만에 자릿수가 바뀐다 — 한참 지나서 쪼개면 그동안 4백만 원짜리가 돌아다닌다.
        두 배를 넘기면 그날 바로, 아니면 나흘 안에 처리한다. 비율도 값에 맞춰 잡는다. */
-    if(s.p>SPLIT_HI && !(s.splitAt && (G.day||0)-s.splitAt<90)
+    /* 🐘 시총이 이미 터무니없으면 더 쪼개지 않는다 — 여기가 시총 계단의 통로였다 (제보) */
+    if(s.p>SPLIT_HI && stkCap(s)<STK_CAP_HARD && !(s.splitAt && (G.day||0)-s.splitAt<90)
        && (s.p>SPLIT_HI*2 || Math.random()<0.25)){
       S.splitN=(S.splitN||0)+1;
       stkSplit(s, clamp(Math.round(s.p/60000), 2, 20));
@@ -46663,7 +46711,8 @@ function profileCard(p){
     ${(()=>{ /* 🧭 요청 11 — 포지션이 바뀐 이력 */
       try{ const H=p.posHist; if(!Array.isArray(H)||!H.length) return "";
         const seg=[]; let prev=H[0].from;
-        for(const h of H) seg.push(`<b>${h.s}</b> ${h.from} → <b style="color:var(--acc)">${h.to}</b>`);
+        for(const h of H) seg.push(`<b>${h.s}</b> ${h.from} → <b style="color:var(--acc)">${h.to}</b>`
+          +((h.o0&&h.o1)?` <span class="small" style="opacity:.7">(종합 ${h.o0}→${h.o1} · 잣대가 바뀐 것입니다)</span>`:""));
         return `<span style="color:#d2a8ff">🧭 <b>포지션 전환</b> — ${seg.join(" · ")}
           <span class="small" style="opacity:.7">(뛴 자리 숙련도가 원래 자리를 앞질렀습니다)</span></span><br>`;
       }catch(e){ return ""; } })()}
@@ -94208,7 +94257,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5199";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5200";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
