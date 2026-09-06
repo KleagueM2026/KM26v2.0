@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5202-->
+<!--B:20260913-5203-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -43232,17 +43232,22 @@ function armyIntake(gc, n){
          홈그로운(hg)은 「외국인 쿼터를 차지하지 않는다」는 등록상의 취급일 뿐 국적은 외국이다.
          병역은 국적의 문제라 frnQ(쿼터 기준)로 거르면 홈그로운 용병이 그대로 뽑혔다.
          ─ 입대 자격은 p.frn(국적) 으로 판정한다. */
-      if(age<20 || age>26 || p.loan || p.frn || p.armyDone || p.armyCall) continue;
+      if(age<20 || age>26 || p.loan || p.frn || p.armyDone || p.armyCall || p.army) continue;
       cands.push({p, t, sc: p.ovr - (p.apps||0)*0.35 - (t.isUser?6:0)});   // 안 뛰는 선수부터
     }
   }
   cands.sort((a,b)=>b.sc-a.sc);
   const taken=[];
+  /* 🎖️ 한 구단에서 세 명까지 — 뽑는 도중에도 세어 간다 (제보: 한 팀에서 7명이 빠져나갔다) */
+  const perClub={};
+  for(const id in G.teams){ try{ perClub[id]=armyOutCount(G.teams[id]); }catch(e){ perClub[id]=0; } }
   for(const c of cands){
     if(taken.length>=n) break;
     if(c.t.players.length<=22) continue;
+    if((perClub[c.t.id]||0)>=ARMY_PER_CLUB) continue;
     /* 📨 즉시 데려가지 않는다 — 입영 통지를 보내고 한 달 뒤에 데려간다 */
     armySetCall(c.p, c.t, gc);
+    perClub[c.t.id]=(perClub[c.t.id]||0)+1;
     taken.push({p:c.p, from:c.t});
     if(c.t.isUser){
       /* 통지는 armySetCall 이 이미 띄웠다 — 여기서는 배웅하지 않는다(아직 안 갔다) */
@@ -53262,10 +53267,35 @@ function armyGate(what){
   return true;
 }
 /* 입대 지원 자격 — 20~26세 국내 선수, 병역 미필, 원소속 스쿼드에 여유가 있어야 한다 */
+/* ═══ 🎖️ 한 구단에서 데려갈 수 있는 인원 상한 ══════════════════════════════
+   ⚠ 제보 — 「어제 갑자기 사이드백 3명 중 주전 2명이 빠져나갔는데, 7명 빼간 사람도 있더라」.
+   ─ 확인 : 연맹의 일괄 선발(armyIntake)이 리그 «전체»를 점수순으로 줄 세워 위에서부터
+     n명을 데려갔다. 한 구단에서 몇 명을 데려가는지는 아무도 세지 않았다. 그래서 어느 해에
+     한 팀이 통째로 뜯기는 일이 생겼다(실측으로 재현됨).
+   ─ 고침 : 한 구단이 «동시에» 상무에 보낼 수 있는 인원을 3명으로 묶는다.
+     복무 중인 인원과 입영 통지를 받아 둔 인원을 함께 센다 — 통지만 받고 아직 안 간 선수를
+     빼놓으면 통지를 몰아서 보내 상한을 우회할 수 있다.
+   ─ 이 문은 armyEligible 하나로 통일한다. 연맹 일괄 선발·정원 긴급 배정·유저(김천) 직접
+     선발이 모두 이 함수를 지나므로, 여기 한 곳이면 모든 경로가 따른다. */
+const ARMY_PER_CLUB=3;
+function armyOutCount(t){
+  if(!t) return 0;
+  let n=0;
+  try{
+    for(const p of (t.players||[])) if(p && p.armyCall) n++;      // 통지를 받고 대기 중
+    const gc=armyClub();
+    if(gc && gc!==t) for(const p of (gc.players||[]))              // 지금 복무 중
+      if(p && p.army && p.army.own===t.id) n++;
+  }catch(e){}
+  return n;
+}
+function armyCapLeft(t){ return Math.max(0, ARMY_PER_CLUB - armyOutCount(t)); }
 function armyEligible(p, t){
   const age=G.season-p.by;
   /* 🎖️ ⚠ 제보 — 홈그로운도 국적은 외국이다. 병역 대상이 아니므로 p.frn 으로 거른다 */
-  return !(age<20 || age>26 || p.loan || p.frn || p.armyDone || p.army || p.armyCall || p.tfLock) && (t.players||[]).length>22;
+  if(age<20 || age>26 || p.loan || p.frn || p.armyDone || p.army || p.armyCall || p.tfLock) return false;
+  if((t.players||[]).length<=22) return false;
+  return armyCapLeft(t)>0;                                        // 🎖️ 한 구단 최대 3명
 }
 function armyCandList(){
   const out=[];
@@ -53363,6 +53393,11 @@ function armyApply(pid){
   const c=list.find(x=>x.p.id===pid); if(!c){ flash("그 지원자는 더 이상 명단에 없습니다.","warn"); show("transfer"); return; }
   if(st.tried[pid]){ flash("이번 모집에서는 이미 판정이 끝난 선수입니다.","warn"); show("transfer"); return; }
   if(armySlots()<=0){ flash(`부대 정원(${ARMY_CAP}명)이 찼습니다. 전역자가 나와야 자리가 생깁니다.`,"warn"); show("transfer"); return; }
+  /* 🎖️ 한 구단에서 세 명까지 — 한 팀을 통째로 비우지 않는다 (제보) */
+  if(armyCapLeft(c.t)<=0){
+    flash(`${c.t.short}에서는 이미 ${ARMY_PER_CLUB}명이 상무에 가 있습니다 — 한 구단에서 동시에 ${ARMY_PER_CLUB}명까지만 데려올 수 있습니다.`,"warn");
+    show("transfer"); return;
+  }
   const ch=armyOdds(c), p=c.p, from=c.t;
   showConfirm(`<b>🎖️ ${p.name} 선발 신청</b>\n\n`+
     `· 원소속: <b>${from.name}</b>\n· ${G.season-p.by}세 ${POS_KO[p.pos]||p.pos} · 올 시즌 ${p.apps||0}경기\n`+
@@ -53420,16 +53455,21 @@ function armyAutoFloor(){
       if(p.loan || p.frn || p.armyDone || p.army || p.armyCall) continue;
       if(age<20 || age>27) continue;
       if((t.players||[]).length<=20) continue;      // 원소속을 빈껍데기로 만들지는 않는다
+      if(armyCapLeft(t)<=0) continue;               // 🎖️ 한 구단 최대 3명 (제보)
       wide.push({p,t});
     } } }catch(e){}
   const strict=wide.filter(c=>{ try{ return armyEligible(c.p, c.t); }catch(e){ return false; } });
   const got=[];
+  const perClub={};
+  for(const id in G.teams){ try{ perClub[id]=armyOutCount(G.teams[id]); }catch(e){ perClub[id]=0; } }
   const take=(pool, want)=>{
     if(gc.players.length>=ARMY_CAP) return false;
-    const c=pool.filter(x=>(!want || x.p.pos===want) && x.t.players.indexOf(x.p)>=0)
+    const c=pool.filter(x=>(!want || x.p.pos===want) && x.t.players.indexOf(x.p)>=0
+                           && (perClub[x.t.id]||0)<ARMY_PER_CLUB)
                 .sort((a,b)=>(a.p.apps||0)-(b.p.apps||0))[0];
     if(!c) return false;
     try{ armyEnlist(c.p, c.t, gc); }catch(e){ return false; }
+    perClub[c.t.id]=(perClub[c.t.id]||0)+1;         // 🎖️ 한 구단 최대 3명 (제보)
     got.push(`${c.p.name}(${c.p.pos})`);
     return true;
   };
@@ -53455,7 +53495,7 @@ function armyTab(){
   const goneCnt={}; for(const x of soon) goneCnt[x.p.pos]=(goneCnt[x.p.pos]||0)+1;
   return `<div class="msg info" style="border-width:2px">🎖️ <b>김천 상무 FC — 이적시장이 아니라 입대·전역입니다.</b><br>
     영입·방출·임대·재계약은 모두 막혀 있습니다. 전역으로 빠지는 자리를 <b>입대 지원자</b> 중에서 채우는 것이 이 팀의 보강입니다.
-    <span class="small">복무 기간 ${ARMY_MONTHS}개월 · 부대 정원 ${ARMY_CAP}명 · 이적료와 연봉 협상은 존재하지 않습니다.</span></div>
+    <span class="small">복무 기간 ${ARMY_MONTHS}개월 · 부대 정원 ${ARMY_CAP}명 · 이적료와 연봉 협상은 존재하지 않습니다.<br>🚧 <b>한 구단에서 동시에 ${ARMY_PER_CLUB}명까지만</b> 데려올 수 있습니다 — 복무 중인 인원과 입영 통지를 함께 셉니다.</span></div>
   <div class="row">
     <div class="card"><h3>👥 부대 인원</h3><div style="font-size:26px">${gc.players.length}<span class="small"> / ${ARMY_CAP}</span></div>
       <p class="small" style="margin-top:6px">남은 정원 <b style="color:${slots?"var(--green)":"var(--red)"}">${slots}명</b>
@@ -53481,7 +53521,8 @@ function armyTab(){
     ${list.length?`<div class="tblScroll"><table><tr>${sortTh("army","name","이름")}${sortTh("army","club","원소속")}${sortTh("army","pos","포지션")}${sortTh("army","age","나이")}${sortTh("army","ovr","능력")}${sortTh("army","apps","올 시즌")}${sortTh("army","odds","합격 전망")}<th></th></tr>
       ${page.map(c=>{ const ch=armyOdds(c), done=st.tried[c.p.id];
         return `<tr><td class="clickable" onclick="openPlayerMenu(event,${c.p.id})">${nmF(c.p)}</td>
-        <td class="small">${c.t.short}${c.t.div===2?" (K2)":""}</td>
+        <td class="small">${c.t.short}${c.t.div===2?" (K2)":""}${(()=>{const o=armyOutCount(c.t);
+          return o>0?` <span class="small" style="color:var(--gold)">이미 ${o}명</span>`:"";})()}</td>
         <td class="pos-${c.p.pos}">${c.p.pos}</td><td>${G.season-c.p.by}</td><td>${abilityStars(c.p)}</td>
         <td>${c.p.apps||0}경기</td>
         <td><b style="color:${ch>=0.6?"var(--green)":ch>=0.35?"var(--gold)":"var(--red)"}">${Math.round(ch*100)}%</b></td>
@@ -94316,7 +94357,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5202";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5203";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
