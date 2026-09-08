@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5219-->
+<!--B:20260913-5221-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -408,6 +408,17 @@ body.matchFS .fmPitchPane{max-width:none;}
   box-shadow:0 12px 40px rgba(0,0,0,.55);}
 .lvSpdPanel input[type=range]{width:100%;}
 .lvTopBtns{float:right; display:flex; gap:6px; align-items:center;}
+/* ⚽🟥 전광판 주요 사건 — 득점 시간·선수와 퇴장을 한 줄로 (요청) */
+.lvMajor{display:flex; gap:8px; align-items:flex-start; padding:6px 10px 7px; border-bottom:1px solid var(--line);
+  font-size:12px; line-height:1.55; background:#0b1016;}
+.lvMjS{flex:1 1 0; min-width:0; display:flex; flex-wrap:wrap; gap:3px 9px;}
+.lvMjS.r{justify-content:flex-end; text-align:right;}
+.lvMjE{white-space:nowrap; color:#c7d2dd;}
+.lvMjE b{color:#e8f0f7; font-weight:700;}
+.lvMjE .m{color:var(--sub); font-variant-numeric:tabular-nums;}
+.lvMjE.red b{color:#ff9d9d;}
+.lvMjMid{flex:0 0 auto; color:var(--sub); opacity:.5; align-self:center;}
+@media (max-width:640px){ .lvMajor{font-size:11px; padding:5px 7px 6px;} }
 .lvDrop{position:absolute; top:44px; right:8px; z-index:650; width:min(400px,92vw);
   max-height:74vh; overflow:auto; background:#0f141bf2; border:1px solid var(--line);
   border-radius:10px; padding:12px 14px; box-shadow:0 14px 44px rgba(0,0,0,.6);}
@@ -16944,6 +16955,30 @@ function sellSeasonTickets(t){
   t.stClosed=true;
   return t;
 }
+/* 🎫 ⚠ 제보 — 「에디터에서 평균 관중·티켓 수입값을 고쳤는데 재정에 적용이 안 된다」.
+   ─ 다음 경기의 관중(attendanceFor)은 곧바로 바뀐다. 문제는 «시즌권»이었다.
+     시즌권 목표·판매량·수입(stTarget · seasonTix · seasonTixRev)은 시즌 초에 한 번 계산해
+     구단에 박아 두고, 판매 창구가 닫히면(stClosed) 다시는 손대지 않는다. 재정 탭에서
+     제일 큰 덩어리가 그 값이라, 평균 관중을 아무리 올려도 화면이 꿈쩍하지 않았다.
+   ─ 감독이 기준 관중이나 수용 인원을 손으로 고치면 시즌권을 그 자리에서 다시 계산한다.
+     이미 정산이 끝났다면 «차액»만 예산에 넣거나 뺀다 — 두 번 주지 않는다. */
+function stadReprice(t){
+  if(!t) return;
+  try{
+    const before=t.seasonTixRev||0;
+    t.stTarget=seasonTixTarget(t);
+    if(t.stSeason===G.season && t.stClosed){
+      t.seasonTix=t.stTarget;
+      t.seasonTixRev=Math.round(t.seasonTix*TICKET_UNIT*ST_MATCHES*ST_DISCOUNT*10)/10;
+      const d=Math.round((t.seasonTixRev-before)*10)/10;
+      if(d) t.budget=Math.round((t.budget + d*BUD_SHARE)*10)/10;
+      const fin=finLedger(t); fin.st=t.seasonTixRev;
+    } else if(t.stSeason===G.season){
+      /* 아직 파는 중 — 목표만 갈아 끼우면 판매 곡선이 새 목표를 따라간다 */
+      t.seasonTix=Math.min(t.seasonTix||0, t.stTarget);
+    }
+  }catch(e){}
+}
 /* 홈경기 하루치 수입 — 시즌권자는 이미 값을 냈으므로 당일권 수입에서 제외한다 */
 function gateRevenue(t, att){
   const st=Math.min(att, t.seasonTix||0);
@@ -24552,6 +24587,11 @@ function loanInRefuseSay(p, from){
 function doLoanIn(p, from, share, buyOpt, halfSeason, buyFee){
   const t=userTeam();
   if(loanInCount(t)>=LOAN_IN_MAX){ gameAlert(`임대 영입은 시즌당 ${LOAN_IN_MAX}명까지 가능합니다.`); return false; }
+  /* 🔙 이번 시즌에 우리가 돌려보낸 선수는 다시 빌려올 수 없다 */
+  if(typeof loanBackBlocked==="function" && loanBackBlocked(p)){
+    gameAlert(`${p.name} 선수는 이번 시즌에 우리가 임대를 중도 종료한 선수입니다. 다음 시즌에 다시 시도할 수 있습니다.`);
+    return false;
+  }
   from.players.splice(from.players.indexOf(p),1);
   t.players.push(p);
   const _bf = buyOpt ? Math.round((buyFee!=null?buyFee:loanBuyFair(p))*10)/10 : null;
@@ -30368,13 +30408,13 @@ function edSetTeamQ(t, field, v){
   /* 🏟️ 홈구장 — 이름·수용 인원·평균 관중을 직접 고친다 (세이브의 t.stad 에 저장) */
   else if(field==="stadName"){ const s=stadOf(t); const nm=edName(v,24);
     if(nm && nm!==s.n){ const old=s.n; s.n=nm; try{ renameEverywhere([[old,nm]]); }catch(e){} } }
-  else if(field==="stadCap"){ const s=stadOf(t); const n2=edNum(v,1000,120000,0); if(n2!=null) s.cap=n2; }
+  else if(field==="stadCap"){ const s=stadOf(t); const n2=edNum(v,1000,120000,0); if(n2!=null){ s.cap=n2; stadReprice(t); } }
   /* ⚠ 제보 — 「고쳐 놓으면 몇 시즌 지나서 원상복귀」. 평균 관중이 그랬다.
      시즌말 조정(attSeasonAdjust)의 하한·상한이 옛 자료값(_base0)에 묶여 있어서,
      14,000 으로 올려 둬도 첫 시즌말에 10,400 으로 끌려 내려갔다(실측).
      감독이 손수 넣은 값은 「그 구단의 진짜 기준 관중」으로 인정하고 밑값까지 옮긴다. */
   else if(field==="stadAvg"){ const s=stadOf(t); const n2=edNum(v,100,120000,0);
-    if(n2!=null){ s.avg=Math.min(n2, s.cap||n2); s._base0=s.avg; } }
+    if(n2!=null){ s.avg=Math.min(n2, s.cap||n2); s._base0=s.avg; stadReprice(t); } }
   else if(field==="youthLv"){ const n=edNum(v,1,10,0); if(n!=null) t.youthLv=n; }
   else if(field==="trainLv"){ const n=edNum(v,1,10,0); if(n!=null) t.trainLv=n; }
   else if(field==="scoutLv"){ const n=edNum(v,1,5,0); if(n!=null) t.scoutLv=n; }
@@ -55795,6 +55835,46 @@ function lcInList(){
     </div>`;}).join("");
   return head + rows + psPager(L.length, page, "lcGo", LC_PER);
 }
+/* ═══ 🔙 빌려온 선수를 원소속으로 돌려보낸다 ═══════════════════════════════
+   ⚠ 요청 — 「임대한 선수 원소속팀으로 돌려보내는 기능은 어떤가요?」.
+   ─ 지금까지는 «우리가 내보낸» 선수를 데려오는 조기 복귀만 있었다. 반대쪽, 즉 빌려온 선수를
+     기간 전에 돌려보내는 길이 없어서, 안 쓰는 선수가 자리와 주급을 계속 물고 있었다.
+   ─ 원소속 구단은 대체로 반긴다(제 선수를 돌려받는 것이므로). 다만 공짜는 아니다 —
+     선수는 「기회를 준다더니」 하고 서운해하고, 그 구단과의 관계도 조금 상한다.
+     그리고 같은 선수를 이번 시즌에 다시 빌려올 수는 없다.
+═══════════════════════════════════════════════════════════════════════ */
+function loanBackBlocked(p){
+  try{ return !!(p && G.loanSentBack && G.loanSentBack[p.id]===(G.season|0)); }catch(e){ return false; }
+}
+function askLoanReturn(pid){
+  const t=userTeam(); if(!t) return;
+  const p=t.players.find(x=>x.id===pid && x.loan && x.loan.own!==t.id);
+  if(!p){ flash("빌려온 선수가 아닙니다.","warn"); return; }
+  if(!transferOpen()){ flash("이적시장이 닫혀 있어 임대를 중도에 끊을 수 없습니다.","warn"); return; }
+  const own=G.teams[p.loan.own];
+  const played=(p.apps||0)-(p.loan.apps0||0);
+  const saved=Math.round((p.wage||0)*(p.loan.share||0)*10)/10;
+  showConfirm(`<b>🔙 ${p.name} — ${own?own.name:"원소속 구단"}으로 돌려보냅니다.</b>\n\n`
+    + `<span class="small">우리 팀에서 ${played}경기${p.apps?` · 평점 ${(p.seasonRating||0).toFixed(2)}`:""}`
+    + ` · 분담하던 주급 <b>${saved}억</b>이 빠집니다.</span>\n\n`
+    + `${p.loan.buy?`⚠ <b>완전이적 옵션</b>이 걸린 임대입니다 — 돌려보내면 그 권리도 사라집니다.\n`:""}`
+    + `<span class="small">${played>=5?"이미 우리 팀에서 뛰고 있던 선수입니다. 서운해할 겁니다.\n":""}`
+    + `이번 시즌에는 이 선수를 다시 빌려올 수 없습니다.</span>`,
+    ()=>{
+      const nm=p.name, os=own?own.short:"원소속";
+      if(p.loan) p.loan.buy=null;              // 완전이적 옵션 팝업이 뜨지 않게
+      try{ affAdd(p, played>=5?-12:-6, "임대 중도 반납"); }catch(e){}
+      if(played>=5) p.unhappy=Math.min(3,(p.unhappy||0)+1);
+      try{ coachRelAdd(p.loan.own, -6); }catch(e){}
+      try{ loanSocial(p, own, "sendback"); }catch(e){}      // 📱 팬 반응 · 펨코 (요청)
+      G.loanSentBack=G.loanSentBack||{}; G.loanSentBack[p.id]=(G.season|0);
+      endLoan(p, t);
+      try{ addNews(`🔙 <b>${t.short}</b>, ${nm} 임대 중도 종료 — ${os}(으)로 돌려보냈습니다. <span class="small">우리 팀에서 ${played}경기</span>`, "warn", "club"); }catch(e){}
+      try{ notify(`🔙 <b>${nm}</b> 선수를 ${os}(으)로 돌려보냈습니다. <span class="small">주급 분담 ${saved}억이 빠집니다</span>`,"warn"); }catch(e){}
+      try{ addMood(`🔙 ${nm}이(가) 임대를 마치고 ${os}(으)로 돌아갔습니다.`); }catch(e){}
+      saveGame(); show("loancenter");
+    }, {okLabel:"돌려보낸다", cancelLabel:"데리고 있는다", danger:true});
+}
 /* 🔙 임대 조기 복귀 — 감독이 먼저 데려오겠다고 나서는 경우.
    임대 구단 입장에서는 계산이 다르다. 이미 주전으로 쓰고 있으면 놓아줄 이유가 없다. */
 /* 🗓️ 이 임대가 언제 끝나는가 — 「반 시즌」이라는 말만으로는 언제 돌아오는지 알 수 없다.
@@ -55911,7 +55991,7 @@ function loanCenterView(){
   let body="";
   if(lcTab==="status"){
     body=`<div class="card"><h3>📥 빌려온 선수 <span class="small">(${came.length}/${LOAN_IN_MAX}) — 원소속 구단과의 경기에는 출전할 수 없습니다</span></h3>
-    ${came.length?`<div class="tblScroll"><table><tr><th>이름</th><th>포지션</th><th>나이</th><th>원소속</th><th>기간</th><th>주급 부담</th><th>옵션</th><th>우리 팀에서</th></tr>
+    ${came.length?`<div class="tblScroll"><table><tr><th>이름</th><th>포지션</th><th>나이</th><th>원소속</th><th>기간</th><th>주급 부담</th><th>옵션</th><th>우리 팀에서</th><th></th></tr>
       ${came.map(p=>{ const c=G.teams[p.loan.own]; const played=(p.apps||0)-(p.loan.apps0||0);
         return `<tr><td class="clickable" onclick="openPlayerMenu(event,${p.id})">${nmF(p)}</td>
         <td class="pos-${p.pos}" title="${p.pos}"><b>${prefNm(p)}</b></td>
@@ -55922,9 +56002,13 @@ function loanCenterView(){
         <td class="small">${p.loan.buy?`<b style="color:var(--gold)">완전이적 ${loanOptFee(p)}억</b><br>
           <button class="mini" style="padding:3px 9px;margin-top:3px;border-color:var(--gold);color:var(--gold);font-weight:800"
             onclick="loanBuyNow(${p.id})">💰 지금 영입</button>`:"—"}</td>
-        <td>${played}경기${p.apps?` · 평점 ${(p.seasonRating||0).toFixed(2)}`:""}</td></tr>`;}).join("")}
+        <td>${played}경기${p.apps?` · 평점 ${(p.seasonRating||0).toFixed(2)}`:""}</td>
+        <td>${transferOpen()
+          ? `<button class="mini" onclick="askLoanReturn(${p.id})" title="임대를 기간 전에 끊고 원소속으로 돌려보냅니다">🔙 돌려보내기</button>`
+          : '<span class="small" style="opacity:.6">이적시장 닫힘</span>'}</td></tr>`;}).join("")}
       </table></div>
-      <p class="small" style="opacity:.85;margin:6px 0 0">💰 <b>완전이적 옵션</b>이 걸린 선수는 임대 종료를 기다릴 필요 없이, <b>이적시장이 열려 있는 동안</b> 계약에 못박아 둔 금액으로 바로 사 올 수 있습니다.${wi.open?"":" <b style=\"color:var(--gold)\">(지금은 시장이 닫혀 있습니다)</b>"}</p>`:`<p class="small">빌려온 선수가 없습니다. <b>📥 임대 영입</b> 탭에서 찾아보세요.</p>`}
+      <p class="small" style="opacity:.85;margin:6px 0 0">🔙 <b>돌려보내기</b>는 이적시장이 열려 있는 동안 가능합니다 — 분담 주급이 그날로 빠지지만, 선수는 서운해하고 이번 시즌에는 다시 빌려올 수 없습니다.<br>
+        💰 <b>완전이적 옵션</b>이 걸린 선수는 임대 종료를 기다릴 필요 없이, <b>이적시장이 열려 있는 동안</b> 계약에 못박아 둔 금액으로 바로 사 올 수 있습니다.${wi.open?"":" <b style=\"color:var(--gold)\">(지금은 시장이 닫혀 있습니다)</b>"}</p>`:`<p class="small">빌려온 선수가 없습니다. <b>📥 임대 영입</b> 탭에서 찾아보세요.</p>`}
     </div>
     <div class="card"><h3>📤 내보낸 선수 <span class="small">(${sentOut.length}) — 출전 시간이 성장으로 돌아옵니다</span></h3>
     ${sentOut.length?`<div class="tblScroll"><table><tr><th>이름</th><th>포지션</th><th>나이</th><th>임대 구단</th><th>기간</th><th>주급 분담</th><th>옵션</th><th>임대 후 출전</th><th></th></tr>
@@ -56110,6 +56194,13 @@ function loanSocial(p, club, kind){
       socialFill(good?SOC.loanReturn2:SOC.loanBack, 2+R(2), good?1:0, V);
     } else if(kind==="in"){
       socialFill(SOC.loanIn, 2+R(2), 1, V); fmkFill(FMK.loanIn, 1+R(2), V);
+    } else if(kind==="sendback"){
+      /* 🔙 빌려온 선수를 원소속으로 — 주전이었으면 팬이 화를 낸다 */
+      const played=(p.apps||0)-((p.loan&&p.loan.apps0)||0);
+      const reg = played>=5 || (p.ovr||0)>=73;
+      socialFill(reg?SOC.loanSendBackReg:SOC.loanSendBack, reg?(3+R(3)):(2+R(2)), reg?-1:0, V);
+      fmkFill(FMK.loanSendBack, 1+R(2), V);
+      if(reg) try{ adjustTrust("fans", -3, `${p.name} 임대 중도 반납`); }catch(e){}
     } else if(kind==="recall"){
       socialFill(SOC.loanRecall, 2+R(2), -1, V); fmkFill(FMK.loanRecall, 1+R(2), V);
     } else if(kind==="buy"){
@@ -60689,6 +60780,11 @@ FMK.loanRecall=[
  ["{t} {p} 임대 조기 소환 ㅋㅋ 거기서도 벤치였다더라",-1],
  ["임대 보냈는데 안 뛰면 그냥 시간 낭비지",0],
  ["{o}가 출전 약속 안 지킨 듯. 이런 거 계약서에 못 넣나",0]];
+FMK.loanSendBack=[
+ ["{t} 임대생 {p} 조기 반납 ㅋㅋ 안 쓸 거면 왜 빌렸냐",0],
+ ["{o} 입장에선 개꿀이지 주급 반 받다가 선수까지 돌아옴",1],
+ ["임대 중도 종료 = 감독이 계산 틀렸다는 뜻임",-1],
+ ["{p} 다음 시즌엔 다른 데로 갈 듯",0]];
 FMK.loanBuy=[
  ["{t} 임대생 {p} 완전 영입 ㅋㅋ 이건 잘한 장사",1],
  ["{o} 지금 후회하고 있을 듯",1],
@@ -60710,6 +60806,28 @@ SOC.loanRecall=[
  ["{p} 반년 날렸네... 이럴 거면 그냥 데리고 있지",-1],
  ["임대 보낼 땐 출전 보장 확인부터 하자 제발",-1],
  ["{p} 돌아온다니까 오히려 반갑다 여기서 기회 줘라",0]];
+/* 🔙 ⚠ 요청 — 「빌려온 선수를 원소속으로 돌려보낼 때 소셜 반응도」.
+   두 결이 다르다 — 거의 안 뛴 선수를 정리하는 것과, 주전으로 쓰던 선수를 돌려보내는 것. */
+SOC.loanSendBack=[
+ ["{p} 벌써 {o}으로/로 돌려보냈다는데? 계약 기간 한참 남았잖아",0],
+ ["안 쓸 거면 진작 보내지. 자리랑 주급만 물고 있었음",1],
+ ["{p} 임대 중도 종료 ㅋㅋ 서로 좋은 거 아님?",0],
+ ["감독님이 데려오라 해놓고 두 달 만에 반품하는 거 아니냐",-1],
+ ["{o} 팬들은 반기겠네 자기 선수 돌아오니까",0],
+ ["주급 분담 빠지는 것만 해도 어디냐",1],
+ ["{p} 여기서 한 경기도 제대로 못 뛰고 가네... 좀 미안하다",0],
+ ["임대 자리 하나 비었다 이번엔 제대로 좀 데려오자",1],
+ ["반년도 안 돼서 돌려보낼 거면 왜 빌려온 건데",-1],
+ ["{p}은/는 잘못 없지. 우리가 안 쓴 거야",0]];
+SOC.loanSendBackReg=[
+ ["{p} 왜 돌려보내?? 잘 뛰고 있었잖아 이거 뭔데",-1],
+ ["주전으로 쓰던 선수를 {o}에 그냥 반납한다고?",-1],
+ ["{p} 없이 남은 시즌 어떻게 굴리려고 하는지 설명 좀",-1],
+ ["임대 끊는 거 프런트 결정이냐 감독 결정이냐 밝혀라",-1],
+ ["{o}이/가 데려간 게 아니라 우리가 보낸 거라고? 이해가 안 감",-1],
+ ["{p} 마지막 경기 뛰는 줄도 몰랐다 인사도 못 했는데",-1],
+ ["돈 문제면 돈 문제라고 말이라도 해줘라",-1],
+ ["{p} 잘 가라... 우리 팀에서 제일 열심히 뛰었다",0]];
 SOC.loanBuy=[
  ["{p} 완전 영입 확정!! 임대 때부터 우리 선수 같았다",1],
  ["{o}한테 돈 주고 사왔다는데 아깝지 않다 진짜",1],
@@ -83176,9 +83294,63 @@ const COMMENTARY=new CommentaryManager("pitchCaption");
 /* 이벤트가 이미 갖고 있는 완성 문장을 자막으로 띄운다(연출 등급은 씬 종류에서 가져온다) */
 /* 전광판에 지금 보여 주고 있는 스코어. 시뮬은 이미 앞서가 있어도, 화면은 공개된 이벤트까지만 안다. */
 let shownHg=0, shownAg=0;
+/* ⚽🟥 ⚠ 요청 — 「경기 중 스코어보드에 주요 내용(득점 시간·선수, 레드카드)이 나오게」.
+   ─ 시뮬은 화면보다 앞서 굴러가므로 여기서도 «공개된 이벤트»만 모은다(전광판 점수와 같은 원칙).
+     revealScore 는 그 줄이 화면에 뜨는 바로 그 순간에 불린다. */
+let lvMajor=[], lvMjH=0, lvMjA=0;
+/* ⚠ 배선 — 골을 「이벤트 종류」로 잡으면 새는 곳이 생긴다.
+     · 2D 엔진의 골은 kind:"sim_goal", 분 단위 엔진은 shot_goal/pen_goal/shot_owngoal
+     · VAR 로 취소된 골은 그 줄이 남아 있고(type:"bad"), 인정된 골은 다시 한 줄이 나온다
+     · 연장 골은 «치장용 한 줄»(kind:"et")이 골 뒤에 한 번 더 붙는다 — 두 번 세면 안 된다
+   그래서 «전광판 숫자가 오른 줄»만 골로 센다. 취소 골은 숫자가 안 오르고, 치장용 줄도
+   숫자가 그대로라 저절로 걸러진다. 퇴장도 엔진마다 type 이 달라(red · big) kind 로 잡는다. */
+function lvMajorAdd(e){
+  try{
+    if(!e || !liveM) return;
+    const M=liveM, sc=e.scene||{};
+    const hs=M.home.short||M.home.name, as=M.away.short||M.away.name;
+    if(e.type==="red" || sc.kind==="card_red"){
+      const pid=sc.playerId;
+      const key=`red|${e.min}|${e.t}|${pid!=null?pid:""}`;
+      if(lvMajor.some(x=>x.key===key)) return;
+      let nm=""; try{ const q=(pid!=null)?findAnyPlayer(pid):null; if(q) nm=q.name; }catch(_){}
+      lvMajor.push({key, red:true, min:e.min, side:e.t||hs, nm});
+      syncMajorBar(); return;
+    }
+    if(e.hg==null) return;
+    if(e.hg<lvMjH || e.ag<lvMjA){ lvMjH=e.hg; lvMjA=e.ag; return; }   // 리플레이로 되감긴 줄
+    if(e.hg===lvMjH && e.ag===lvMjA) return;                          // 숫자가 그대로다 — 골이 아니다
+    const homeGoal=(e.hg>lvMjH);
+    lvMjH=e.hg; lvMjA=e.ag;
+    const og=(sc.kind==="shot_owngoal");
+    const pid = og ? sc.ogScorerId : (sc.shooterId!=null ? sc.shooterId : sc.scorerId);
+    let nm=""; try{ const q=(pid!=null)?findAnyPlayer(pid):null; if(q) nm=q.name; }catch(_){}
+    const key=`goal|${e.min}|${homeGoal?"h":"a"}|${pid!=null?pid:""}`;
+    if(lvMajor.some(x=>x.key===key)) return;
+    /* 🥅 자책골은 «넣어 준 팀» 칸에 이름을 적는다 — 실제 기록지와 같다 */
+    lvMajor.push({key, red:false, min:e.min, side:homeGoal?hs:as, nm, og, pen:sc.kind==="pen_goal"});
+    syncMajorBar();
+  }catch(_){}
+}
+function lvMajorHtml(){
+  const M=liveM; if(!M || !lvMajor.length) return "";
+  const hs=M.home.short||M.home.name, as=M.away.short||M.away.name;
+  const one=(x)=>`<span class="lvMjE${x.red?" red":""}">${x.red?"🟥":"⚽"} <span class="m">${x.min}'</span> <b>${x.nm||"—"}</b>${x.pen?" (PK)":x.og?" (자책)":""}</span>`;
+  const H=lvMajor.filter(x=>x.side===hs).map(one).join("");
+  const A=lvMajor.filter(x=>x.side!==hs).map(one).join("");
+  return `<div class="lvMjS">${H}</div><span class="lvMjMid">│</span><div class="lvMjS r">${A}</div>`;
+}
+function syncMajorBar(){
+  const box=document.getElementById("lvMajor"); if(!box) return;
+  const h=lvMajorHtml();
+  if(!h){ box.classList.add("hidden"); if(box.innerHTML) box.innerHTML=""; return; }
+  box.classList.remove("hidden");
+  if(box.innerHTML!==h) box.innerHTML=h;
+}
 /* 화면(하이라이트·문자중계)이 도달한 시점의 통계 — 없으면 시뮬 현재값을 쓴다 */
 let shownSt=null;
 function revealScore(e){
+  lvMajorAdd(e);                       // ⚽🟥 전광판 주요 사건 — 이 줄이 뜨는 순간에 함께 올린다
   if(!e || e.hg==null) return;
   if(e.hg<shownHg || e.ag<shownAg) return;   // 리플레이로 되감긴 장면 — 전광판은 내리지 않는다
   if(e.hg!==shownHg || e.ag!==shownAg){
@@ -86484,7 +86656,7 @@ function startLive(M, tag){
   snapshotTactic();          // 킥오프 직전 전술을 찍어 둔다 (종료 후 되돌리기용)
   liveM=M; liveShown=0; livePaused=false; livePanelKey=""; liveTag=tag; inLiveTactics=false; liveTacBackup=null;
   try{ wakeAcquire(); }catch(e){}   // 경기 동안 화면이 꺼지지 않게 잡아 둔다
-  shownHg=0; shownAg=0; shownSt=null;
+  shownHg=0; shownAg=0; shownSt=null; lvMajor=[]; lvMjH=0; lvMjA=0;
   // 연속 2D 매치엔진으로 치를 경기라면 여기서 시뮬을 만들어 둔다.
   // 이후 liveTick 이 stepMinute 대신 이 시뮬을 굴리고, 캔버스는 그 좌표를 실시간으로 그린다.
   /* ⚠ 제보 — 시뮬 생성 중 예외가 나면 liveM 이 이미 채워져 있어 show() 가 전부 막히고,
@@ -86537,6 +86709,7 @@ function liveLayout(M, tag){
           : (M.home.isUser||M.away.isUser)?`<button class="mini" onclick="openLiveTactics()">📋 전술</button>`:""}
         <span id="pitchMode" class="pitchMode" style="margin-left:auto">○ 경기 진행 중</span>
       </div>
+      <div id="lvMajor" class="lvMajor hidden"></div>
       <div class="pitchWrap">
         <canvas id="pitch2d" class="dim" width="960" height="630"
                 onclick="pickPlayerOnPitch(event,this,liveSim)" title="선수를 클릭하면 이름이 표시됩니다"></canvas>
@@ -87612,7 +87785,11 @@ function syncLive(goalFlash, instant){
   // ⚠ M.hg/M.ag 를 그대로 찍으면 안 된다. 시뮬은 하이라이트보다 앞서 있어서 골이 터지기 전에
   //   전광판 숫자가 먼저 올라가 스포일러가 된다. 공개된 이벤트(revealScore)까지만 반영한다.
   // 경기가 끝나고 남은 해설까지 전부 흘러나온 뒤에야 최종 스코어로 맞춘다
-  if(M.done && liveShown>=M.events.length && !revealQueue.length && !current2DScene){ shownHg=M.hg; shownAg=M.ag; }
+  if(M.done && liveShown>=M.events.length && !revealQueue.length && !current2DScene){
+    shownHg=M.hg; shownAg=M.ag;
+    try{ lvMajor=[]; lvMjH=0; lvMjA=0; for(const e of M.events) lvMajorAdd(e); }catch(_){}   // 휘슬이 울렸다 — 처음부터 다시 훑어 빠진 줄이 없게 한다
+  }
+  try{ syncMajorBar(); }catch(_){}
   if(sc.textContent!==`${shownHg} : ${shownAg}`) sc.textContent=`${shownHg} : ${shownAg}`;
   if(goalFlash){ sc.classList.remove("flash"); void sc.offsetWidth; sc.classList.add("flash"); }
   // 하프타임 라커룸에서 막 돌아와 일시정지된 상태(전반 45분에 멈춰 후반 시작을 기다리는 중)에는
@@ -94988,7 +95165,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5219";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5221";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
