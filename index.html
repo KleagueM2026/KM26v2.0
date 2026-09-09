@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!--B:20260913-5221-->
+<!--B:20260913-5230-->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -2325,6 +2325,41 @@ tr.yArmy{background:linear-gradient(90deg,rgba(201,162,39,.12),rgba(201,162,39,0
 .gmTot.bj{color:#ffd76a;border-color:#e0a52c;background:#2a2208;box-shadow:0 0 16px #ffd76a66}
 @keyframes gmPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
 
+/* ⚽ 승무패 토토 —
+   ⚠ 제보 「토토 UI가 이렇게 겹치네?」. 표를 .tblScroll 에 max-height 만 얹었는데,
+     .tblScroll 규칙은 모바일 미디어쿼리 «안»에만 있어서 데스크톱에서는 overflow 가 visible 이었다.
+     높이는 340px 로 잘리고 내용은 그대로 흘러넘쳐, 아래 문단과 버튼 위로 겹쳐 그려졌다.
+   ─ 토토 표는 미디어쿼리와 무관한 제 스크롤 상자를 갖는다. */
+.totoWrap{max-height:min(46vh,360px); overflow:auto; overscroll-behavior:contain;
+  border:1px solid var(--line); border-radius:10px; background:#0b1016; margin:0; contain:paint;}
+.totoTbl{width:100%; border-collapse:collapse; margin:0}
+.totoTbl th{position:sticky; top:0; z-index:2; background:#141b24; padding:7px 9px; font-size:12px;
+  color:var(--sub); border-bottom:1px solid var(--line); white-space:nowrap}
+.totoTbl td{padding:5px 9px; border-bottom:1px solid #1b222c; vertical-align:middle}
+.totoTbl tr:last-child td{border-bottom:none}
+.totoRd{white-space:nowrap; color:var(--sub)}
+.totoGm{min-width:150px}
+.totoBtns{white-space:nowrap; text-align:right}
+.totoWhy{white-space:nowrap; color:var(--sub); text-align:right}
+.totoLine{display:inline-block; margin-left:7px; padding:1px 7px; border-radius:99px; font-size:11px;
+  font-weight:800; color:var(--gold); background:#2a220833; border:1px solid #e0a52c55; white-space:nowrap}
+.totoPick{padding:4px 9px; min-width:62px}
+.totoPick b{color:var(--gold)}
+.totoPick.sel b{color:#2a1a05}
+.totoBar{display:flex; gap:7px; align-items:center; flex-wrap:wrap; margin:2px 0 7px}
+.totoTabs{display:flex; gap:5px; flex-wrap:wrap}
+.totoWhyBtn{margin-left:auto}
+.totoNote{margin:7px 0 0; opacity:.8}
+.totoFoot{margin-top:11px; padding-top:10px; border-top:1px solid var(--line)}
+.totoHelp{margin-top:11px; color:var(--sub); line-height:1.85}
+@media(max-width:640px){
+  .totoWrap{max-height:none; overflow:visible}
+  .totoGm{min-width:0}
+  .totoBtns{text-align:left; white-space:normal; display:flex; gap:4px; flex-wrap:wrap}
+  .totoPick{flex:1 1 0; min-width:0; padding:5px 4px}
+  .totoGm .totoLine{margin-left:0; margin-top:3px; display:block; width:fit-content}
+}
+
 /* 베팅 칩 버튼 */
 .gmChips{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
 .gmChip{border:none;border-radius:99px;padding:7px 15px;font-weight:800;font-size:13px;cursor:pointer;
@@ -2592,7 +2627,7 @@ const ROSTER26={
  gimpo:[["이상민","GK","2003/02/25",1,185,75],["윤보상","GK","1993/09/09",21,185,91],["손정현","GK","1991/11/25",31,191,88],["최선규","DF","2001/03/28",2,175,67],["박경록","DF","1994/09/30",3,185,80],["김태한","DF","1996/02/24",4,184,76],["이찬형","DF","2004/07/23",5,188,78],["박상현","DF","2005/10/14",13,193,85],["이학민","DF","1991/03/11",14,174,68],["이인재","DF","1992/05/13",15,187,78],["임창석","DF","1999/12/07",17,174,69],["홍태형","DF","2005/02/19",19,188,80],["김민식","DF","1998/03/18",23,174,68],["최종운","DF","2004/11/04",26,175,70],["장부성","DF","2004/06/07",32,173,66],["이용혁","DF","1996/08/03",44,188,85],["김동민","DF","1994/08/16",47,180,77],["박병현","DF","1993/03/28",66,184,83],["채프먼","DF","1994/10/31",77,188,83,1],["최재영","MF","1998/03/18",6,181,73],["김도혁","MF","1992/02/08",7,173,71],["디자우마","MF","2000/06/29",8,174,70,1],["루안","MF","1997/07/31",10,181,75,1],["이시헌","MF","1998/05/04",11,177,67],["김성준","MF","1988/04/08",16,174,68],["김준서","FW","2008/01/26",18,182,73],["김민석","FW","2002/09/05",20,180,73],["윤재운","FW","2002/04/01",22,178,73],["무신","FW","1997/12/27",33,190,78,1],["남현우","FW","2003/05/05",40,180,73],["박동진","FW","1994/12/10",50,182,78],["최성범","FW","2001/12/24",70,173,68],["파울리뇨","FW","1996/06/24",96,167,69,1]],
  gwangju:[["김경민","GK","1991/11/01",1,190,78],["김동화","GK","2003/05/07",23,185,82],["이윤성","GK","2005/05/23",71,186,87],["장석환","DF","2004/10/11",2,180,70],["이민기","DF","1993/05/19",3,175,61],["반 흐룬스벤","DF","1999/10/30",4,194,78,1],["안영규","DF","1989/12/04",6,185,79],["곽성훈","DF","2006/06/18",15,190,82],["주앙 페드로","DF","2003/03/14",17,186,75,1],["임승겸","DF","1995/04/26",20,185,78],["김용혁","DF","2007/01/11",24,187,76],["공배현","DF","2007/03/05",26,184,72],["김진호","DF","2000/01/21",27,178,74],["박원재","DF","1994/05/07",33,176,66],["민상기","DF","1991/08/27",39,184,77],["배진우","DF","2002/01/23",66,185,74],["주세종","MF","1990/10/30",8,176,72],["최경록","MF","1995/03/15",10,176,71],["유제호","MF","2000/08/15",14,178,68],["박성현","MF","2009/07/14",28,173,65],["리영직","MF","1991/02/08",37,189,75],["강희수","MF","2003/02/25",42,176,68],["김우진","MF","2005/05/06",70,170,58],["오하종","MF","2003/06/08",77,172,64],["정규민","MF","2007/01/04",79,174,64],["문민서","MF","2004/02/18",88,182,74],["홍용준","MF","2003/03/26",99,173,67],["사이토스키","FW","2003/05/08",7,176,63,1],["하승운","FW","1998/05/04",9,177,74],["프리드욘슨","FW","1993/04/19",11,196,86,1],["정지훈","FW","2004/04/09",16,175,60],["아이데일","FW","1999/08/01",18,188,86,1],["안혁주","FW","2004/09/03",19,176,70],["권성윤","FW","2001/03/30",22,174,65],["김윤호","FW","2007/05/13",25,188,78],["신창무","FW","1992/09/17",40,170,70],["바 루아","FW","1996/07/25",50,170,75,1],["김종석","MF","1995/01/11",21,180,75]],
  gyeongnam:[["신준서","GK","2007/12/06",1,187,75],["이기현","GK","1993/12/16",13,192,84],["안호진","GK","2003/01/13",15,189,80],["이범수","GK","1990/12/10",25,190,85],["배현서","DF","2005/02/16",2,170,65],["조우영","DF","2005/03/24",3,187,78],["최성진","DF","2002/06/24",4,192,85],["최성훈","DF","2007/04/09",5,183,73],["전민수","DF","2005/09/22",14,170,63],["김규민","DF","2007/02/27",17,177,70],["김선호","DF","2001/03/29",18,180,70],["이규백","DF","2004/02/10",20,186,83],["최정원","DF","1995/08/16",26,185,84],["손호준","DF","2002/07/03",27,175,66],["알렉스","DF","2006/03/04",29,196,86,1],["정현욱","DF","2004/02/04",30,188,68],["김연수","DF","2005/05/24",33,183,73],["루컹","DF","2002/05/24",39,192,92,1],["장승우","DF","2007/11/14",55,170,60],["임은수","MF","1996/04/01",6,181,70],["이찬동","MF","1993/01/10",8,183,80],["임현섭","MF","2006/01/16",16,184,73],["김형원","MF","1999/02/22",22,187,73],["김준호","MF","2002/12/11",28,182,70],["김정현","MF","2000/06/09",44,176,68],["이헌재","MF","2006/03/23",71,178,73],["김하민","MF","2003/08/26",77,176,70],["치기","FW","1997/09/18",10,175,72,1],["조진혁","FW","2000/08/10",21,180,73],["권기표","FW","1997/06/26",23,175,71],["윤일록","FW","1992/03/07",24,178,65],["조상준","FW","1999/07/11",66,174,70],["펠리페","FW","2003/05/24",70,176,77,1],["김현오","FW","2007/09/12",90,183,76],["이중민","FW","1999/11/03",99,188,84],["김태훈","GK","1997/04/24",31,190,77],["김수민","FW","2006/06/15",9,186,83]],
- hwaseong:[["김승건","GK","1999/02/08",1,189,82],["김기훈","GK","2002/11/14",18,186,84],["김태준","GK","2001/07/08",21,185,80],["박의정","GK","2004/05/22",38,192,86],["임찬열","DF","2002/11/08",2,186,78],["장민준","DF","2002/07/11",4,186,80],["양시후","DF","2000/04/04",5,185,80],["보이노비치","DF","1996/10/03",15,192,81,1],["박경민","DF","1999/08/02",17,173,73],["박준서","DF","2004/04/26",20,183,73],["김대환","DF","2004/10/19",22,175,75],["김제율","DF","2004/04/03",23,187,83],["최예훈","DF","2003/08/19",24,180,73],["김우진","DF","2005/02/19",27,176,72],["김성진","DF","2004/02/28",33,175,73],["함선우","DF","2005/01/28",44,192,84],["정용희","DF","2002/05/10",66,183,78],["김정민","MF","1999/11/13",6,182,80],["전성진","MF","2003/03/21",8,180,69],["데메트리우스","MF","1999/04/05",10,172,68,1],["박재성","MF","2003/02/28",13,184,78],["최명희","MF","1990/09/04",16,177,76],["박진우","MF","2003/12/09",28,177,68],["임병훈","MF","2004/05/03",79,180,78],["이종성","MF","1992/08/05",92,187,72],["이래준","MF","1997/03/19",97,193,84],["제갈재민","FW","2000/08/12",7,178,77],["페트로프","FW","1998/06/18",9,190,85,1],["플라나","FW","1996/08/26",11,183,83,1],["김병오","FW","1989/06/26",14,182,84],["손승범","FW","2004/05/04",29,180,65],["황군성","FW","2005/01/05",47,177,70],["이지한","FW","2003/01/08",77,182,71],["일류첸코","FW","1990/08/13",90,187,82,1],["김범환","FW","2006/09/12",99,188,83],["안광문","GK","2004/05/13",31,193,90]],
+ hwaseong:[["김승건","GK","1999/02/08",1,189,82],["김기훈","GK","2002/11/14",18,186,84],["김태준","GK","2001/07/08",21,185,80],["박의정","GK","2004/05/22",38,192,86],["임찬열","DF","2002/11/08",2,186,78],["장민준","DF","2002/07/11",4,186,80],["양시후","DF","2000/04/04",5,185,80],["보이노비치","DF","1996/10/03",15,192,81,1],["박경민","DF","1999/08/02",17,173,73],["박준서","DF","2004/04/26",20,183,73],["김대환","DF","2004/10/19",22,175,75],["김제율","DF","2004/04/03",23,187,83],["최예훈","DF","2003/08/19",24,180,73],["김우진","DF","2005/02/19",27,176,72],["함선우","DF","2005/01/28",44,192,84],["정용희","DF","2002/05/10",66,183,78],["김정민","MF","1999/11/13",6,182,80],["전성진","MF","2003/03/21",8,180,69],["데메트리우스","MF","1999/04/05",10,172,68,1],["박재성","MF","2003/02/28",13,184,78],["최명희","MF","1990/09/04",16,177,76],["박진우","MF","2003/12/09",28,177,68],["임병훈","MF","2004/05/03",79,180,78],["이종성","MF","1992/08/05",92,187,72],["이래준","MF","1997/03/19",97,193,84],["제갈재민","FW","2000/08/12",7,178,77],["페트로프","FW","1998/06/18",9,190,85,1],["플라나","FW","1996/08/26",11,183,83,1],["김병오","FW","1989/06/26",14,182,84],["손승범","FW","2004/05/04",29,180,65],["황군성","FW","2005/01/05",47,177,70],["이지한","FW","2003/01/08",77,182,71],["일류첸코","FW","1990/08/13",90,187,82,1],["김범환","FW","2006/09/12",99,188,83],["안광문","GK","2004/05/13",31,193,90]],
  incheon:[["김동헌","GK","1997/03/03",1,186,85],["이태희","GK","1995/04/26",21,189,84],["왕민준","GK","2006/03/02",74,187,82],["후안 이비자","DF","1995/08/17",2,187,80,1],["이상기","DF","1996/05/07",3,180,79],["김건희","DF","2002/09/16",4,192,86],["오후성","DF","1999/08/25",7,173,64],["최승구","DF","2005/09/28",13,174,71],["김성민","DF","2000/07/03",17,171,69],["박경섭","DF","2004/07/02",20,188,83],["고정민","DF","2007/02/01",22,188,80],["이준섭","DF","2007/01/30",24,173,62],["여승원","DF","2000/05/05",27,179,72],["김연수","DF","1993/12/29",28,185,78],["이주용","DF","1992/09/26",32,180,78],["강영훈","DF","1998/09/28",34,187,83],["김명순","DF","2000/07/17",39,177,76],["이명주","MF","1990/04/24",5,176,74],["문지환","MF","1994/07/26",6,184,77],["이케르","MF","1995/05/18",8,182,75],["제르소","MF","1991/02/23",11,172,62],["서재민","MF","2003/09/16",15,178,73],["정치인","MF","1997/08/21",23,182,71],["김영환","MF","2002/03/23",30,180,74],["오준엽","MF","2002/01/14",55,178,72],["이청용","MF","1988/07/02",72,180,69],["정원진","MF","1994/08/10",88,176,67],["무고사","FW","1992/02/26",9,188,81,1],["레안드로","FW","1995/01/13",25,178,75,1],["이동률","FW","2000/06/09",10,174,70],["백민규","FW","2005/11/20",14,184,75],["박호민","FW","2001/10/09",19,191,86],["박승호","FW","2003/09/01",77,179,75],["페리어","FW","1994/11/15",99,185,80,1],["이민혁","MF","2002/01/19",26,178,70]],
  jeju:[["김동준","GK","1994/12/19",1,189,85],["안찬기","GK","1998/04/06",21,187,80],["허재원","GK","2008/05/21",29,194,75],["주승민","GK","2006/06/13",31,190,82],["허자웅","GK","1998/05/12",81,185,70],["토비아스","DF","1994/02/02",2,186,89,1],["세레스틴","DF","1997/07/24",3,192,80,1],["허강준","DF","2002/07/01",4,188,83],["권기민","DF","2005/10/27",6,185,77],["정운","DF","1989/06/30",13,180,76],["유인수","DF","1994/12/28",17,178,70],["장민규","DF","1999/03/06",20,186,78],["임창우","DF","1992/02/13",23,184,79],["김륜성","DF","2002/06/04",40,179,70],["김재우","DF","1998/02/06",41,187,84],["박민재","DF","2005/11/30",47,175,68],["조인정","DF","2005/11/08",88,184,75],["이탈로","MF","1997/08/23",5,190,78],["이창민","MF","1994/01/20",8,178,74],["오재혁","MF","2002/06/21",14,174,69],["김준하","MF","2005/12/02",27,177,66],["김건웅","MF","1997/08/29",28,185,83],["김재민","MF","2003/03/19",39,180,78],["강동휘","MF","2007/12/24",55,186,80],["박창준","FW","1996/12/23",7,178,67],["아이아스","FW","1996/12/30",9,174,80,1],["신상은","FW","1999/08/20",11,185,76],["김신진","FW","2001/07/13",18,186,80],["김이안","FW","1999/04/23",19,180,68],["최병욱","FW","2005/04/11",24,177,70],["유승재","FW","2008/03/31",77,182,68],["네게바","FW","2000/11/24",94,173,85,1],["박수빈","DF","1999/09/22",33,180,74],["구본서","MF","2008/04/03",30,177,66],["치나리","FW","1996/10/11",22,182,76,1]],
  jeonbuk:[["이주현","GK","1998/12/06",1,188,78],["공시현","GK","2005/02/23",29,190,78],["송범근","GK","1997/10/15",31,194,88],["이한결","GK","2007/07/19",51,188,76],["전지완","GK","2004/05/14",71,189,81],["정대영","GK","2006/09/11",91,192,83],["김영빈","DF","1991/09/20",2,184,79],["연제운","DF","1994/08/28",3,185,78],["조위제","DF","2001/08/25",4,189,82],["박지수","DF","1994/06/13",5,184,70],["김하준","DF","2002/07/17",15,188,78],["김준영","DF","2004/05/31",22,178,70],["김태환","DF","1989/07/24",23,177,72],["이상명","DF","2003/04/23",24,182,83],["황승준","DF","2005/08/03",27,180,72],["서정혁","DF","2006/03/09",39,177,68],["김주형","DF","2007/08/20",44,187,77],["최진웅","DF","2004/12/23",55,185,82],["최우진","DF","2004/07/18",66,175,66],["김수형","DF","2007/06/25",74,183,79],["김태현","DF","1996/12/19",77,175,71],["곽희벽","DF","2005/03/15",80,178,72],["맹성웅","MF","1998/02/04",6,183,70],["강상윤","MF","2004/05/31",13,171,64],["감보아","MF","1996/08/31",16,187,80,1],["문준혁","MF","2005/05/21",26,182,74],["이영재","MF","1994/09/13",28,174,60],["장남웅","MF","2004/02/09",36,184,79],["우현수","MF","2003/04/17",42,178,78],["이건희","MF","2007/08/13",47,177,67],["박현민","MF","2007/04/02",70,180,71],["김예건","MF","2008/08/07",73,169,67],["윤현석","MF","2003/11/08",88,178,71],["김진규","MF","1997/02/24",97,177,68],["도도","MF","2001/06/15",30,170,69,1],["이동준","FW","1997/02/01",7,173,65],["티아고","FW","1993/10/28",9,190,84,1],["이승우","FW","1998/01/06",10,173,63],["김승섭","FW","1996/11/01",11,177,65],["박주영","FW","2003/04/23",19,186,75],["츄마시","FW","1994/05/09",21,176,67,1],["한석진","FW","2007/12/19",33,174,69],["엄승민","FW","2003/05/02",34,180,72],["안태훈","FW","2007/06/08",40,182,68],["김창훈","FW","2004/10/23",79,170,69],["기티스","FW","1999/09/27",81,193,94],["정상운","FW","2003/04/03",90,190,80],["이탈로","FW","2002/10/13",95,181,75],["콤파뇨","FW","1996/04/22",96,195,84,1],["임준휘","FW","2005/02/14",98,176,75],["모따","FW","1996/02/10",99,193,87,1],["김태영","DF","2008/10/17",62,176,63],["한재빈","DF","2006/11/04",37,189,80],["구교빈","MF","2008/10/06",61,174,63],["한승민","MF","2009/11/09",63,179,73]],
@@ -4867,9 +4902,270 @@ const POSFAM26={
   "cheongju:이동진":{pref:"DM", f:{DC:70,DM:100,MC:40,ML:0,MR:0,LW:0,RW:0,ST:70}},
   "cheongju:제랄데스":{pref:"CAM", f:{DM:0,MC:70,ML:70,AMC:100,LW:70}},
   "cheongju:이창훈":{pref:"CB", f:{ST:70}},
+  /* ── 화성 피닉스 FC ──
+     ⚠ 이 팀은 «전 항목»을 적는다. inferPrefPos 는 표에 없는 선수의 주 포지션을 무작위로 뽑는데,
+       주 포지션이 흔들리면 initPosFam 의 바탕값이 통째로 달라져 «적지 않은 칸»이 판마다 바뀐다.
+       제보의 상세 포지션 명칭을 그대로 못박고, 나머지 칸도 전부 적어 새 게임마다 같게 만든다.
+     · SW 는 famSW26 이 주 포지션으로 결정한다(DC 면 40, 그 밖은 0) — 제보의 값과 같다.
+     · LW↔ML · RW↔MR · DL↔WBL · DR↔WBR 는 famPairUp 이 짝을 맞춘다 — 제보도 이미 짝이 맞다. */
+  "hwaseong:박준서":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "hwaseong:김제율":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "hwaseong:함선우":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "hwaseong:임병훈":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "hwaseong:임찬열":{pref:"LB", f:{DC:70,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "hwaseong:장민준":{pref:"CB", f:{DC:100,DL:70,DR:40,WBL:70,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "hwaseong:양시후":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "hwaseong:보이노비치":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "hwaseong:박경민":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "hwaseong:최예훈":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "hwaseong:정용희":{pref:"LB", f:{DC:40,DL:100,DR:70,WBL:100,WBR:70,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "hwaseong:김대환":{pref:"RB", f:{DC:40,DL:70,DR:100,WBL:70,WBR:100,DM:0,MC:0,ML:0,MR:70,AMC:0,LW:0,RW:70,ST:0}},
+  "hwaseong:김우진":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "hwaseong:김정민":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:70,AMC:70,LW:0,RW:70,ST:0}},
+  "hwaseong:전성진":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:40,ML:70,MR:70,AMC:100,LW:70,RW:70,ST:0}},
+  "hwaseong:데메트리우스":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:40,ML:70,MR:0,AMC:100,LW:70,RW:0,ST:0}},
+  "hwaseong:박재성":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:70,ML:0,MR:0,AMC:70,LW:0,RW:0,ST:0}},
+  "hwaseong:최명희":{pref:"DM", f:{DC:0,DL:0,DR:70,WBL:0,WBR:70,DM:100,MC:40,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "hwaseong:이종성":{pref:"DM", f:{DC:70,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "hwaseong:박진우":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:40,AMC:0,LW:100,RW:40,ST:40}},
+  "hwaseong:손승범":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:40,AMC:0,LW:100,RW:40,ST:40}},
+  "hwaseong:황군성":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:40,AMC:0,LW:100,RW:40,ST:40}},
+  "hwaseong:이지한":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:70,LW:100,RW:70,ST:40}},
+  "hwaseong:제갈재민":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:0,LW:100,RW:70,ST:70}},
+  "hwaseong:플라나":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:0,LW:70,RW:100,ST:70}},
+  "hwaseong:페트로프":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:70,AMC:0,LW:70,RW:70,ST:100}},
+  "hwaseong:일류첸코":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "hwaseong:김병오":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:70,AMC:70,LW:40,RW:70,ST:100}},
+  "hwaseong:김범환":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:70,LW:40,RW:40,ST:100}},
+  "hwaseong:이래준":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  /* ── 아래 여섯 팀은 «전 항목»을 적는다 (화성과 같은 이유).
+       표에 없는 선수의 주 포지션은 inferPrefPos 가 무작위로 뽑는다 — 주 포지션이 흔들리면
+       initPosFam 의 바탕값이 통째로 달라져 «적지 않은 칸»이 판마다 바뀐다.
+       제보의 상세 포지션 명칭을 못박고 나머지 칸도 전부 적어 새 게임마다 같게 만든다.
+     · SW 는 famSW26 이 주 포지션으로 정한다(DC 면 40, 그 밖은 0) — 제보의 값과 같다.
+     · LW↔ML · RW↔MR · DL↔WBL · DR↔WBR 는 famPairUp 이 짝을 맞춘다. */
+  /* ── 김포 FC ── */
+  "gimpo:최선규":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:박경록":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:김태한":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:이찬형":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:박상현":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:홍태형":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:무신":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "gimpo:남현우":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:40,AMC:0,LW:100,RW:40,ST:40}},
+  "gimpo:박병현":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:최재영":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:김도혁":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:70,MR:70,AMC:40,LW:70,RW:70,ST:0}},
+  "gimpo:디자우마":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:40,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:루안":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:40,ML:70,MR:70,AMC:100,LW:70,RW:70,ST:0}},
+  "gimpo:이시헌":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:40,ML:70,MR:100,AMC:70,LW:70,RW:100,ST:40}},
+  "gimpo:이학민":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:0,MC:0,ML:0,MR:70,AMC:0,LW:0,RW:70,ST:0}},
+  "gimpo:이인재":{pref:"CB", f:{DC:100,DL:70,DR:40,WBL:70,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:김성준":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:0,AMC:70,LW:0,RW:0,ST:0}},
+  "gimpo:임창석":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:김준서":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:0,LW:70,RW:100,ST:40}},
+  "gimpo:김민석":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:40,AMC:0,LW:100,RW:40,ST:70}},
+  "gimpo:윤재운":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:100,AMC:70,LW:40,RW:100,ST:40}},
+  "gimpo:김민식":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:70,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "gimpo:최종운":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:40,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:장부성":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:이용혁":{pref:"CB", f:{DC:100,DL:70,DR:40,WBL:70,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:김동민":{pref:"CB", f:{DC:100,DL:70,DR:70,WBL:70,WBR:70,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:박동진":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "gimpo:최성범":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:0,LW:70,RW:100,ST:40}},
+  "gimpo:채프먼":{pref:"DM", f:{DC:70,DL:40,DR:70,WBL:40,WBR:70,DM:100,MC:40,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimpo:파울리뇨":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:0,LW:100,RW:70,ST:40}},
+  /* ── 경남 FC ── */
+  "gyeongnam:조우영":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:최성훈":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:김수민":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "gyeongnam:이규백":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:알렉스":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:정현욱":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:김연수":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:루컹":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:김현오":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "gyeongnam:배현서":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:최성진":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:70,AMC:0,LW:0,RW:70,ST:70}},
+  "gyeongnam:임은수":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:이찬동":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:40,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:치기":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:70,LW:100,RW:70,ST:40}},
+  "gyeongnam:전민수":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:임현섭":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:김규민":{pref:"LB", f:{DC:70,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:김선호":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "gyeongnam:조진혁":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:0,LW:100,RW:70,ST:70}},
+  "gyeongnam:김형원":{pref:"DM", f:{DC:70,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:40,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:70}},
+  "gyeongnam:권기표":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:0,MC:0,ML:70,MR:70,AMC:0,LW:70,RW:70,ST:0}},
+  "gyeongnam:윤일록":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:40,AMC:0,LW:100,RW:40,ST:70}},
+  "gyeongnam:최정원":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:손호준":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:김준호":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:0,AMC:70,LW:0,RW:0,ST:0}},
+  "gyeongnam:김정현":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:40,ML:0,MR:0,AMC:100,LW:0,RW:0,ST:0}},
+  "gyeongnam:펠리페":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:0,LW:70,RW:100,ST:40}},
+  "gyeongnam:이헌재":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:70,LW:100,RW:70,ST:0}},
+  "gyeongnam:김하민":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gyeongnam:이중민":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  /* ── 천안 시티 FC ── */
+  "cheonan:이광준":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:최규백":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:이준호":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "cheonan:안창민":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "cheonan:권용승":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:이바닐도":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "cheonan:신한결":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:0,MC:0,ML:0,MR:70,AMC:0,LW:0,RW:70,ST:0}},
+  "cheonan:최준혁":{pref:"DM", f:{DC:70,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:40,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:고태원":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:이상준":{pref:"RW", f:{DC:0,DL:0,DR:70,WBL:0,WBR:70,DM:0,MC:0,ML:70,MR:100,AMC:0,LW:70,RW:100,ST:40}},
+  "cheonan:허동민":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:40,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:툰가라":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:70,ML:70,MR:0,AMC:100,LW:70,RW:0,ST:0}},
+  "cheonan:이지훈":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:40,ML:70,MR:70,AMC:100,LW:70,RW:70,ST:0}},
+  "cheonan:장현도":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:구종욱":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:70,LW:100,RW:70,ST:40}},
+  "cheonan:김성주":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:이지승":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:100,ML:0,MR:0,AMC:70,LW:0,RW:0,ST:0}},
+  "cheonan:진의준":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:70,AMC:40,LW:0,RW:70,ST:0}},
+  "cheonan:이상용":{pref:"CB", f:{DC:100,DL:70,DR:70,WBL:70,WBR:70,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:어은결":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:이동협":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "cheonan:박창우":{pref:"RB", f:{DC:40,DL:70,DR:100,WBL:70,WBR:100,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:강교훈":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:하재민":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:우정연":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:70,LW:40,RW:40,ST:100}},
+  "cheonan:오성민":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:정지황":{pref:"RB", f:{DC:40,DL:70,DR:100,WBL:70,WBR:100,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:사르자니":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:100,AMC:70,LW:40,RW:100,ST:40}},
+  "cheonan:차승현":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "cheonan:이규민":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:40,AMC:0,LW:100,RW:40,ST:40}},
+  "cheonan:윌리안":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:70,LW:100,RW:70,ST:40}},
+  "cheonan:라마스":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:40,ML:0,MR:70,AMC:100,LW:0,RW:70,ST:0}},
+  /* ── 안산 그리너스 FC ── */
+  "ansan:이재환":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "ansan:김준형":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "ansan:이준한":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:100,AMC:0,LW:40,RW:100,ST:40}},
+  "ansan:김승현":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "ansan:김민영":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "ansan:하츠젤":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "ansan:이효준":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "ansan:도승우":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "ansan:장현수":{pref:"LB", f:{DC:40,DL:100,DR:70,WBL:100,WBR:70,DM:0,MC:0,ML:70,MR:70,AMC:70,LW:70,RW:70,ST:0}},
+  "ansan:강동현":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "ansan:연제민":{pref:"CB", f:{DC:100,DL:70,DR:40,WBL:70,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "ansan:연응빈":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "ansan:박규민":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:100,AMC:70,LW:40,RW:100,ST:40}},
+  "ansan:류승우":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:70,ML:0,MR:70,AMC:100,LW:0,RW:70,ST:0}},
+  "ansan:정현우":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "ansan:마촙":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:70,AMC:0,LW:70,RW:70,ST:100}},
+  "ansan:리마":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:70,LW:100,RW:70,ST:40}},
+  "ansan:정건욱":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:70,AMC:0,LW:70,RW:70,ST:100}},
+  "ansan:김건오":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:70,MR:0,AMC:70,LW:70,RW:0,ST:0}},
+  "ansan:오브라도비치":{pref:"CB", f:{DC:100,DL:70,DR:40,WBL:70,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "ansan:박채준":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:40,AMC:0,LW:100,RW:40,ST:40}},
+  "ansan:류승완":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:0,LW:100,RW:70,ST:40}},
+  "ansan:송범":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "ansan:진호진":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:40,AMC:0,LW:100,RW:40,ST:70}},
+  "ansan:박시화":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:70,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "ansan:조지훈":{pref:"DM", f:{DC:70,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "ansan:임지민":{pref:"RB", f:{DC:40,DL:70,DR:100,WBL:70,WBR:100,DM:0,MC:0,ML:0,MR:70,AMC:0,LW:0,RW:70,ST:0}},
+  "ansan:김정현":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:70,ML:0,MR:0,AMC:100,LW:0,RW:0,ST:0}},
+  "ansan:최단":{pref:"RB", f:{DC:40,DL:70,DR:100,WBL:70,WBR:100,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "ansan:김백민":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:0,MC:0,ML:0,MR:70,AMC:0,LW:0,RW:70,ST:0}},
+  "ansan:말론":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:0,LW:70,RW:100,ST:40}},
+  "ansan:김인성":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:0,LW:100,RW:70,ST:40}},
+  /* ── 김해 FC 2008 ── */
+  "gimhae:차준영":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimhae:여재율":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimhae:최준영":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimhae:이승재":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "gimhae:김경수":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "gimhae:김현덕":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimhae:김대현":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimhae:박형빈":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "gimhae:강준모":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:0,LW:100,RW:70,ST:40}},
+  "gimhae:이슬찬":{pref:"RB", f:{DC:40,DL:70,DR:100,WBL:70,WBR:100,DM:0,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "gimhae:문승민":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "gimhae:베카":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:70,AMC:0,LW:70,RW:70,ST:100}},
+  "gimhae:이강욱":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:100,AMC:0,LW:40,RW:100,ST:70}},
+  "gimhae:조영광":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:70,LW:100,RW:70,ST:0}},
+  "gimhae:표건희":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:40,AMC:0,LW:100,RW:40,ST:40}},
+  "gimhae:최원철":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:70,ML:0,MR:0,AMC:70,LW:0,RW:0,ST:0}},
+  "gimhae:이유찬":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "gimhae:박상준":{pref:"DM", f:{DC:70,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimhae:성호영":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:0,AMC:70,LW:70,RW:0,ST:0}},
+  "gimhae:명세진":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:100,ML:0,MR:0,AMC:70,LW:0,RW:0,ST:0}},
+  "gimhae:이준규":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:70,MR:0,AMC:70,LW:70,RW:0,ST:0}},
+  "gimhae:홍욱현":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimhae:설현진":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:0,LW:100,RW:70,ST:70}},
+  "gimhae:박재현":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:0,MC:0,ML:0,MR:70,AMC:0,LW:0,RW:70,ST:0}},
+  "gimhae:곽성욱":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:70,ML:70,MR:0,AMC:100,LW:70,RW:0,ST:0}},
+  "gimhae:김동국":{pref:"LB", f:{DC:70,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:100,MR:0,AMC:0,LW:100,RW:0,ST:0}},
+  "gimhae:박요한":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimhae:윤병권":{pref:"CB", f:{DC:100,DL:40,DR:70,WBL:40,WBR:70,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "gimhae:우제욱":{pref:"ST", f:{DC:70,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "gimhae:후벵 마세도":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:100,MR:70,AMC:0,LW:100,RW:70,ST:40}},
+  "gimhae:미겔 바지오":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:70,ML:0,MR:0,AMC:70,LW:0,RW:0,ST:0}},
+  "gimhae:마이사 폴":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:70,ML:40,MR:40,AMC:70,LW:40,RW:40,ST:100}},
+  /* ── 용인 FC ── */
+  "yongin:조현우":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "yongin:임형진":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "yongin:김진호":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "yongin:임채민":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "yongin:이진섭":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "yongin:강신명":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "yongin:곽윤호":{pref:"CB", f:{DC:100,DL:70,DR:40,WBL:70,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "yongin:신진호":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:70,ML:70,MR:0,AMC:100,LW:70,RW:0,ST:0}},
+  "yongin:비티뉴":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:70,LW:70,RW:100,ST:40}},
+  "yongin:최영준":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:70,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "yongin:석현준":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:70,AMC:0,LW:40,RW:70,ST:100}},
+  "yongin:자르델":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:40,AMC:70,LW:70,RW:40,ST:100}},
+  "yongin:가브리엘":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:70,AMC:0,LW:40,RW:70,ST:100}},
+  "yongin:조재훈":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:40,ML:0,MR:0,AMC:100,LW:0,RW:0,ST:0}},
+  "yongin:김현준":{pref:"CB", f:{DC:100,DL:40,DR:70,WBL:40,WBR:70,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "yongin:진태호":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:70,ML:0,MR:0,AMC:100,LW:0,RW:0,ST:0}},
+  "yongin:이재형":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "yongin:유동규":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:70,AMC:0,LW:70,RW:70,ST:70}},
+  "yongin:최치웅":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "yongin:김한길":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:70,AMC:0,LW:70,RW:70,ST:0}},
+  "yongin:김보섭":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:0,LW:70,RW:100,ST:70}},
+  "yongin:이규동":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:70,LW:40,RW:40,ST:100}},
+  "yongin:김한서":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:100,ML:0,MR:70,AMC:40,LW:0,RW:70,ST:0}},
+  "yongin:이재준":{pref:"RB", f:{DC:40,DL:70,DR:100,WBL:70,WBR:100,DM:0,MC:0,ML:0,MR:70,AMC:0,LW:0,RW:70,ST:0}},
+  "yongin:김동민":{pref:"DM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:100,MC:40,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  /* ── 파주 FC ── */
+  "paju:심민용":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "paju:전현병":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "paju:아리아스":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "paju:박수빈":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:100,AMC:0,LW:40,RW:100,ST:40}},
+  "paju:서정현":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "paju:장하윤":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "paju:이찬호":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:40,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "paju:김민호":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "paju:보르하 바스톤":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "paju:김민성":{pref:"RB", f:{DC:40,DL:70,DR:100,WBL:70,WBR:100,DM:0,MC:0,ML:0,MR:70,AMC:0,LW:0,RW:70,ST:0}},
+  "paju:김현태":{pref:"CM", f:{DC:70,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:100,ML:0,MR:0,AMC:40,LW:0,RW:0,ST:0}},
+  "paju:바우텔손":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:70,AMC:0,LW:70,RW:70,ST:100}},
+  "paju:최범경":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:70,ML:0,MR:0,AMC:100,LW:0,RW:0,ST:0}},
+  "paju:이준석":{pref:"LW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:70,ML:100,MR:40,AMC:70,LW:100,RW:40,ST:40}},
+  "paju:최원록":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:0,LW:70,RW:100,ST:40}},
+  "paju:안준혁":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:70,LW:70,RW:100,ST:40}},
+  "paju:서동한":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:70,LW:70,RW:100,ST:40}},
+  "paju:이대광":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:70,AMC:0,LW:70,RW:70,ST:100}},
+  "paju:이제호":{pref:"ST", f:{DC:70,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:0,ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
+  "paju:유재준":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:70,ML:0,MR:0,AMC:100,LW:0,RW:0,ST:0}},
+  "paju:홍정운":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "paju:이민기":{pref:"LB", f:{DC:70,DL:100,DR:40,WBL:100,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "paju:성진영":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:40,AMC:70,LW:70,RW:40,ST:100}},
+  "paju:이연규":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "paju:바에즈":{pref:"CAM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:70,ML:0,MR:70,AMC:100,LW:0,RW:70,ST:0}},
+  "paju:보닐라":{pref:"CB", f:{DC:100,DL:40,DR:40,WBL:40,WBR:40,DM:70,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "paju:노승익":{pref:"RB", f:{DC:40,DL:40,DR:100,WBL:40,WBR:100,DM:0,MC:0,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "paju:루크":{pref:"CM", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:70,MC:100,ML:0,MR:0,AMC:0,LW:0,RW:0,ST:0}},
+  "paju:최상윤":{pref:"RW", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:100,AMC:0,LW:70,RW:100,ST:40}},
+  "paju:이택근":{pref:"LB", f:{DC:40,DL:100,DR:40,WBL:100,WBR:40,DM:0,MC:0,ML:70,MR:0,AMC:0,LW:70,RW:0,ST:0}},
+  "paju:전유상":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:70,MR:70,AMC:0,LW:70,RW:70,ST:100}},
+  "paju:이동열":{pref:"ST", f:{DC:0,DL:0,DR:0,WBL:0,WBR:0,DM:0,MC:0,ML:40,MR:70,AMC:0,LW:40,RW:70,ST:100}},
   "gimcheon:임준영":{pref:"LB", f:{DC:70,DL:100,WBL:100,DM:70}},
   /* ── 안산 그리너스 (대구 → 안산 이적) ── */
-  "ansan:김민영":{pref:"ST", f:{ML:40,MR:40,AMC:0,LW:40,RW:40,ST:100}},
 };
 function applyFam26(p, tid){
   if(!p) return;
@@ -5360,6 +5656,7 @@ function posFromFam(p){
    유스 11명을 긴급 등록하고, 에디터로 고쳐도 다음 불러오기에서 원상 복구된다.
    불러오는 시점에 이 조합을 찾아 되돌린다 — 진짜 골키퍼는 절대 건드리지 않는다. */
 let GK_FIXED_N=0;   // 진단용 — 세이브에는 남기지 않는다
+let POSBAND_FIXED_N=0;   // 🧯 조용히 옮겨진 대분류를 되돌린 인원 (진단용)
 function looksLikeRealGK(p){
   if(!p) return false;
   if(p.prefPos==="GK") return true;                       // 주 포지션이 골키퍼 — 진짜다
@@ -5405,11 +5702,54 @@ function repairFakeGK(arr){
   }
   return n;
 }
-/* 능숙도가 바뀌면 대분류도 따라 바뀐다 — 자리를 새로 익힌 선수는 소속 라인이 옮겨진다 */
-function syncPosBand(p){
+/* 능숙도가 바뀌면 대분류도 따라 바뀐다 — 자리를 새로 익힌 선수는 소속 라인이 옮겨진다.
+   ⚠ 제보 — 「유스탭이랑 전술탭 왔다갔다 하다가 보니 종합 표기가 200에서 149로 주저앉았다.
+      세부 능력치 프로필로 보면 변화가 없다」.
+   범인은 탭이 아니라 «불러오기» 였다(탭 전환만으로는 아무 값도 안 바뀐다 — 실측).
+     · 화면 종합(dispOvr)은 대분류(p.pos)별 가중치로 «세부 능력치»를 접어서 낸다.
+       그래서 세부 능력치가 하나도 안 변해도 대분류만 옮겨지면 숫자가 통째로 달라진다.
+       (실측 — 리그 1056명, 대분류만 바꿨을 때 평균 29 · 최대 83 벌어진다)
+     · 경기를 뛰면 그 자리 능숙도가 오르고 안 선 자리는 잊힌다(gainPosFam). 수비수를
+       한동안 중앙 미드필더로 쓰면 «가장 익숙한 자리»가 미드필드로 넘어간다.
+     · 그 상태로 세이브를 열면, 불러오기 때 도는 「포지션 대분류」 정리가 p.pos 를 그대로
+       옮겼다. 시즌 말 «전향»(posFamSeasonEnd)에는 있는 안전장치(POSFLIP_OVR_DROP·최소
+       능숙도·격차)가 이 정리에는 하나도 없었다.
+     · 실측 — 화면 종합 172 인 수비수를 중앙 미드필더로 굴린 뒤 한 번 불러오면 127 (낙폭 45).
+   ─ 불러오기 때 도는 정리는 «잘못 등록된 자리를 바로잡는» 것이지 «전향»이 아니다.
+     대분류를 옮겨서 화면 종합이 크게 떨어지면 그 자리 선수가 된 게 아니라 그 자리로
+     «기용됐을» 뿐이다 — 옮기지 않는다. 전향은 시즌이 끝날 때 알림과 함께 일어난다. */
+function syncPosBand(p, guard){
   if(!p || !p.posFam || p._posLock) return;   // 손으로 못 박은 대분류는 건드리지 않는다
   const np=posFromFam(p);
-  if(np && np!==p.pos) p.pos=np;
+  if(!np || np===p.pos) return;
+  if(guard){
+    try{
+      const o0=dispOvr(p);
+      const bk=p.pos; p.pos=np; const o1=dispOvr(p); p.pos=bk;
+      if(o1 < o0 - POSFLIP_OVR_DROP) return;   // 이만큼 무너지면 그 자리 선수가 아니다
+    }catch(e){}
+  }
+  p.pos=np;
+}
+/* 🧯 이미 이렇게 옮겨져 버린 세이브를 되돌린다.
+   주 포지션(prefPos)이 가리키는 라인으로 되돌렸을 때 화면 종합이 크게 회복되면,
+   그건 «조용히 옮겨진» 선수다. 시즌 말 전향은 주 포지션까지 함께 옮기므로 여기 걸리지 않는다. */
+function posBandRepair(arr){
+  if(!Array.isArray(arr)) return 0;
+  let n=0;
+  for(const p of arr){
+    if(!p || typeof p!=="object" || !p.posFam || p._posLock) continue;
+    if(p.pos==="GK") continue;
+    const home=SLOT_FAM[p.prefPos]; if(!home || home==="GK") continue;
+    const want=FAM_LINE[home]; if(!want || want===p.pos) continue;
+    try{
+      const o0=dispOvr(p);
+      const bk=p.pos; p.pos=want;
+      if(dispOvr(p) > o0 + POSFLIP_OVR_DROP) n++;   // 되돌리는 쪽이 크게 낫다 — 그대로 둔다
+      else p.pos=bk;
+    }catch(e){}
+  }
+  return n;
 }
 function getPosFam(p, slot){
   if(!p) return 0;
@@ -6825,6 +7165,8 @@ function banCtxSync(){
       if(p._banL!=null || p._banLC!=null){ delete p._banAct; continue; }
       const v = c==="eacl" ? (p.banE||0) : c==="cwc" ? (p.banC||0) : c==="friendly" ? 0 : (p.ban||0);
       if(v===(p.ban||0)) delete p._banAct; else p._banAct=v;
+      /* 🚔 무면허·음주 징계는 리그 전용이다 — 다음 경기가 대회·연습이면 이 선수만 풀어 준다 */
+      if(c==="league") delete p._crimeOff; else p._crimeOff=1;
     }
   }catch(e){}
 }
@@ -6835,15 +7177,209 @@ function banNow(p){
   if(BAN_CTX==="friendly") return 0;
   return (p && p._banAct!=null) ? p._banAct : ((p&&p.ban)||0);
 }
+/* ═══ 🚔 선수 물의 — 무면허·음주 운전 ══════════════════════════════════════
+   ⚠ 요청 원문 — 「선수에게 무면허 운전 사건, 음주 운전 사건이 일어나게 하자. 선수는 징계로
+     60일 동안 출전 정지가 돼. 리그 경기에만 적용되게 하고, 리그 일정까지 고려하도록 해.
+     뉴스와 소셜 반응도 구현하고, 발생 빈도는 1~2 시즌 동안 리그 전체 팀에서 1~2명꼴로」.
+   · 징계는 «날짜»다 — 60일. 경기 수로 세는 카드 징계(p.ban)와는 다른 장부를 쓴다.
+   · 리그 경기에만 걸린다 — 대륙대회·세계대회·연습경기에는 나설 수 있다(요청).
+   · 시즌 중에만 터진다. 그래야 60일이 실제 리그 일정과 겹친다 — 사건이 나는 순간
+     그 구단의 남은 일정을 읽어 «몇 경기를 못 나오는지»를 계산해 기사에 싣는다.
+   · 빈도 — 리그 전체에서 한 시즌에 0.9건. 한 번 터지면 CRIME_GAP 일은 조용하다. */
+const CRIME_BAN_DAYS=60;      // 협회 징계 — 리그 60일
+/* ⚠ 이 숫자는 «굴림»의 값이지 실제 건수가 아니다 — 아래 재발 금지 기간이 시즌 뒤쪽을
+   잘라 먹으므로 실측은 이보다 낮게 나온다. 실측으로 맞춘 값이다(200시즌 측정). */
+const CRIME_PER_SEASON=1.35;  // 리그 전체 · 한 시즌 굴림 기대값 → 실측 시즌당 약 0.9건
+const CRIME_GAP=110;          // 한 건이 터지면 이만큼은 다음 건이 안 나온다
+const CRIME_KIND={
+  dui:  {k:"dui",  n:"음주운전",   ic:"🚔", w:0.62},
+  nolic:{k:"nolic",n:"무면허 운전", ic:"🚗", w:0.38}
+};
+function crimeSt(){ if(!G.crime) G.crime={last:-9999, n:0, log:[]}; return G.crime; }
+/* 지금 리그가 돌고 있는가 — 개막부터 최종전까지 */
+function crimeInSeason(){
+  try{
+    if(G.phase!=="league") return false;
+    const d=G.day|0, fix=G.k1Fix||[];
+    if(!fix.length) return false;
+    return d>=matchDayOf(0) && d<=matchDayOf(fix.length-1);
+  }catch(e){ return false; }
+}
+/* 그 구단이 앞으로 days 일 안에 치르는 «리그» 경기 수 — 징계가 실제로 몇 경기인가 */
+function crimeLeagueMiss(t, days){
+  try{
+    const d0=G.day|0, d1=d0+(days|0);
+    const div=t.div===2?2:1;
+    const fix=div===1?G.k1Fix:G.k2Fix, r0=(div===1?G.r1:G.r2)|0;
+    if(!Array.isArray(fix)) return 0;
+    let n=0;
+    for(let r=r0; r<fix.length; r++){
+      const md=matchDayOf(r);
+      if(md<d0) continue;
+      if(md>d1) break;
+      for(const [hid,aid] of (fix[r]||[])) if(hid===t.id || aid===t.id){ n++; break; }
+    }
+    return n;
+  }catch(e){ return 0; }
+}
+/* 사고를 칠 만한 선수 뽑기 — 성격과 판단력을 본다 (프로페셔널은 좀처럼 안 친다) */
+function crimeWeight(p){
+  if(!p) return 0;
+  const age=(G.season|0)-(p.by|0);
+  if(age<18 || age>40) return 0;                 // 면허 나이 아래는 제외
+  if(p.army && p.army.out) return 0;             // 복무 중
+  if(p.loan && p.loan.own && p.loan.to && p.loan.to!==p.loan.own) { /* 임대는 그대로 대상 */ }
+  if(crimeOf(p)) return 0;                       // 이미 징계 중
+  const a=p.attr||{};
+  let w=1;
+  const PERS_K=[0.25, 1.0, 0.8, 1.9];            // 프로 · 야심가 · 온화함 · 다혈질
+  w *= PERS_K[(p.pers|0)] != null ? PERS_K[(p.pers|0)] : 1;
+  w *= clamp(1.6 - ((a.dec||55)/100), 0.5, 1.5); // 판단력이 낮을수록
+  w *= clamp(0.8 + ((a.agg||50)/140), 0.7, 1.5); // 공격성이 높을수록
+  w *= clamp(1.5 - ((a.cmp||55)/140), 0.6, 1.4); // 침착성이 낮을수록
+  if(age<=23) w*=1.25;                           // 어린 선수 — 특히 무면허
+  if((p.apps||0)<=2) w*=0.7;                     // 아예 안 뛰는 선수는 기사가 안 된다
+  return Math.max(0.02, w);
+}
+function crimeOf(p){ return (p && p.crime && (p.crime.left|0)>0) ? p.crime : null; }
+/* 지금 이 경기에 이 징계가 걸리는가 — 리그에만 (요청)
+   ⚠ 점검에서 잡은 것 — 처음에는 BAN_CTX 가 "eacl"/"cwc" 면 전부 풀어 줬다. 그런데 BAN_CTX 는
+     «유저의 다음 경기»가 무엇인가일 뿐이다. 유저의 다음 경기가 대륙대회면, 같은 날 도는
+     <b>AI 구단들의 리그 경기</b>에서도 징계가 통째로 풀려 버린다(카드 징계는 AI 에게
+     p.ban 을 그대로 먹여서 이 문제가 없었다).
+   ─ 카드 징계와 같은 모양으로 맞춘다. 기본은 «걸린다»이고, 푸는 건 두 경우뿐이다.
+     · 연습경기(BAN_CTX==="friendly") — 친선은 어떤 징계도 걸리지 않는다(기존 규칙)
+     · 내 팀 선수가 대회 경기를 치를 때 — banCtxSync 가 선수마다 찍어 주는 표식(_crimeOff)
+       또는 대회용 장부가 끼워진 상태(_banL/_banLC) */
+function crimeOut(p){
+  const c=crimeOf(p); if(!c) return false;
+  try{
+    if(p._crimeM) return false;        // 지금 치르는 «그 경기»가 리그가 아니다 (경기 단위 표식)
+    if(BAN_CTX==="friendly") return false;
+    if(p._crimeOff) return false;      // 화면용 — 내 팀의 «다음 경기»가 대회다
+    if(p._banL!=null || p._banLC!=null) return false;   // 대회 장부가 끼워져 있다 = 대회 경기 중
+  }catch(e){}
+  return true;
+}
+function crimeDaysLeft(p){ const c=crimeOf(p); return c?(c.left|0):0; }
+/* 하루치 — 남은 일수를 깎고, 새 사건을 굴린다 */
+function crimeTick(){
+  const S=crimeSt();
+  /* ① 징계 소화 */
+  const 훑기=(t)=>{ for(const p of (t.players||[])){
+    const c=p.crime; if(!c || !(c.left>0)) continue;
+    c.left--;
+    if(c.left<=0){
+      delete p.crime;
+      try{ t._xiCK=null; t._xiC=null; t._xiCKf=null; t._xiCf=null; }catch(e){}
+      if(t.id===G.userTeamId){
+        addNews(`✅ ${p.name} 선수의 ${CRIME_KIND[c.k].n} 징계가 끝났습니다 — 다음 리그 경기부터 출전할 수 있습니다.`);
+        try{ notify(`✅ <b>${p.name}</b> ${CRIME_KIND[c.k].ic} ${CRIME_KIND[c.k].n} 징계 해제 — 리그 출전이 가능합니다.`,"good"); }catch(e){}
+      }
+    }
+  } };
+  try{ for(const id in G.teams) 훑기(G.teams[id]); }catch(e){}
+  /* 방출·해외 이적으로 구단 밖에 나가 있어도 징계는 흐른다 — 안 그러면 돌아올 때 그대로 남는다 */
+  try{ 훑기({players:G.freeAgents||[], id:"__fa"}); }catch(e){}
+  try{ 훑기({players:G.overseas||[], id:"__os"}); }catch(e){}
+  /* ② 새 사건 */
+  try{
+    if(!crimeInSeason()) return;
+    if(((G.day|0)-(S.last|0)) < CRIME_GAP) return;
+    const fix=G.k1Fix||[];
+    const 시즌일수=Math.max(60, matchDayOf(fix.length-1)-matchDayOf(0)+1);
+    if(Math.random() >= CRIME_PER_SEASON/시즌일수) return;
+    crimeFire();
+  }catch(e){}
+}
+function crimeFire(force){
+  const S=crimeSt();
+  const cand=[];
+  for(const id in G.teams){
+    const t=G.teams[id];
+    if(!t || isArmyTeam(t)) continue;
+    for(const p of (t.players||[])){ const w=crimeWeight(p); if(w>0) cand.push({p, t, w}); }
+  }
+  if(!cand.length) return null;
+  let tot=0; for(const c of cand) tot+=c.w;
+  let r=Math.random()*tot, pick2=cand[cand.length-1];
+  for(const c of cand){ r-=c.w; if(r<=0){ pick2=c; break; } }
+  const {p, t}=pick2;
+  const age=(G.season|0)-(p.by|0);
+  /* 어릴수록 무면허, 나이가 있으면 음주 쪽이 많다 */
+  const wNo = CRIME_KIND.nolic.w * (age<=23?1.9:age<=27?1.0:0.45);
+  const kind = (Math.random()*(wNo+CRIME_KIND.dui.w) < wNo) ? "nolic" : "dui";
+  const miss = crimeLeagueMiss(t, CRIME_BAN_DAYS);
+  p.crime={k:kind, left:CRIME_BAN_DAYS, d:(G.day|0), s:(G.season|0), miss};
+  try{ t._xiCK=null; t._xiC=null; t._xiCKf=null; t._xiCf=null; }catch(e){}
+  /* 라커룸·팬 — 사기와 신뢰가 함께 내려간다 */
+  try{ p.morale=clamp((p.morale||70)-18, 5, 100); }catch(e){}
+  /* ⚠ 점검 — 여기서 setMor() 를 불렀는데 그건 다른 함수 안의 지역 클로저다. try 가 삼켜서
+     팀 사기가 «한 번도» 내려가지 않았다. 팀 사기는 직접 적는다. */
+  try{ t.morale=Math.round(clamp((t.morale||70)-(t.id===G.userTeamId?4:2), 40, 99)*100)/100; }catch(e){}
+  try{ affAdd(p, -6, `${CRIME_KIND[kind].n} 물의`); }catch(e){}
+  S.last=(G.day|0); S.n=(S.n||0)+1;
+  S.log=(Array.isArray(S.log)?S.log:[]).concat([{s:G.season, d:G.day|0, tid:t.id, nm:p.name, k:kind, miss}]).slice(-20);
+  if(t.id===G.userTeamId){ try{ pruneUserLineup(); }catch(e){} }   // 전술판에서 즉시 내린다
+  crimeNews(p, t, kind, miss);
+  try{ crimeSocial(p, t, kind, miss); }catch(e){}
+  return {p, t, kind, miss};
+}
+function crimeNews(p, t, kind, miss){
+  const K=CRIME_KIND[kind];
+  const mine=(t.id===G.userTeamId);
+  const 몇경기 = miss>0 ? `이 기간에 <b>${t.short}</b>의 리그 경기 <b>${miss}경기</b>가 들어갑니다` : `남은 리그 일정이 없어 다음 시즌 개막까지 이어집니다`;
+  const head=`${K.ic} ${t.short} ${p.name}, ${K.n}으로 적발 — 리그 ${CRIME_BAN_DAYS}일 출전 정지`;
+  try{ addNews(fixJosa(head), mine?"bad":null, "club", {cat:"league", ic:K.ic, tone:mine?-2:-1,
+        tid:t.id, src:"연맹 공식", sub:fixJosa(`${age(p)}세. 협회 상벌위원회는 ${CRIME_BAN_DAYS}일 리그 출전 정지를 의결했습니다. ${몇경기}.`)}); }catch(e){
+    try{ addNews(fixJosa(head), mine?"bad":null); }catch(e2){}
+  }
+  if(mine){
+    try{ notify(`${K.ic} <b>${p.name}</b> 선수가 <b>${K.n}</b>으로 적발됐습니다.<br>
+      <span class="small">협회 징계 — 리그 <b>${CRIME_BAN_DAYS}일</b> 출전 정지. ${몇경기}.<br>
+      대륙·세계 대회와 연습경기에는 나설 수 있습니다.</span>`,"bad"); }catch(e){}
+    try{ addMood(`💢 라커룸이 무겁습니다 — ${p.name}의 ${K.n} 건으로 팀 분위기가 가라앉았습니다.`); }catch(e){}
+    try{ adjustTrust("fans", -6, `${p.name} ${K.n}`); }catch(e){}
+    try{ adjustTrust("board", -4, `${p.name} ${K.n}`); }catch(e){}
+  }
+  function age(q){ return (G.season|0)-(q.by|0); }
+}
+function crimeSocial(p, t, kind, miss){
+  const mine=(t.id===G.userTeamId);
+  const V={p:p.name, t:t.short, n:CRIME_BAN_DAYS, g:miss};
+  const pool = kind==="dui" ? SOC.crimeDui : SOC.crimeNoLic;
+  socialFill(pool, mine?(4+R(3)):(2+R(2)), -1, V, mine?undefined:"rival");
+  try{ fmkFill(kind==="dui"?FMK.crimeDui:FMK.crimeNoLic, 2+R(3), V); }catch(e){}
+}
 /* 🇰🇷 p.natlCall — 대표팀에 가 있는 선수는 소속팀 경기에 못 나선다.
    ⚠ 이 표식은 처음에 p.natl 이라는 이름을 썼는데, 그 칸은 이미 «선수의 출신 국가»가
      쓰고 있었다(선수 생성기의 «출신 국가»). 그래서 국적을 넣어 만든 외국인은
      avail() 이 «대표팀에 가 있다»로 읽어 <b>영영 경기에 못 나섰고</b>, 세이브를 열면
      natlSweep 이 그 국적 문자열을 지워 버렸다(실측 — 브라질 국적이 사라짐).
      이름을 갈라 둔다. 국적은 p.natl, 소집은 p.natlCall 이다. */
-function avail(p){ return p.inj<=0 && !(banNow(p)>0) && !(p.sulk>0) && !p._loanBlk && !p.natlCall; }
+function avail(p){ return p.inj<=0 && !(banNow(p)>0) && !crimeOut(p) && !(p.sulk>0) && !p._loanBlk && !p.natlCall; }
 /* 🔁 임대 선수는 원소속 구단과의 경기에 나설 수 없다 (K리그 규정).
    경기를 만들기 직전에 표식을 달고, 끝나면 지운다 — avail() 을 쓰는 모든 경로가 한 번에 따른다. */
+/* 🚔 이 경기가 «리그가 아니면» 무면허·음주 징계는 걸리지 않는다 (요청).
+   ⚠ BAN_CTX 는 «유저의 다음 경기»가 무엇인가일 뿐이라, AI 구단끼리의 대회 경기나
+     같은 날 도는 AI 리그 경기를 가려내지 못한다. 임대 금지 표식과 똑같이
+     «경기를 만들기 직전에» 두 팀 선수 모두에게 찍고, 경기가 끝나면 지운다. */
+function crimeCtxSet(home, away, opts){
+  const off = !!(opts && (opts.friendly || opts.pvp || opts.eacl || opts.cwc || opts.noTable));
+  for(const t of [home, away]){
+    if(!t || !Array.isArray(t.players)) continue;
+    for(const p of t.players){ if(!p || !p.crime) continue;
+      if(off) p._crimeM=1; else delete p._crimeM; }
+  }
+  try{ if(home) home._xiCK=null; if(away) away._xiCK=null; }catch(e){}
+}
+function crimeCtxClear(home, away){
+  for(const t of [home, away]){
+    if(!t || !Array.isArray(t.players)) continue;
+    for(const p of t.players) if(p && p._crimeM) delete p._crimeM;
+  }
+  try{ if(home) home._xiCK=null; if(away) away._xiCK=null; }catch(e){}
+}
 function loanBlockSet(home, away){
   for(const [t,opp] of [[home,away],[away,home]]){
     if(!t||!opp) continue;
@@ -9106,6 +9642,7 @@ function createMatch(home, away, opts={}){
   ensureAIRoles(home); ensureAIRoles(away);   // 이적으로 새로 온 선수도 역할을 갖고 뛰게
   /* 🔁 임대 선수 친정팀 출전 금지 — 선발·벤치를 짜기 전에 걸어 둔다 */
   try{ loanBlockSet(home, away); }catch(e){}
+  try{ crimeCtxSet(home, away, opts); }catch(e){}   // 🚔 리그 경기에만 걸리는 징계 (요청)
   const _MP={};                                     // 플랜 기록용 임시 컨테이너
   try{ aiMatchPlan(_MP, home, away, true); aiMatchPlan(_MP, away, home, false); }catch(e){}
   /* 🌦️ 오늘 날씨 — 달(月)이 판을 깔고 그 위에서 주사위를 굴린다 (요청) */
@@ -9140,6 +9677,7 @@ function createMatch(home, away, opts={}){
   /* 명단이 확정됐으니 표식은 지운다 — 스쿼드 화면 등 다른 곳까지 막으면 안 된다.
      M.h/M.a 의 list·bench 는 이미 배열로 복사돼 있어 영향을 받지 않는다. */
   try{ loanBlockClear(home, away); }catch(e){}
+  try{ crimeCtxClear(home, away); }catch(e){}
   try{ M.loanOutIds=[home,away].flatMap(t=>t.players.filter(p=>p.loan && p.loan.own===(t===home?away.id:home.id)).map(p=>p.id)); }catch(e){}
   // 오늘 이 경기장에 몇 명이 왔는가 — 홈 이점·입장 수입·기사·팬 반응이 모두 여기서 갈린다
   try{
@@ -15320,6 +15858,7 @@ function completeRound(M){
   const k1done=G.r1>=G.k1Fix.length, k2done=G.r2>=G.k2Fix.length;
   if(k1done&&k2done&&G.phase==="league"){ G.phase="po"; G.poQueue=buildPOQueue(); addNews("⚔️ 정규리그 종료! 승강 플레이오프가 시작됩니다."); }
   try{ checkTitleClinch(); }catch(e){}   // 🏆 이 라운드로 우승이 정해졌는가
+  try{ totoSettle(); }catch(e){}         // ⚽ 이 라운드로 토토가 끝났으면 바로 정산한다
   try{ acqRoundCheck(); }catch(e){}      // 📰 시민구단 인수 접촉설 (요청)
   try{ banSweep(); }catch(e){}      // 🟥 갈아끼운 징계가 갇혀 있으면 먼저 되돌린다
   tickBanInj({inj:true, ban:true});
@@ -23442,7 +23981,7 @@ function startNewSeason(){
       while(G.freeAgents.length<25){
         /* 💰 요청 — 시장을 채우자고 «쓸 만한 젊은 자원»을 공짜로 던지지 않는다.
            지켜야 할 선수는 후보에서 빼고, 그래도 자리가 없으면 아래에서 팔린다. */
-        const pool=t.players.filter(p=>!p.army && !aiKeepTalent(p));
+        const pool=t.players.filter(p=>!p.army && !aiKeepTalent(p) && !aiJustJoined(p));
         /* ⚠ 이 상한이 스쿼드 하한보다 낮으면 같은 오프시즌에 방출과 보강이 서로 싸운다 */
         if(pool.length<=2 || t.players.filter(p=>!p.army).length<=aiSquadFloor(t)+2) break;
         const low=[...pool].sort((a,b)=>a.ovr-b.ovr)[0];
@@ -25478,6 +26017,15 @@ function unlist(pid){
 }
 /* 매주 유저 선수에게 들어오는 오퍼 */
 /* AI 구단도 이적시장 기간 중 계약 만료 임박·노장·저평가 선수를 방출해 FA 시장을 채운다 */
+/* 🚪 ⚠ 제보 — 「능력치가 낮은 선수를 타 구단에 팔았더니 이적 성사되자마자 방출한다」.
+   방출 후보를 «지금 능력»으로만 골라서, 돈을 주고 방금 데려온 선수가 그날로 잘렸다.
+   구단이 이적료를 치르고 데려온 선수를 다음 날 자르는 일은 없다 — 반 시즌은 지켜본다. */
+const AI_KEEP_NEW=150;      // 입단 뒤 이 날수 동안은 방출·되팔기 대상이 아니다
+function aiJustJoined(p){
+  /* ⚠ 시즌 경계 — _joinD 는 「그 시즌의 며칠째」다. 그냥 빼면 해가 바뀌는 순간 음수가 되어
+     보호가 통째로 풀린다. 시즌까지 함께 보는 clubDaysOf 를 그대로 쓴다. */
+  try{ if(!p || p._joinD==null) return false; return clubDaysOf(p) < AI_KEEP_NEW; }catch(e){ return false; }
+}
 function aiReleaseCheck(){
   if(!Array.isArray(G.freeAgents)) G.freeAgents=[];
   const _glut = G.freeAgents.length>=28;   // FA 시장 과포화 — 넘치는 스쿼드만 정리한다
@@ -25501,6 +26049,7 @@ function aiReleaseCheck(){
     const cands=t.players.filter(p=>{
       const age=G.season-p.by, ctExp=(p.ct||1)<=1;
       if(p.army) return false;                    // 복무 중인 선수는 대상이 아니다
+      if(aiJustJoined(p)) return false;           // 🚪 방금 들어온 선수 — 이적 성사 직후 방출을 막는다
       /* 🌱 ⚠ 제보 — 여기가 「포텐 160짜리 신민하가 FA 로 풀린」 경로다. 정원 초과 정리는
          현재 능력만 보고 잘라서, 아직 안 자란 특급 유망주가 제일 먼저 걸렸다. */
       if(aiKeepTalent(p)) return false;
@@ -28705,11 +29254,21 @@ function migrateLoadedG(){
   });
   /* 포지션 대분류를 능숙도 기준으로 다시 읽는다 — 등록만 FW 였던 풀백 같은 선수가 바로잡힌다 */
   step("포지션 대분류", ()=>{
+    /* ⚠ guard=1 — 불러오기 때의 정리는 «바로잡기»다. 대분류를 옮겨 화면 종합이
+       POSFLIP_OVR_DROP 넘게 무너지는 경우는 손대지 않는다(제보 — 200 → 149). */
+    let _back=0;
     const band=(arr)=>{ if(!Array.isArray(arr)) return;
-      for(const p of arr) if(p && p.posFam){ migratePosFam(p); syncPosBand(p); try{ retuneTraits(p); }catch(e){} } };
+      for(const p of arr) if(p && p.posFam){ migratePosFam(p); syncPosBand(p, 1); try{ retuneTraits(p); }catch(e){} }
+      _back += posBandRepair(arr); };
     for(const id in G.teams) band(G.teams[id].players);
     band(G.freeAgents); band(G.overseas); band(G.youthPool); band(G.retired);
     if(G.scout) band(G.scout.list);
+    POSBAND_FIXED_N=_back;
+    if(_back>0){
+      try{ setTimeout(()=>{ try{ notify(`🧯 세이브 복구 — 기용된 자리를 따라 대분류가 조용히 옮겨져 있던
+        <b>${_back}명</b>의 포지션을 주 포지션대로 되돌렸습니다.
+        <span class="small">세부 능력치는 그대로인데 종합 표기만 주저앉던 문제입니다.</span>`,"good"); }catch(e){} }, 1400); }catch(e){}
+    }
   });
   step("공통 백필", ()=>{ migrateSave(); });
   /* 🗓️ 일정 정합성
@@ -29705,6 +30264,7 @@ function hideGoalPanel(){
   if(goalPanelTimer){ clearTimeout(goalPanelTimer); goalPanelTimer=null; }
   const el=document.getElementById("goalPanel");
   if(el){ el.classList.add("hidden"); el.innerHTML=""; }
+  try{ syncMajorBar(); }catch(e){}          // 🎬 세리머니가 걷혔다 — 이제 득점자를 올린다
   /* ⚔️ ⚠ 제보 원문 — 「게스트일때 득점 팝업 표시되는게 너무 길게 표시되거든? 호스트의 것과
      같은 호흡으로 표시되게 해주고」.
      원인 — 호스트는 세리머니가 끝나는 순간 syncGoalPanel 이 패널을 걷는다(타이머는 상한일 뿐).
@@ -33425,6 +33985,10 @@ function pTags(p){
       return out;
     }catch(e){ return p.ban>0?` <span class="tag inj">출전정지 ${p.ban}경기</span>`:""; }
   })();
+  /* 🚔 무면허·음주 물의 — 리그에만 걸리는 «날짜» 징계라 위의 경기 수 배지와 따로 적는다 */
+  try{ const _c=crimeOf(p);
+    if(_c) s+=` <span class="tag inj" title="협회 징계 — 리그 경기에만 적용됩니다. 대륙·세계 대회와 연습경기에는 나설 수 있습니다.">${CRIME_KIND[_c.k].ic} ${CRIME_KIND[_c.k].n} 리그 정지 D-${_c.left}</span>`;
+  }catch(e){}
   if(p.army && p.army.out){ const d=armyDaysLeft(p);
     if(d!=null && d>0) s+=` <span class="tag" style="background:#3a4a2a;color:#a8e04a" title="${p.army.out} 전역 · 원소속 ${p.army.own&&G.teams[p.army.own]?G.teams[p.army.own].short:"무소속"}">🎖️ 전역 D-${d}</span>`; }
   /* 🕐 이적 진행 중 — 아직 우리 선수지만 서류가 돌고 있다. 여기 없으면 「왜 못 팔지」가 안 보인다. */
@@ -40609,6 +41173,363 @@ function bjTable(){
   B.seenY=B.you.length; B.seenD=B.dl.length;
   return html;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   ⚽ 승무패 토토 — ⚠ 요청 원문 「이 배당률 로직을 살려서 도박에 승무패 토토를 넣자.
+     그 주간 경기에 배팅을하고 돈을 딸 수 있는거지」.
+   ─ 설계 ─────────────────────────────────────────────────────
+     · 배당은 «전력 차 + 홈 이점» 에서 나온다. 회견에서 기자가 말하는 그 배당률과 같은 근거다.
+     · 다리(경기)를 여러 개 고르면 배당이 곱해진다 — 전부 맞아야 딴다. 그게 승무패다.
+     · 다리마다 환수율을 곱하므로 다리가 늘수록 기대값은 빠르게 내려간다(진짜 토토가 그렇다).
+     · ⛔ <b>내 팀 경기에는 걸 수 없다</b>. 감독이 자기 경기에 돈을 거는 건 승부조작이다.
+     · 발각 위험은 카지노보다 무겁다 — K리그 감독이 K리그 경기에 돈을 걸고 있다는 뜻이니까.
+═══════════════════════════════════════════════════════════════ */
+const TOTO_PAY=0.90;        // 다리당 환수율 (1 미만이라야 도박이다)
+const TOTO_MAX_LEG=5;       // 한 장에 담을 수 있는 경기 수
+const TOTO_HOME=1.55;       // 홈 이점 (팀 눈금 단위)
+const TOTO_FORM_MIN=5;      // ⚠ 리그 초반 배제 — 이 경기 수를 채우기 전에는 순위·최근 폼을 배당에 안 넣는다
+const TOTO_OU=2.5;          // 오버/언더 기준 득점
+let TOTO_PICK={};           // 화면 상태 — "div:r:hid:시장" → 선택 (세이브에 남지 않는다)
+let TOTO_AMT="", TOTO_MKT="w", TOTO_WHY=0;
+function totoOf(){
+  const M=me();
+  if(!M.toto) M.toto={slips:0, won:0, lost:0, hits:0, open:null, last:null};
+  return M.toto;
+}
+/* ═══ 팀의 «오늘 눈금» ═══════════════════════════════════════════════════
+   ⚠ 요청 — 「배당률 로직도 현재 순위(리그 초반에는 배제), 전력 등등 여러 상황을 따져서」.
+   ─ 전력(teamOVR)은 뼈대다. 부상·출장정지는 여기에 이미 반영돼 있다(가용 선수로 베스트 11을 짠다).
+   ─ 순위·최근 폼은 표본이 쌓이기 전에는 소음이다. 5경기 전에는 아예 0, 이후 8경기에 걸쳐
+     서서히 무게가 붙는다(w). 개막 라운드에 「1위 팀」이라며 배당이 튀는 일이 없다.
+   ─ 사기(분위기)는 작게, 항상. */
+function totoPlayed(t){ try{ return (t.W|0)+(t.Dw|0)+(t.L|0); }catch(e){ return 0; } }
+const TOTO_PPG0=1.36;       // 리그 평균 승점/경기 (표본이 없을 때 쓰는 기준)
+function totoLeagueAvg(div, selfId){
+  /* ⚠ 자기 자신을 평균에 넣으면 «나 혼자 경기를 치른» 상태에서 평균이 곧 내 성적이 되어
+     순위 성분이 항상 0이 된다. 비교 대상은 언제나 «나를 뺀 리그»다. */
+  const ids=(typeof seasonDivIds==="function") ? (seasonDivIds(div)||[]) : [];
+  let pts=0, gd=0, n=0, teams=0;
+  for(const id of ids){ if(id===selfId) continue;
+    const t=G.teams[id]; if(!t) continue;
+    const k=totoPlayed(t); if(!k) continue;
+    pts+=(t.Pts|0); gd+=((t.GF|0)-(t.GA|0)); n+=k; teams++; }
+  if(n<6 || teams<3) return {ppg:TOTO_PPG0, gdpg:0};
+  return {ppg:pts/n, gdpg:gd/n};
+}
+/* 눈금의 내역 — 화면에 「왜 이 배당인가」로 그대로 보여 준다 */
+function totoRateParts(t){
+  const base=(function(){ try{ return teamOVR(t); }catch(e){ return 65; } })();
+  const n=totoPlayed(t);
+  const w=clamp((n-(TOTO_FORM_MIN-1))/8, 0, 1);      // 5경기부터 열리고 13경기에서 만개
+  let rank=0, form=0;
+  if(w>0){
+    const A=totoLeagueAvg(t.div, t.id);
+    const ppg=(t.Pts|0)/Math.max(1,n);
+    const gdpg=((t.GF|0)-(t.GA|0))/Math.max(1,n);
+    rank = (ppg-A.ppg)*1.7 + clamp(gdpg-A.gdpg, -2.5, 2.5)*0.55;
+    const f=(t.form||[]).slice(-5);
+    if(f.length>=3){
+      const fp=f.reduce((s,x)=>s+(x==="W"?3:x==="D"?1:0),0)/(f.length*3);
+      form=(fp-0.45)*2.2;
+    }
+  }
+  rank=clamp(rank, -3.2, 3.2)*w;
+  form=clamp(form, -1.4, 1.4)*w;
+  const mor=clamp((((t.morale==null?70:t.morale))-70)*0.022, -0.8, 0.8);
+  const r10=(x)=>Math.round(x*100)/100;
+  return {base, n, w:r10(w), rank:r10(rank), form:r10(form), mor:r10(mor),
+          r: Math.round((base+rank+form+mor)*100)/100};
+}
+function totoRating(t){ try{ return totoRateParts(t).r; }catch(e){ return 65; } }
+function totoEsc(x){ return String(x==null?"":x).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function totoWhy(t){
+  const P=totoRateParts(t);
+  const sg=(x)=>(x>0?"+":"")+x.toFixed(2);
+  if(P.w<=0) return `전력 ${P.base} · ${P.n}경기 — 표본이 적어 순위·폼은 아직 안 봅니다 (사기 ${sg(P.mor)}) → 눈금 ${P.r}`;
+  return `전력 ${P.base} · 순위 ${sg(P.rank)} · 최근 폼 ${sg(P.form)} · 사기 ${sg(P.mor)} → 눈금 ${P.r} (${P.n}경기 · 반영 ${Math.round(P.w*100)}%)`;
+}
+/* ═══ 득점 모형 — 두 팀의 눈금 차이를 기대 득점으로 옮긴다 ═══
+   여기서 나온 하나의 표에서 승무패·핸디캡·오버언더가 «전부» 나온다.
+   그래서 세 시장의 배당이 서로 어긋나지 않는다. */
+function totoLam(h, a){
+  const rh=totoRating(h), ra=totoRating(a);
+  const gap=clamp(rh+TOTO_HOME-ra, -9, 9);
+  const avg=(rh+ra)/2;
+  const tot=clamp(2.30+(avg-68)*0.022, 1.95, 3.15);   // 두 팀이 좋을수록 골이 조금 더 난다
+  const sh=1/(1+Math.exp(-gap*0.27));
+  return {lamH:clamp(tot*sh, 0.18, 4.2), lamA:clamp(tot*(1-sh), 0.15, 4.2), gap:Math.round(gap*100)/100, rh, ra};
+}
+function totoPoisRow(lam, N){
+  const out=[]; let p=Math.exp(-lam);
+  for(let k=0;k<=N;k++){ out.push(p); p=p*lam/(k+1); }
+  return out;
+}
+/* 두 팀의 스코어 확률표 (0~9골) */
+function totoGrid(h, a){
+  const L=totoLam(h,a), N=9;
+  const H=totoPoisRow(L.lamH,N), A=totoPoisRow(L.lamA,N);
+  const g=[]; let s=0;
+  for(let i=0;i<=N;i++){ g[i]=[]; for(let j=0;j<=N;j++){ const v=H[i]*A[j]; g[i][j]=v; s+=v; } }
+  if(s>0) for(let i=0;i<=N;i++) for(let j=0;j<=N;j++) g[i][j]/=s;   // 꼬리를 잘랐으니 다시 1로
+  return {g, N, L};
+}
+function totoOdd(pr){ return Math.max(1.05, Math.round((TOTO_PAY/Math.max(0.02,pr))*100)/100); }
+/* 세 시장을 한 번에 뽑는다 */
+function totoMarkets(h, a){
+  const {g, N, L}=totoGrid(h,a);
+  const W={H:0,D:0,A:0}, U={O:0,U:0};
+  /* 핸디캡 선 — 강한 쪽에 붙인다. 항상 «진짜 핸디캡»이 되게 최소 1골. */
+  const d=L.lamH-L.lamA;
+  let line = d>=0 ? -Math.max(1, Math.min(3, Math.round(d)))
+                  :  Math.max(1, Math.min(3, Math.round(-d)));
+  const Hd={H:0,D:0,A:0};
+  for(let i=0;i<=N;i++) for(let j=0;j<=N;j++){
+    const p=g[i][j]; if(!p) continue;
+    if(i>j) W.H+=p; else if(i===j) W.D+=p; else W.A+=p;
+    (i+j)>TOTO_OU ? U.O+=p : U.U+=p;
+    const hi=i+line;
+    if(hi>j) Hd.H+=p; else if(hi===j) Hd.D+=p; else Hd.A+=p;
+  }
+  const od=(o)=>{ const r={}; for(const k in o) r[k]=totoOdd(o[k]); return r; };
+  return {L, line, P:{w:W, h:Hd, u:U}, o:{w:od(W), h:od(Hd), u:od(U)}};
+}
+/* 옛 배선 호환 — 승무패 확률만 필요할 때 */
+function totoProb(h, a){ return totoMarkets(h,a).P.w; }
+/* ═══ 이번 주 판 ═══════════════════════════════════════════════════════ */
+function totoMktNm(m){ return m==="h"?"핸디캡" : m==="u"?`오버/언더 ${TOTO_OU}` : "승무패"; }
+function totoPickNm(mkt, v, g){
+  if(mkt==="u") return v==="O"?`오버 ${TOTO_OU}`:`언더 ${TOTO_OU}`;
+  const nm=v==="H"?"승":v==="D"?"무":"패";
+  if(mkt==="h" && g) return `${nm}(${totoLineNm(g)})`;
+  return nm;
+}
+function totoLineNm(g){
+  const L=g.line|0;
+  if(L<0) return `${g.h?g.h.short:g.hn} −${-L}`;
+  if(L>0) return `${g.a?g.a.short:g.an} −${L}`;
+  return "―";
+}
+/* 한 다리를 사람이 읽는 문장으로 — 「인천 vs 대전 → 승 (핸디 대전 −1)」 */
+function totoLegLine(x){
+  const hn=x.hn||(x.g&&x.g.h.short), an=x.an||(x.g&&x.g.a.short);
+  const g=x.g||x;
+  const tail = x.mkt==="h" ? ` <span class="totoLine">핸디 ${totoLineNm(g)}</span>`
+             : x.mkt==="u" ? ` <span class="small" style="opacity:.6">[합계 ${TOTO_OU}]</span>` : "";
+  const nm = x.mkt==="u" ? (x.v==="O"?"오버":"언더") : (x.v==="H"?"승":x.v==="D"?"무":"패");
+  return `${hn} <span class="small" style="opacity:.5">vs</span> ${an} → <b style="color:var(--gold)">${nm}</b>${tail} <span style="opacity:.7">(${(x.odd||0).toFixed(2)})</span>`;
+}
+function totoBoard(){
+  const out=[];
+  try{
+    /* 이미 치른 경기에는 걸 수 없다 — 결과가 남아 있으면 판에서 뺀다 */
+    const done=new Set();
+    for(const x of (G.results||[])) if(x && x.s===G.season) done.add(`${x.div}:${x.r}:${x.hid}`);
+    for(const div of [1,2]){
+      const fix=div===1?G.k1Fix:G.k2Fix, r=div===1?G.r1:G.r2;
+      if(!Array.isArray(fix) || r>=fix.length) continue;
+      for(const [hid,aid] of (fix[r]||[])){
+        if(hid===G.userTeamId || aid===G.userTeamId) continue;   // ⛔ 내 경기에는 못 건다
+        if(done.has(`${div}:${r+1}:${hid}`)) continue;           // 이미 끝난 경기
+        const h=G.teams[hid], a=G.teams[aid]; if(!h||!a) continue;
+        const M=totoMarkets(h,a);
+        out.push({div, r, hid, aid, h, a, line:M.line, P:M.P, o:M.o, L:M.L});
+      }
+    }
+  }catch(e){}
+  return out;
+}
+function totoKey(g, mkt){ return `${g.div}:${g.r}:${g.hid}:${mkt||TOTO_MKT}`; }
+function totoGameKey(g){ return `${g.div}:${g.r}:${g.hid}`; }
+function totoPickSet(k, v){
+  if(TOTO_PICK[k]===v){ delete TOTO_PICK[k]; show("mylife"); return; }
+  /* 한 경기에 한 다리만 — 같은 경기의 다른 시장은 지운다 (상관관계가 있는 조합을 막는다) */
+  const gk=k.split(":").slice(0,3).join(":");
+  for(const a in TOTO_PICK) if(a.indexOf(gk+":")===0) delete TOTO_PICK[a];
+  TOTO_PICK[k]=v; show("mylife");
+}
+function totoPickClear(){ TOTO_PICK={}; show("mylife"); }
+function totoSetAmt(v){ TOTO_AMT=String(v||"").slice(0,12); }
+function totoSetMkt(m){ TOTO_MKT=m; show("mylife"); }
+function totoToggleWhy(){ TOTO_WHY=TOTO_WHY?0:1; show("mylife"); }
+/* 판에 없는 옛 선택을 털어 낸다 — 라운드가 넘어가면 키가 안 맞는다 */
+function totoPrune(B){
+  const ok=new Set();
+  for(const g of B) for(const m of ["w","h","u"]) ok.add(totoKey(g,m));
+  for(const k in TOTO_PICK) if(!ok.has(k)) delete TOTO_PICK[k];
+}
+/* 지금 고른 조합 — 다리 수와 총배당 */
+function totoSel(){
+  const B=totoBoard(), legs=[];
+  for(const g of B) for(const m of ["w","h","u"]){
+    const v=TOTO_PICK[totoKey(g,m)]; if(!v) continue;
+    const o=(g.o[m]||{})[v]; if(!o) continue;
+    legs.push({g, mkt:m, v, odd:o});
+  }
+  const odd=legs.reduce((s,x)=>s*x.odd, 1);
+  return {legs, odd:Math.round(odd*100)/100};
+}
+function totoBuy(){
+  const M=me(), g=gamOf(), T=totoOf();
+  if(G.phase==="sacked"){ flash("지금은 그럴 때가 아닙니다.","warn"); return; }
+  if(gamBanned()){ gamWarn(`협회 징계 중입니다 — ${Math.ceil((g.banUntil-(G.day||0)))}일 남았습니다.`); return; }
+  if(T.open){ gamWarn("이미 사 둔 토토가 있습니다. 결과가 나온 뒤에 다시 살 수 있습니다."); return; }
+  const S=totoSel();
+  if(!S.legs.length){ gamWarn("경기를 하나 이상 고르세요."); return; }
+  if(S.legs.length>TOTO_MAX_LEG){ gamWarn(`한 장에 ${TOTO_MAX_LEG}경기까지만 담을 수 있습니다.`); return; }
+  const bet=Math.round((parseFloat(TOTO_AMT)||0)*100)/100;
+  if(!(bet>0)){ gamWarn("걸 금액을 입력하세요."); return; }
+  if(bet>M.cash){ gamWarn(`보유 현금이 모자랍니다 — 지금 ${moneyEok(M.cash)} 있습니다.`); return; }
+  if(bet>gamMax()){ gamWarn(`한 장 상한은 ${gamMax().toFixed(2)}억입니다.`); return; }
+  gamWarn("");
+  mePay(-bet, null);
+  g.bets++; g.lost=Math.round(((g.lost||0)+bet)*100)/100;
+  g.sAmt=Math.round(((g.sAmt||0)+bet)*100)/100;
+  T.slips=(T.slips||0)+1;
+  T.open={s:G.season, d:(G.day||0), bet, odd:S.odd,
+          legs:S.legs.map(x=>({div:x.g.div, r:x.g.r, hid:x.g.hid, aid:x.g.aid,
+                               mkt:x.mkt, v:x.v, line:x.g.line|0, odd:x.odd,
+                               hn:x.g.h.short, an:x.g.a.short}))};
+  TOTO_PICK={}; TOTO_AMT="";
+  /* 🚨 감독이 «리그 경기»에 돈을 건다 — 카지노보다 훨씬 무겁다 */
+  try{ gamHeat(bet*2.2); }catch(e){}
+  try{ meLog(`－${bet.toFixed(2)}억 · ⚽ 승무패 토토 ${S.legs.length}경기 (배당 ${S.odd.toFixed(2)}배)`); }catch(e){}
+  saveGame(); show("mylife");
+}
+function totoCancel(){
+  const T=totoOf(); if(!T.open) return;
+  showConfirm(`⚽ 사 둔 토토를 무릅니다.<br><span class="small">판돈의 <b>80%</b>만 돌려받습니다.</span>`, ()=>{
+    const T2=totoOf(); if(!T2.open) return;
+    const back=Math.round((T2.open.bet*0.8)*100)/100;
+    mePay(back, null);
+    const g=gamOf(); g.lost=Math.round(((g.lost||0)-back)*100)/100;
+    try{ meLog(`＋${back.toFixed(2)}억 · ⚽ 토토 취소 환급`); }catch(e){}
+    T2.open=null; saveGame(); show("mylife");
+  }, {okLabel:"무른다"});
+}
+/* 한 다리의 정답 — 시장별로 다르다 */
+function totoLegWin(L, hg, ag){
+  if(L.mkt==="u") return ((hg+ag)>TOTO_OU) ? "O" : "U";
+  const h = (L.mkt==="h") ? hg+(L.line|0) : hg;
+  return h>ag ? "H" : h<ag ? "A" : "D";
+}
+/* 표를 무효 처리하고 판돈을 돌려준다 (경기가 영영 안 열릴 때) */
+function totoVoid(why){
+  const T=totoOf(), S=T.open; if(!S) return;
+  mePay(S.bet, null);
+  const g=gamOf(); g.lost=Math.round(((g.lost||0)-S.bet)*100)/100;
+  T.open=null;
+  T.last={s:S.s, bet:S.bet, odd:S.odd, pay:S.bet, hit:false, voided:true,
+          rows:[`경기가 열리지 않아 무효 처리 — 판돈 ${S.bet.toFixed(2)}억을 돌려받았습니다.`]};
+  try{ meLog(`＋${S.bet.toFixed(2)}억 · ⚽ 토토 무효 환급 (${why||"경기 취소"})`); }catch(e){}
+  try{ notify(`⚽ 사 두신 토토가 <b>무효</b> 처리됐습니다 (${why||"경기 취소"}) — 판돈 ${S.bet.toFixed(2)}억을 돌려드렸습니다.`,"warn"); }catch(e){}
+  saveGame();
+}
+/* 결과 정산 — 담긴 경기가 전부 끝났으면 계산한다 (하루치 · 라운드 종료에서 부른다) */
+function totoSettle(){
+  const T=totoOf(); const S=T.open; if(!S) return;
+  /* ⚠ 시즌이 바뀌면 그 시즌의 결과를 다시 찾을 수 없다 — 표가 영원히 남지 않게 무효로 돌린다 */
+  if((S.s|0)!==(G.season|0)){ totoVoid("시즌 종료"); return; }
+  const res=[];
+  for(const L of S.legs){
+    const r=(G.results||[]).find(x=>x && x.s===S.s && x.div===L.div && x.r===L.r+1
+                                     && x.hid===L.hid && x.aid===L.aid);
+    if(!r){
+      /* 라운드가 이미 지나갔는데 결과가 없다 — 열리지 않은 경기다 */
+      const cur=(L.div===1?G.r1:G.r2)|0;
+      if(cur > (L.r|0)+1){ totoVoid("경기 무산"); return; }
+      return;                                        // 아직 안 치른 경기가 있다
+    }
+    const w=totoLegWin(L, r.hg|0, r.ag|0);
+    res.push({L, w, sc:`${r.hg}-${r.ag}`, hit:(w===L.v)});
+  }
+  const hit=res.every(x=>x.hit);
+  const pay=hit ? Math.round((S.bet*S.odd)*100)/100 : 0;
+  const g=gamOf();
+  if(pay>0){ mePay(pay, null); g.won=Math.round(((g.won||0)+pay)*100)/100; T.hits=(T.hits||0)+1; }
+  T.last={s:S.s, bet:S.bet, odd:S.odd, pay, hit, voided:false,
+          rows:res.map(x=>`${x.L.hn} <b>${x.sc}</b> ${x.L.an} <span style="opacity:.65">[${totoMktNm(x.L.mkt)}${x.L.mkt==="h"?` ${totoLineNm(x.L)}`:""}]</span> · 내 선택 ${totoPickNm(x.L.mkt, x.L.v)} ${x.hit?"✅":"❌"}`)};
+  T.open=null;
+  const nm=`${S.legs.length}경기 · 배당 ${S.odd.toFixed(2)}배`;
+  try{ meLog(`${hit?"＋"+pay.toFixed(2):"－"+S.bet.toFixed(2)}억 · ⚽ 승무패 토토 ${hit?"적중":"낙첨"} (${nm})`); }catch(e){}
+  try{ notify(hit ? `⚽ <b>승무패 토토 적중!</b> ${nm} — <b class="money">+${pay.toFixed(2)}억</b>`
+                  : `⚽ 승무패 토토 낙첨 — ${nm} · ${S.bet.toFixed(2)}억`, hit?"good":"warn"); }catch(e){}
+  /* 큰 배당은 소문이 난다 — 감독이 리그 경기로 돈을 벌었다는 이야기다 */
+  if(hit && pay>=Math.max(3, S.bet*6)){
+    g.heat=clamp((g.heat||0)+10, 0, 100);
+    try{ pushSocial(pick([
+      "감독님이 이번 주 경기 결과를 다 맞혔다는 소문이 도는데 이거 괜찮은 거냐",
+      "우리 감독 요즘 다른 팀 경기를 너무 열심히 본다는 얘기가 있음"]), -1); }catch(e){}
+  }
+  saveGame();
+}
+function totoCard(){
+  const M=me(), g=gamOf(), T=totoOf();
+  const banned=gamBanned();
+  const B=totoBoard();
+  totoPrune(B);
+  const S=totoSel();
+  const open=T.open, L=T.last;
+  const mkt=TOTO_MKT;
+  const tab=(k)=>`<button class="mini totoTab ${mkt===k?"sel":""}" onclick="totoSetMkt('${k}')">${totoMktNm(k)}</button>`;
+  const btn=(x,v,l)=>{
+    const k=totoKey(x,mkt), cur=TOTO_PICK[k], o=(x.o[mkt]||{})[v];
+    if(o==null) return "";
+    return `<button class="mini totoPick ${cur===v?"sel":""}"
+      ${open||banned?"disabled":`onclick="totoPickSet('${k}','${v}')"`}>${l} <b>${o.toFixed(2)}</b></button>`;
+  };
+  const row=(x)=>{
+    const why=`${x.h.short} — ${totoWhy(x.h)}\n${x.a.short} — ${totoWhy(x.a)}\n홈 이점 +${TOTO_HOME} → 눈금 차 ${x.L.gap>0?"+":""}${x.L.gap} · 기대 득점 ${x.L.lamH.toFixed(2)} : ${x.L.lamA.toFixed(2)}`;
+    const picks = mkt==="u" ? `${btn(x,"O",`오버`)} ${btn(x,"U",`언더`)}`
+                            : `${btn(x,"H","승")} ${btn(x,"D","무")} ${btn(x,"A","패")}`;
+    return `<tr title="${totoEsc(why)}">
+      <td class="small totoRd">${x.div===1?"K1":"K2"} ${x.r+1}R</td>
+      <td class="totoGm"><b>${x.h.short}</b> <span class="small" style="opacity:.55">vs</span> <b>${x.a.short}</b>${
+        mkt==="h"?`<span class="totoLine">핸디 ${totoLineNm(x)}</span>`:""}</td>
+      <td class="totoBtns">${picks}</td>
+      ${TOTO_WHY?`<td class="small totoWhy">${x.L.lamH.toFixed(2)} : ${x.L.lamA.toFixed(2)}<br><span style="opacity:.7">눈금 ${x.L.rh.toFixed(1)} / ${x.L.ra.toFixed(1)}</span></td>`:""}
+    </tr>`;
+  };
+  return `<div class="card">
+    <h3>⚽ 승무패 토토 <span class="small">— 이번 주 K리그 경기에 겁니다</span></h3>
+    ${open?`<div class="msg info" style="border-width:2px">🎫 <b>사 둔 토토가 있습니다</b> — ${open.legs.length}경기 · 판돈 <b class="money">${open.bet.toFixed(2)}억</b> · 배당 <b style="color:var(--gold)">${open.odd.toFixed(2)}배</b> · 적중 시 <b class="money">${(open.bet*open.odd).toFixed(2)}억</b>
+      <div class="small" style="margin-top:5px;line-height:2">${open.legs.map(x=>totoLegLine(x)).join("<br>")}</div>
+      <div style="margin-top:7px"><button class="mini" onclick="totoCancel()">🚪 무른다 (80% 환급)</button></div></div>`:""}
+    ${L?`<div class="msg ${L.voided?"info":L.hit?"good":"warn"}" style="margin-top:${open?"8px":"0"}">
+      ${L.voided?`↩️ <b>지난 토토 무효</b> — 판돈 <b class="money">${L.bet.toFixed(2)}억</b>을 돌려받았습니다`
+        :L.hit?`🎉 <b>지난 토토 적중</b> — 배당 ${L.odd.toFixed(2)}배 · <b class="money">+${L.pay.toFixed(2)}억</b>`
+             :`❌ <b>지난 토토 낙첨</b> — 판돈 ${L.bet.toFixed(2)}억`}
+      <div class="small" style="margin-top:5px;line-height:1.8">${L.rows.join("<br>")}</div></div>`:""}
+    ${banned?`<div class="msg warn">⛔ 협회 징계 중입니다 — 토토도 살 수 없습니다.</div>`:""}
+    ${!B.length?`<p class="small">이번 주에 걸 수 있는 경기가 없습니다. <span style="opacity:.75">(내 팀 경기에는 걸 수 없습니다)</span></p>`
+    :`<div class="totoBar">
+        <div class="totoTabs">${tab("w")}${tab("h")}${tab("u")}</div>
+        <button class="mini totoWhyBtn ${TOTO_WHY?"sel":""}" onclick="totoToggleWhy()">📐 근거</button>
+      </div>
+      <div class="totoWrap"><table class="totoTbl"><tr>
+        <th>라운드</th><th style="text-align:left">경기</th>
+        <th class="totoBtns">${mkt==="u"?`오버 · 언더 (${TOTO_OU})`:"승 · 무 · 패"}</th>
+        ${TOTO_WHY?`<th>기대 득점</th>`:""}</tr>
+      ${B.map(row).join("")}</table></div>
+     <p class="small totoNote">⛔ <b>내 팀 경기는 목록에 없습니다</b> — 감독이 자기 경기에 돈을 거는 건 승부조작입니다. 한 경기에는 한 시장만 담깁니다.</p>`}
+    ${open?"":`<div class="totoFoot">
+      <div class="small" style="color:var(--sub);margin-bottom:5px">고른 경기 <b style="color:var(--gold)">${S.legs.length}</b>/${TOTO_MAX_LEG}
+        ${S.legs.length?`· 총배당 <b style="color:var(--gold)">${S.odd.toFixed(2)}배</b>`:""}
+        ${S.legs.length?`<button class="mini" style="margin-left:6px;padding:2px 8px" onclick="totoPickClear()">✕ 비우기</button>`:""}</div>
+      ${S.legs.length?`<div class="small" style="margin-bottom:6px;line-height:2">${S.legs.map(x=>totoLegLine(x)).join("<br>")}</div>`:""}
+      <div class="gmChips">
+        <input type="text" inputmode="decimal" class="gmBet" placeholder="금액(억)" value="${TOTO_AMT}" oninput="totoSetAmt(this.value)">
+        <button class="gmGo gmBtn" ${banned?"disabled":`onclick="totoBuy()"`}>🎫 산다</button>
+      </div>
+      ${S.legs.length?`<p class="small" style="margin-top:6px;opacity:.85">적중하면 판돈 × <b>${S.odd.toFixed(2)}</b> 을 받습니다 — 고른 경기가 <b>하나라도 빗나가면 전부 잃습니다</b>.</p>`:""}
+    </div>`}
+    <p class="small totoHelp">
+      <b>승무패</b> 그대로 · <b>핸디캡</b> 강한 쪽 점수에서 미리 빼고 계산 · <b>오버/언더</b> 두 팀 합계 득점이 ${TOTO_OU} 위인지 아래인지.<br>
+      배당은 <b>전력</b>에 <b>현재 순위</b>·<b>최근 5경기</b>·<b>팀 분위기</b>·<b>홈 이점</b>을 얹어 계산합니다 — 부상·출장정지는 전력에 이미 반영돼 있습니다.
+      순위와 폼은 <b>${TOTO_FORM_MIN}경기</b>를 채우기 전에는 넣지 않습니다(리그 초반에는 표본이 소음이라서). 「📐 근거」로 기대 득점을 볼 수 있습니다.<br>
+      다리마다 환수율 <b>${Math.round(TOTO_PAY*100)}%</b>가 곱해집니다. 경기를 많이 담을수록 배당은 커지지만 기대값은 빠르게 내려갑니다.<br>
+      <b style="color:#ff9d5c">K리그 감독이 K리그 경기에 돈을 걸고 있습니다.</b> 카지노보다 훨씬 위험합니다 — 발각되면 협회가 그냥 넘어가지 않습니다.</p>
+  </div>`;
+}
 function gamCard(){
   const M=me(), g=gamOf();
   const net=Math.round(((g.won||0)-(g.lost||0))*100)/100;
@@ -40697,7 +41618,7 @@ function gamCard(){
       네 게임 모두 <b>기대값이 판돈보다 낮습니다</b> — 오래 할수록 잃습니다. 그게 도박입니다.<br>
       진짜 위험은 돈이 아닙니다. K리그 감독이 판돈 오가는 자리에 앉아 있는 게 알려지면
       <b>기사가 나고, 구단주 신뢰가 깎이고, 협회가 움직입니다.</b> 판이 클수록 눈에 띕니다.</p>
-  </div>`;
+  </div>` + (function(){ try{ return totoCard(); }catch(e){ return ""; } })();
 }
 /* 💝 기부 화면 — 무직이면 잠긴다 */
 function donCard(){
@@ -42393,6 +43314,31 @@ const SOC={
    "지금이라도 감독 바꾸면 반등할까","{r}위인데 선수단은 위기의식이 있긴 한가"]};
 /* 부임 직후 — 아직 경기를 한 판도 안 했으니 기대와 의심이 반반이다 */
 /* 프리시즌 — 결과보다 "새 시즌이 온다"는 설렘과 걱정이 반반이다 */
+/* 🚔 선수 물의 — 무면허·음주 운전 (요청). 조사는 F_ 가 갈라 주도록 «이/가·은/는» 으로 적는다. */
+SOC.crimeDui=[
+ ["{p} 음주운전이라고?? 하 진짜 할 말이 없다",-1],
+ ["{t} 팬 하는 게 벌 받는 거냐 시즌 중에 이게 뭐냐",-1],
+ ["{n}일 정지? 이건 방출감이지 무슨 정지야",-1],
+ ["실력이 문제가 아니라 사람이 문제였네",-1],
+ ["{p}은/는 다음 시즌에도 우리 유니폼 입히지 마라",-1],
+ ["대중교통 놔두고 왜 운전대를 잡냐 진짜",-1],
+ ["{g}경기 빠지는 것보다 팀 이미지 날아간 게 더 크다",-1],
+ ["구단은 성명 안 내나 이럴 때 조용하면 같이 욕먹는다",-1],
+ ["어제까지 응원가 불러 준 게 아깝다",-1],
+ ["징계 끝나고 돌아와도 야유 각오해야 할 듯",-1],
+ ["솔직히 {n}일이면 가벼운 거다 협회가 봐준 거지",-1],
+ ["그래도 사람 안 다친 게 다행이라면 다행",0]];
+SOC.crimeNoLic=[
+ ["{p} 무면허라니 이건 또 무슨 소리야",-1],
+ ["{t} 관리 뭐 하냐 프로 구단 맞냐",-1],
+ ["어린 선수라 봐주자는 말 나올까 봐 미리 말한다 안 된다",-1],
+ ["{n}일 정지에 리그 {g}경기 날아감 ㅋㅋ 잘한다",-1],
+ ["면허부터 따고 축구해라 진짜",-1],
+ ["실수라기엔 면허가 없는 걸 몰랐을 리가 없잖아",-1],
+ ["{p}은/는 유망주라는 말도 이제 못 쓰겠다",-1],
+ ["구단이 교육을 안 시키니 이런 게 나온다",-1],
+ ["차라리 지금 크게 데인 게 나을 수도 있다",0],
+ ["돌아오면 그라운드에서 갚아라 그거밖에 없다",0]];
 SOC.preWin=[
  ["연습경기지만 이겼다! 올해 느낌 좋은데?",1],["프리시즌 경기력 괜찮던데. 기대해봐도 되나",1],
  ["연습경기 결과에 일희일비하지 맙시다 (그래도 기분 좋음)",1],["새로 온 선수 폼 좋더라 👀",1],
@@ -42887,6 +43833,16 @@ function fmkFill(list, n, vars, side){
   }
 }
 const FMK={
+ crimeDui:[["{t} {p} 음주운전 떴다 ㄷㄷ",-1],["시즌 중에 이걸 하네 ㄹㅇ 대단하다",-1],
+   ["리그 {n}일 정지면 {g}경기임 사실상 시즌 끝",-1],["구단 성명 나올 때까지 기다려 보자",0],
+   ["이런 건 리그 전체가 욕먹는 거라 짜증남",-1],["다른 팀 팬인데 이건 진짜 아니다",-1],
+   ["징계 수위 이거 맞음? 다른 종목은 더 세게 때리던데",-1],
+   ["{p} 커리어 여기서 반토막 났다고 본다",-1]],
+ crimeNoLic:[["{t} {p} 무면허 적발 ㅋㅋㅋ 뭐 하는 거냐",-1],
+   ["프로가 면허가 없다는 게 더 신기함",-1],["리그 {n}일 정지 · {g}경기 결장",-1],
+   ["구단 아카데미에서 이런 것도 안 가르치나",-1],["나이 어리다고 봐주면 또 나온다",-1],
+   ["솔직히 음주보다는 낫지만 그래도 프로가 저러면 안 되지",0],
+   ["{p} 이번 시즌 계획 다 꼬였네",0]],
  stadOk:[["{t} {w} 짓는다는데 ㄷㄷ 사업비 {m}억",1],["K리그에 전용구장 하나 더 생기네",1],
    ["부럽다 우리 팀은 아직도 트랙",-1],["{t} 프런트 일 제대로 하네",1],["이거 진짜 되는 거 맞음? 착공까지 봐야 앎",0],
    ["가결까지 갔으면 반은 온 거임",1],["{m}억 어디서 나옴? 시에서 대주나",0],
@@ -48973,7 +49929,7 @@ function kickerPanel(t, xi){
      임대 보낸 선수 빼고 전원을 고를 수 있게 해달라」. 맞는 지적 — 키커 지정은 우선순위
      명단일 뿐이고, 경기에서는 그라운드에 있는 최상위 순번이 차므로 다쳐 있어도 지정해 둘
      수 있어야 한다. 임대·군복무만 빼고 전원을 올리되, 상태를 표시한다. */
-  const _kSt=(p)=>p.inj>0?" 🚑":p.ban>0?" ⛔":(p.sulk>0?" 😤":"");
+  const _kSt=(p)=>p.inj>0?" 🚑":p.ban>0?" ⛔":(function(){ try{ return crimeOf(p)?" 🚔":""; }catch(e){ return ""; } })()||(p.sulk>0?" 😤":"");
   const kPool=t.players.filter(p=>!p.loan && !p.army);
   const pool=kPool.slice().sort((a,b)=>b.ovr-a.ovr);
   const hint=(p,kind)=>{
@@ -49394,7 +50350,9 @@ function fmSquadTable(t, xi, slotOf, mb, rest, sulking, injured){
        onclick="event.stopPropagation();benchPin(${p.id})">⬆ 벤치</button>`, "rest")).join("");
   const restNav = `<span class="small" style="margin-left:auto">${restAll.length}명${restAll.length>7?" · 스크롤":""}</span>`;
   const outRows=[...(sulking||[]), ...(injured||[]).filter(p=>!(p.sulk>0))]
-    .map(p=>subRow(p, "✕", p.natlCall?`🇰🇷 대표팀 차출`:(p.sulk>0?`태업 ${p.sulk}R`:(p.inj>0?`부상 ${p.inj}주`:(banLabel(p)||"출장정지"))), "out")).join("");
+    .map(p=>subRow(p, "✕", p.natlCall?`🇰🇷 대표팀 차출`:(p.sulk>0?`태업 ${p.sulk}R`:(p.inj>0?`부상 ${p.inj}주`
+        :(function(){ try{ const c=crimeOf(p); return c?`${CRIME_KIND[c.k].ic} ${CRIME_KIND[c.k].n} 리그 정지 D-${c.left}`:null; }catch(e){ return null; } })()
+        ||(banLabel(p)||"출장정지"))), "out")).join("");
   return `<div class="fmTableWrap">
     <div class="fmTabs">
       <span class="fmTab ${FMTAB==="kick"?"":"on"} clickable" onclick="FMTAB='info';refreshTactics()">👁 선발 정보</span>
@@ -58614,7 +59572,12 @@ function buildCtx(stage, M){
   ctx.opened = rd===1 && stage==="post";
   ctx.myOVR=teamOVR(me); ctx.oppOVR=teamOVR(opp);
   ctx.ovrGap=Math.round((ctx.myOVR-ctx.oppOVR)*10)/10;          // +면 내가 강팀
-  ctx.underdog = ctx.ovrGap<=-1.5; ctx.favorite = ctx.ovrGap>=1.5;
+  /* 🎲 기자가 말하는 «배당률»은 토토 배당과 같은 눈금에서 나와야 한다 —
+     전력에 현재 순위·최근 폼·분위기·홈 이점까지 얹은 값이다(리그 초반에는 순위·폼 배제). */
+  try{ ctx.oddGap=Math.round((totoRating(me)-totoRating(opp)+(ctx.isHome?TOTO_HOME:-TOTO_HOME))*10)/10; }
+  catch(e){ ctx.oddGap=ctx.ovrGap; }
+  ctx.underdog = ctx.oddGap<=-1.5; ctx.favorite = ctx.oddGap>=1.5;
+  ctx.bigDog = ctx.oddGap<=-4.0; ctx.bigFav = ctx.oddGap>=4.0;   // 「압도적」은 이만큼 벌어졌을 때만
   ctx.splitSoon = me.div===1 && rd>=30 && rd<33;
   ctx.finalRd = me.div===1 && rd>=33;
   ctx.finalA = ctx.finalRd && G.finalA && G.finalA.includes(me.id);
@@ -58635,6 +59598,9 @@ function buildCtx(stage, M){
   ctx.gapTop = myPos>1 ? tbl[0].Pts-tbl[myPos-1].Pts : 0;
   ctx.lead = myPos===1 && tbl.length>1 ? tbl[0].Pts-tbl[1].Pts : 0;
   ctx.titleRace = ctx.lastRds && myPos<=2 && (myPos===1 ? ctx.lead<=6 : ctx.gapTop<=6);
+  /* 🏆 이미 우승을 확정지었는가 — 확정 뒤에도 「우승 가능하냐」고 묻던 문제(제보) */
+  try{ ctx.champDone = ((G.clinched||{})[G.season+"-"+me.div]===me.id); }catch(e){ ctx.champDone=false; }
+  if(ctx.champDone) ctx.titleRace=false;
   ctx.acl = G.aclTeams.includes(me.id) && G.aclFix.some(x=>!x.done);
   /* 🌏 EACL — 이 경기가 대륙대회인지, 어느 나라 팀과 붙는지, 대회에서 어디쯤 와 있는지.
      리그 순위 맥락으로 질문하면 "상대는 0위인데요" 같은 말이 나온다. */
@@ -58861,7 +59827,10 @@ function qPool(stage,c){
       O("아직 아무것도 정해지지 않았습니다. 그 이상은 없습니다.",1,0,"...늘 그렇게 말씀하시죠.")]);
   }
   /* ══ 🎩 감독의 출신 — 부임 초기엔 이게 제일 큰 화제다 ══ */
-  if(c.mgrNm && c.rookieMgr && c.mgrBg){
+  /* 🎩 ⚠ 제보 — 「어디 출신 감독이냐는 질문이 너무 자주 나온다」.
+     조건이 「첫 시즌 내내」였다. 부임 초 한 번이면 충분한 이야기다 —
+     초반 8라운드 안에서, 그리고 한 번 물었으면 다시 묻지 않는다. */
+  if(c.mgrNm && c.rookieMgr && c.mgrBg && (c.rd||0)<=8 && !(G.pressAsked&&G.pressAsked.mgrBg)){
     if(c.mgrBg.k==="none")
       QP(2,true,`감독님은 선수 경력이 없으십니다. 프로 선수들이 그 말을 듣겠느냐는 시선이 있는데요.`,[
         O("경기장에서 증명하는 수밖에 없습니다. 말로는 안 되죠.",2,2,"담백한 답변입니다."),
@@ -59333,7 +60302,13 @@ function qPool(stage,c){
       O("책임은 전적으로 저에게 있습니다. 반드시 살려내겠습니다.",1,2,"감독의 각오, 지면에 그대로 싣겠습니다."),
       O("시즌은 깁니다. 마지막에 웃는 쪽이 승자입니다.",1,0,"낙관적이시네요. 남은 일정이 만만치 않은데요."),
       O("그런 기사들이 선수단을 더 힘들게 하는 겁니다.",0,-3,"저희 탓이라는 말씀이신가요? 유감이네요.")]);
-    QP(0,c.leader,"선두를 달리고 있습니다! 우승이라는 단어, 이제 꺼내도 될까요?",[
+    /* 🏆 ⚠ 제보 — 「우승을 확정지었는데도 우승이 가능하냐고 묻는다」. 확정 여부를 본다. */
+    QP(0,c.champDone,`이미 우승을 확정지으셨습니다. 남은 경기, 무엇을 보고 뛰십니까?`,[
+      O("기록입니다. 이왕이면 최다 승점으로 마무리하고 싶습니다.",2,2,"끝까지 가시는군요."),
+      O("못 뛴 선수들에게 기회를 주겠습니다. 그것도 제 몫입니다.",2,3,"좋은 마무리네요."),
+      O("다음 시즌 준비입니다. 이미 머릿속은 내년에 가 있습니다.",2,1,"벌써 다음을 보시는군요."),
+      O("팬들에게 축제를 돌려드리는 경기로 만들겠습니다.",3,3,"오늘 헤드라인입니다.")]);
+    QP(0,c.leader&&!c.champDone,"선두를 달리고 있습니다! 우승이라는 단어, 이제 꺼내도 될까요?",[
       O("아직 이릅니다. 한 경기씩 갑니다.",1,1,"신중 모드시군요. 하지만 팬들은 이미 꿈꾸고 있습니다."),
       O("선수들에게 늘 말합니다. 우리는 우승할 자격이 있다고.",3,1,"'우승할 자격' — 이 문구, 1면에 씁니다."),
       O("우승 못 하면 제 책임입니다. 그만큼 자신 있습니다.",2,1,"배수진을 치셨네요. 대단한 승부사십니다.")]);
@@ -59386,10 +60361,21 @@ function qPool(stage,c){
       O("다 보고 있습니다. 팬들의 애정 어린 관심이라 생각합니다.",1,1,"쿨하게 받아들이시는군요."),
       O("결과로 답하는 수밖에 없죠.",1,1,"실력으로 증명하겠다는 말씀이군요."),
       O("SNS 여론이 전술 교과서는 아니죠.",0,-1,"팬들이 서운해할 수도 있겠네요.")]);
-    Q(2,true,"베팅업체 배당률에서 오늘 경기, 감독님 팀이 열세로 나왔습니다. 어떻게 보십니까?",[
+    /* 🎲 ⚠ 제보 — 「전력에서 확실히 앞서는 상대와 붙는데도 기자가 «배당률이 낮게 나왔다»고 한다」.
+       이 질문이 조건 없이(true) 걸려 있었다. 실제로 열세일 때만 묻고, 우세하면 반대로 묻는다. */
+    Q(2,c.underdog,`베팅업체 배당률에서 오늘 경기, 감독님 팀이 열세로 나왔습니다. 어떻게 보십니까?`,[
       O("배당률로 축구하는 거 아니지 않습니까.",1,0,"명언 하나 추가요."),
       O("숫자는 숫자일 뿐입니다. 경기장에서 뒤집겠습니다.",2,1,"자신감 있는 반박이네요."),
       O("배당률 얘기는 좀 불편하네요. 다른 질문 없습니까?",0,-2,"...예민한 부분을 건드렸나 보네요.")]);
+    Q(2,c.favorite && !c.bigFav,`배당률은 오늘 감독님 팀 쪽으로 조금 기울어 있습니다. 홈 이점까지 셈에 들어간 모양인데요.`,[
+      O("한 골 차 경기가 될 겁니다. 그렇게 준비했습니다.",2,1,"현실적인 시각이군요."),
+      O("배당이 기울었다고 경기가 기우는 건 아닙니다.",1,1,"차분하시네요."),
+      O("홈에서 지면 안 되는 경기죠. 그건 맞습니다.",2,0,"부담을 인정하셨습니다.")]);
+    Q(2,c.bigFav,`배당률은 감독님 팀의 압도적 우세로 나왔습니다. 이런 경기가 오히려 어렵다는 말도 있는데요.`,[
+      O("숫자가 승점을 주지는 않습니다. 평소처럼 준비했습니다.",2,1,"방심은 없다는 말씀이군요."),
+      O("어려운 경기가 될 겁니다. 상대를 얕보지 않습니다.",1,2,"모범 답안이네요."),
+      O("이기라고 나온 배당입니다. 이기겠습니다.",2,0,"…시원하십니다."),
+      O("그 배당 보고 뛰는 선수는 우리 팀에 없습니다.",2,1,"라커룸이 단단하군요.")]);
   } else {
     const S=`${c.myG}-${c.opG}`;
     // ══ 이적 루머 — 기자들은 늘 이 얘기부터 꺼낸다 ══════════════
@@ -59858,6 +60844,9 @@ function startInterview(stage, M, cont){
   const ctx=buildCtx(stage, M);
   IV={stage, ctx, qs:pickQuestions(stage,ctx), idx:0, log:[], cont, tones:[]};
   if(IV.qs.some(q=>/보도|기사|이야기가 있습니다|사실입니까/.test(q.q))) markRumorAsked(ctx);
+  /* 🎩 «어디 출신 감독» 이야기는 한 번이면 충분하다 — 물었으면 표시해 둔다 (제보: 너무 자주 나온다) */
+  try{ if(IV.qs.some(q=>/출신 감독|출신으로|선수 경력이 없으십니다/.test(q.q))){
+        G.pressAsked=G.pressAsked||{}; G.pressAsked.mgrBg=1; } }catch(e){}
   if(!IV.qs.length){ endInterview(true); return; }
   $("#advBtn").disabled=true;   // 답변 중에는 잠근다 — 마지막 질문에 답하면 applyNavLock 이 다시 연다
   document.querySelectorAll(".navbtn").forEach(b=>b.classList.toggle("on",b.dataset.v==="match"));
@@ -83340,8 +84329,18 @@ function lvMajorHtml(){
   const A=lvMajor.filter(x=>x.side!==hs).map(one).join("");
   return `<div class="lvMjS">${H}</div><span class="lvMjMid">│</span><div class="lvMjS r">${A}</div>`;
 }
-function syncMajorBar(){
+/* 🎬 ⚠ 제보 — 「골이 오프사이드로 취소될 예정이면 득점자 이름이 안 떠서, 세리머니를 보기도
+     전에 취소될 걸 알아 버린다」. 맞다 — 취소될 골은 전광판 숫자가 오르지 않으니 이 줄도
+     비어 있고, 그 «비어 있음»이 곧 스포일러였다.
+   ─ 세리머니가 화면에 떠 있는 동안에는 이 줄을 아예 갱신하지 않는다. 깃발이 올라가든
+     골로 인정되든, 세리머니가 걷힌 «뒤»에 한꺼번에 반영한다. 두 경우가 화면에서 똑같아진다. */
+function lvMjHeld(){
+  try{ const el=document.getElementById("goalPanel");
+       return !!(el && !el.classList.contains("hidden")); }catch(e){ return false; }
+}
+function syncMajorBar(force){
   const box=document.getElementById("lvMajor"); if(!box) return;
+  if(!force && lvMjHeld()) return;              // 🎬 세리머니 중 — 걷힌 뒤에 반영한다
   const h=lvMajorHtml();
   if(!h){ box.classList.add("hidden"); if(box.innerHTML) box.innerHTML=""; return; }
   box.classList.remove("hidden");
@@ -87788,6 +88787,7 @@ function syncLive(goalFlash, instant){
   if(M.done && liveShown>=M.events.length && !revealQueue.length && !current2DScene){
     shownHg=M.hg; shownAg=M.ag;
     try{ lvMajor=[]; lvMjH=0; lvMjA=0; for(const e of M.events) lvMajorAdd(e); }catch(_){}   // 휘슬이 울렸다 — 처음부터 다시 훑어 빠진 줄이 없게 한다
+    try{ syncMajorBar(true); }catch(_){}     // 휘슬 뒤에는 세리머니와 무관하게 채운다
   }
   try{ syncMajorBar(); }catch(_){}
   if(sc.textContent!==`${shownHg} : ${shownAg}`) sc.textContent=`${shownHg} : ${shownAg}`;
@@ -89148,6 +90148,8 @@ function stepDay(){
      실제로 남아 있는 건만 아래 임대 알림 큐에서 한 번에 알린다 (제보) */
   try{ tfDealTick(); }catch(e){}     // 🕐 진행 중인 이적 — 완료 · 가로채기 · 마감 무산
   try{ tfLockSweep(); }catch(e){}    // 🧹 딜이 사라졌는데 남은 잠금은 하룻밤을 못 넘긴다
+  try{ totoSettle(); }catch(e){}     // ⚽ 승무패 토토 — 그 주 경기가 다 끝났으면 정산한다
+  try{ crimeTick(); }catch(e){}      // 🚔 선수 물의(무면허·음주) — 징계 소화 · 새 사건
   try{ tickLoanAsk(); }catch(e){}
   try{ tickLoanOffer(); }catch(e){}
   try{ if(Array.isArray(G.loanOffers)) G.loanOffers=G.loanOffers.filter(o=>{ o.exp--; return o.exp>0 && G.teams[o.tid] && G.teams[o.tid].players.some(x=>x.id===o.pid); }); }catch(e){}
@@ -95165,7 +96167,7 @@ function pvpView(){
    ─ 캐시를 확실히 비켜 가려고 매번 다른 질의문자열을 붙인다 (깃허브 페이지는 질의문자열을
      무시하고 같은 파일을 주지만, 캐시는 다른 주소로 본다).
    ─ 경기 중에는 절대 새로고침하지 않는다. 메뉴에 있고 대전 중이 아닐 때만 자동 적용한다. */
-const GAME_BUILD="20260913-5221";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
+const GAME_BUILD="20260913-5230";             // 🆕 이 파일의 빌드 표식 (파일 맨 앞 <!--B:…--> 와 같은 값)
 const UPD_EVERY=10*60*1000;        // 확인 주기
 const UPD_SNOOZE=30*60*1000;       // 「나중에」를 누르면 이만큼 조용히 있는다
 let UPD={tag:null, seen:null, at:0, snooze:0, timer:null, busy:false};
